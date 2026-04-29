@@ -723,21 +723,22 @@ Caja esperada: $${summary.expectedCash}`
             return
         }
 
-        const { data: openComandas } = await supabase
-            .from('comandas')
-            .select('id')
-            .in('status', ['open', 'pending_payment', 'processing_payment'])
-            .limit(1)
-
-        if (openComandas && openComandas.length > 0) {
-            alert('No se puede cerrar turno: hay comandas abiertas o en proceso.')
-            return
-        }
-
         const { data: summary, error: summaryError } = await calculateShiftSummary()
 
         if (summaryError || !summary) {
             alert(summaryError?.message || 'No se pudo calcular el cierre de turno.')
+            return
+        }
+
+        const { data: openComandas } = await supabase
+            .from('comandas')
+            .select('id')
+            .in('status', ['open', 'pending_payment', 'processing_payment'])
+            .gte('opened_at', summary.shift.opened_at)
+            .limit(1)
+
+        if (openComandas && openComandas.length > 0) {
+            alert('No se puede cerrar turno: hay comandas abiertas o en proceso.')
             return
         }
 
@@ -864,14 +865,30 @@ Diferencia: $${difference}`
 
         setStatus(`Abriendo ${unit.name}...`)
 
-        let customerName = window.prompt('Nombre o referencia de la mesa (opcional):')
+        const { data: existing, error: existingError } = await supabase
+            .from('comandas')
+            .select('*')
+            .eq('unit_id', unit.id)
+            .in('status', ['open', 'pending_payment', 'processing_payment'])
+            .limit(1)
 
-        if (customerName === null) {
-            setStatus('Operación cancelada.')
+        if (existingError) {
+            setStatus(`Error abriendo comanda: ${existingError.message}`)
             return
         }
 
-        customerName = customerName.trim()
+        const isNew = !existing || existing.length === 0
+
+        let customerName = ''
+
+        if (isNew) {
+            const input = window.prompt('Nombre o referencia de la mesa (opcional):')
+            if (input === null) {
+                setStatus('Operación cancelada.')
+                return
+            }
+            customerName = input.trim()
+        }
 
         const { data, error } = await getOrCreateActiveComanda({
             unitId: unit.id,

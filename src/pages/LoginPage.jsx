@@ -248,11 +248,10 @@ function LoginPage() {
                         </div>
 
                         <div style={{ marginTop: '16px', opacity: 0.9 }}>
-                            <p style={{ margin: '0 0 6px 0' }}>
+                            <p style={{ margin: 0 }}>
                                 Selected user:{' '}
                                 {selectedUser ? `${selectedUser.name} (${selectedUser.role})` : 'None'}
                             </p>
-                            <p style={{ margin: 0 }}>PIN length: {pin.length}/6</p>
                         </div>
 
                         <button

@@ -28,7 +28,7 @@ function WeeklyReportPage() {
 
     useEffect(() => {
         loadWeeklyData();
-    }, [startDate, endDate]);
+    }, []);
 
     function formatCategoryName(category) {
         const map = {
@@ -238,20 +238,36 @@ function WeeklyReportPage() {
             </button>
             <h2>Reporte semanal</h2>
 
-            <div style={{ marginBottom: '16px' }}>
-                <label style={{ marginRight: '8px' }}>Desde:</label>
+            <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                <label>Desde:</label>
                 <input
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
                 />
 
-                <label style={{ margin: '0 8px' }}>Hasta:</label>
+                <label>Hasta:</label>
                 <input
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
                 />
+
+                <button
+                    onClick={loadWeeklyData}
+                    disabled={loading}
+                    style={{
+                        padding: '8px 16px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        background: loading ? '#555' : '#1565c0',
+                        color: 'white',
+                        fontWeight: 'bold',
+                        cursor: loading ? 'default' : 'pointer',
+                    }}
+                >
+                    {loading ? 'Cargando...' : 'Cargar reporte'}
+                </button>
             </div>
 
             <div

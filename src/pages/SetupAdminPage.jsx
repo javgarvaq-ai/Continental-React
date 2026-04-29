@@ -239,8 +239,7 @@ function SetupAdminPage() {
 
                         <div style={{ marginTop: '16px', opacity: 0.9 }}>
                             <p style={{ margin: '0 0 6px 0' }}>Role to create: admin</p>
-                            <p style={{ margin: '0 0 6px 0' }}>Active: true</p>
-                            <p style={{ margin: 0 }}>PIN length: {pin.length}/6</p>
+                            <p style={{ margin: 0 }}>Active: true</p>
                         </div>
 
                         <button
