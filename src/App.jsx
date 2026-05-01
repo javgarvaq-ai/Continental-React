@@ -10,6 +10,7 @@ import UsersAdminPage from './pages/UsersAdminPage'
 import ProductsAdminPage from './pages/ProductsAdminPage'
 import InventoryItemsAdminPage from './pages/InventoryItemsAdminPage'
 import RecipeMappingAdminPage from './pages/RecipeMappingAdminPage'
+import CategoriesAdminPage from './pages/CategoriesAdminPage'
 
 function App() {
   return (
@@ -48,6 +49,14 @@ function App() {
           element={
             <AuthRoute>
               <InventoryItemsAdminPage />
+            </AuthRoute>
+          }
+        />
+        <Route
+          path="/admin/categories"
+          element={
+            <AuthRoute>
+              <CategoriesAdminPage />
             </AuthRoute>
           }
         />

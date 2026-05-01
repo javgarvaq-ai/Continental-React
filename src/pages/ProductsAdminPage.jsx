@@ -303,6 +303,15 @@ function ProductsAdminPage() {
                     >
                         Recetas
                     </button>
+                    <button type="button" onClick={() => navigate('/admin/categories')} style={navButtonStyle}>
+                        Categorías
+                    </button>
+                    <button type="button" onClick={() => navigate('/admin/membership-plans')} style={navButtonStyle}>
+                        Membresías
+                    </button>
+                    <button type="button" onClick={() => navigate('/admin/customers')} style={navButtonStyle}>
+                        Clientes
+                    </button>
                 </div>
                 <h1 style={{ marginTop: 0 }}>Products Administration</h1>
                 <p style={{ opacity: 0.85 }}>{status}</p>
