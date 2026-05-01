@@ -27,6 +27,14 @@ import {
 } from '../services/comandaCheckout';
 import { printTicket } from '../components/Ticket';
 import { supabase } from '../services/supabase';
+import {
+    getCustomerWithMembership,
+    getCustomerByIdWithMembership,
+    getAllActiveMembershipPlans,
+    activateMembership,
+    addFreeBenefitItemToComanda,
+    processMembershipOnPayment,
+} from '../services/membership';
 
 
 
@@ -110,6 +118,19 @@ function PosPage() {
         shotProduct: null,
         selectedMixers: [],
     });
+    const [currentCustomer, setCurrentCustomer] = useState(null);
+    const [currentMembership, setCurrentMembership] = useState(null);
+    const [membershipRenewalState, setMembershipRenewalState] = useState({
+        open: false,
+        plans: [],
+        selectedPlanId: '',
+    });
+    const [freeBenefitState, setFreeBenefitState] = useState({
+        open: false,
+        type: null,
+        benefit: null,
+    });
+    const [isProcessingMembership, setIsProcessingMembership] = useState(false);
 
     useEffect(() => {
         const savedUser = localStorage.getItem('continentalCurrentUser');
@@ -166,6 +187,13 @@ function PosPage() {
             shotProduct: null,
             selectedMixers: [],
         });
+    }
+
+    function resetCustomerState() {
+        setCurrentCustomer(null);
+        setCurrentMembership(null);
+        setMembershipRenewalState({ open: false, plans: [], selectedPlanId: '' });
+        setFreeBenefitState({ open: false, type: null, benefit: null });
     }
 
     function handleChangeUser() {
@@ -878,16 +906,34 @@ Diferencia: $${difference}`
         }
 
         const isNew = !existing || existing.length === 0
-
         let customerName = ''
+        let pendingCustomerData = null
 
         if (isNew) {
-            const input = window.prompt('Nombre o referencia de la mesa (opcional):')
+            const input = window.prompt('Nombre de mesa o número de cliente (opcional):')
             if (input === null) {
                 setStatus('Operación cancelada.')
                 return
             }
-            customerName = input.trim()
+            const trimmed = input.trim()
+
+            if (trimmed && /^\d+$/.test(trimmed)) {
+                setStatus('Buscando cliente...')
+                const { data: customerData } = await getCustomerWithMembership(trimmed)
+                if (customerData) {
+                    customerName = customerData.customer.name
+                    pendingCustomerData = customerData
+                } else {
+                    const proceed = window.confirm(`No se encontró cliente #${trimmed}. ¿Continuar sin cliente?`)
+                    if (!proceed) {
+                        setStatus('Operación cancelada.')
+                        return
+                    }
+                    customerName = trimmed
+                }
+            } else {
+                customerName = trimmed
+            }
         }
 
         const { data, error } = await getOrCreateActiveComanda({
@@ -901,13 +947,116 @@ Diferencia: $${difference}`
             return
         }
 
+        // Link customer to comanda if found
+        if (isNew && pendingCustomerData) {
+            await supabase
+                .from('comandas')
+                .update({ customer_id: pendingCustomerData.customer.id })
+                .eq('id', data.id)
+            setCurrentCustomer(pendingCustomerData.customer)
+            setCurrentMembership(pendingCustomerData.activeMembership)
+        } else if (!isNew && data.customer_id) {
+            const { data: cd } = await getCustomerByIdWithMembership(data.customer_id)
+            if (cd) {
+                setCurrentCustomer(cd.customer)
+                setCurrentMembership(cd.activeMembership)
+            }
+        } else {
+            resetCustomerState()
+        }
+
         setSelectedUnit(unit)
         setCurrentComanda(data)
         resetPaymentState()
         resetShotSelector()
         setStatus(`Comanda cargada para ${unit.name}.`)
     }
+    async function handleOpenMembershipRenewal() {
+        setIsProcessingMembership(true)
+        const { data, error } = await getAllActiveMembershipPlans()
+        if (error || !data || data.length === 0) {
+            alert('No hay planes de membresía activos configurados.')
+            setIsProcessingMembership(false)
+            return
+        }
+        setMembershipRenewalState({
+            open: true,
+            plans: data,
+            selectedPlanId: data[0].id,
+        })
+        setIsProcessingMembership(false)
+    }
 
+    async function handleActivateMembership() {
+        if (!currentCustomer || !currentComanda?.id || !membershipRenewalState.selectedPlanId) return
+        setIsProcessingMembership(true)
+
+        const selectedPlan = membershipRenewalState.plans.find(
+            p => p.id === membershipRenewalState.selectedPlanId
+        )
+
+        // 1. Create the membership record
+        const { data: newMembership, error: membershipError } = await activateMembership({
+            customerId: currentCustomer.id,
+            planId: membershipRenewalState.selectedPlanId,
+            comandaId: currentComanda.id,
+        })
+
+        if (membershipError || !newMembership) {
+            alert(`Error activando membresía: ${membershipError?.message}`)
+            setIsProcessingMembership(false)
+            return
+        }
+
+        // 2. Add membership product to bill if linked
+        if (selectedPlan?.product_id) {
+            const { data: product } = await supabase
+                .from('products')
+                .select('*')
+                .eq('id', selectedPlan.product_id)
+                .single()
+
+            if (product) {
+                await addNormalProductToComanda({
+                    comandaId: currentComanda.id,
+                    product,
+                })
+                await loadComandaView(currentComanda.id)
+            }
+        }
+
+        setCurrentMembership(newMembership)
+        setMembershipRenewalState({ open: false, plans: [], selectedPlanId: '' })
+        setIsProcessingMembership(false)
+        setStatus('Membresía activada correctamente.')
+    }
+
+    async function handleOpenFreeBenefitSelector(type) {
+        if (!currentMembership) return
+        const benefit = currentMembership.membership_plans?.membership_plan_benefits?.find(
+            b => b.benefit_type === type
+        )
+        if (!benefit) return
+        setFreeBenefitState({ open: true, type, benefit })
+    }
+
+    async function handleAddFreeBenefit(productId) {
+        if (!currentComanda?.id || !productId) return
+        setIsAddingProduct(true)
+        const { error } = await addFreeBenefitItemToComanda({
+            comandaId: currentComanda.id,
+            productId,
+        })
+        if (error) {
+            setStatus(`Error agregando beneficio: ${error.message}`)
+            setIsAddingProduct(false)
+            return
+        }
+        await loadComandaView(currentComanda.id)
+        setFreeBenefitState({ open: false, type: null, benefit: null })
+        setIsAddingProduct(false)
+        setStatus('Beneficio agregado.')
+    }
     async function handleBackToUnits(customStatus = null) {
         setSelectedUnit(null);
         setCurrentComanda(null);
@@ -915,6 +1064,7 @@ Diferencia: $${difference}`
         setCartItems([]);
         resetPaymentState();
         resetShotSelector();
+        resetCustomerState();
         await loadUnits();
 
         if (customStatus) {
@@ -1370,12 +1520,39 @@ Diferencia: $${difference}`
                         paymentSummary.transferencia,
                     change_given: paymentSummary.cambio,
                 },
+                membershipInfo: currentCustomer && currentMembership ? {
+                    customerName: currentCustomer.name,
+                    customerNumber: currentCustomer.customer_number,
+                    planName: currentMembership.membership_plans?.name,
+                    discountAmount,
+                    discountPct: membershipDiscountPct,
+                    newVisitCount: membershipResult?.newVisitCount,
+                    bottleCredits: membershipResult?.newBottleCreditsAvailable,
+                    earnedBottleCredit: membershipResult?.earnedBottleCredit,
+                } : null,
             });
+
+            // Process membership if customer is assigned
+            let membershipResult = null
+            if (currentCustomer && currentMembership) {
+                membershipResult = await processMembershipOnPayment({
+                    customerId: currentCustomer.id,
+                    membershipId: currentMembership.id,
+                    comandaId: currentComanda.id,
+                    discountPct: membershipDiscountPct,
+                    discountAmount,
+                    membershipPlanBenefits: currentMembership.membership_plans?.membership_plan_benefits || [],
+                })
+            }
 
             if (data?.inventoryWarning) {
                 alert(`Cobro registrado, pero inventario avisó: ${data.inventoryWarning}`);
             } else {
-                alert('Cobro registrado correctamente.');
+                let msg = 'Cobro registrado correctamente.'
+                if (membershipResult?.earnedBottleCredit) {
+                    msg += ` 🍾 ¡${currentCustomer.name} ganó un crédito de botella!`
+                }
+                alert(msg)
             }
 
             await handleBackToUnits(
@@ -1418,9 +1595,17 @@ Diferencia: $${difference}`
         }, 0);
     }, [visibleCartItems]);
 
+    const membershipDiscountBenefit = currentMembership?.membership_plans?.membership_plan_benefits?.find(
+        b => b.benefit_type === 'discount'
+    );
+    const membershipDiscountPct = Number(membershipDiscountBenefit?.discount_percentage || 0);
+    const discountAmount = currentComanda?.status === 'open' && membershipDiscountPct > 0
+        ? Math.round(cartTotal * (membershipDiscountPct / 100) * 100) / 100
+        : 0;
+
     const displayedTotal =
         currentComanda?.status === 'open'
-            ? cartTotal
+            ? Math.max(cartTotal - discountAmount, 0)
             : Number(currentComanda?.final_total ?? cartTotal);
 
     const paymentSummary = useMemo(() => {
@@ -1507,6 +1692,144 @@ Diferencia: $${difference}`
                             {folioDisplay}
                             {customerDisplay}
                         </div>
+
+                        {/* CUSTOMER & MEMBERSHIP INFO */}
+                        {currentCustomer && (
+                            <div style={{ marginTop: '10px', padding: '10px 12px', background: '#111', borderRadius: '8px', border: '1px solid #333' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                                    <div>
+                                        <span style={{ fontSize: '13px', fontWeight: 'bold' }}>
+                                            👤 #{currentCustomer.customer_number} — {currentCustomer.name}
+                                        </span>
+                                        <span style={{ marginLeft: '10px', fontSize: '12px', opacity: 0.7 }}>
+                                            {currentCustomer.visit_count} visitas · {currentCustomer.bottle_credits_available} 🍾
+                                        </span>
+                                    </div>
+                                    {currentMembership ? (
+                                        <span style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '10px', background: '#1b5e20', color: '#66bb6a', fontWeight: 'bold' }}>
+                                            {currentMembership.membership_plans?.name}
+                                            {membershipDiscountPct > 0 && ` · ${membershipDiscountPct}% desc`}
+                                        </span>
+                                    ) : (
+                                        <span style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '10px', background: '#4a1c00', color: '#f57c00' }}>
+                                            Sin membresía activa este mes
+                                        </span>
+                                    )}
+                                </div>
+
+                                {/* BENEFIT BUTTONS */}
+                                {currentComanda?.status === 'open' && (
+                                    <div style={{ display: 'flex', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
+                                        {!currentMembership && (
+                                            <button
+                                                type="button"
+                                                onClick={handleOpenMembershipRenewal}
+                                                disabled={isProcessingMembership}
+                                                style={{ padding: '6px 12px', borderRadius: '8px', border: 'none', background: '#f57c00', color: 'white', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                                            >
+                                                {isProcessingMembership ? 'Cargando...' : '+ Activar membresía'}
+                                            </button>
+                                        )}
+                                        {currentMembership && currentMembership.membership_plans?.membership_plan_benefits?.some(b => b.benefit_type === 'free_product') && (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleOpenFreeBenefitSelector('free_product')}
+                                                disabled={isAddingProduct}
+                                                style={{ padding: '6px 12px', borderRadius: '8px', border: 'none', background: '#1565c0', color: 'white', cursor: 'pointer', fontSize: '12px' }}
+                                            >
+                                                🎁 Producto gratis
+                                            </button>
+                                        )}
+                                        {currentMembership && currentCustomer.bottle_credits_available > 0 && currentMembership.membership_plans?.membership_plan_benefits?.some(b => b.benefit_type === 'free_bottle_milestone') && (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleOpenFreeBenefitSelector('free_bottle_milestone')}
+                                                disabled={isAddingProduct}
+                                                style={{ padding: '6px 12px', borderRadius: '8px', border: 'none', background: '#6a1b9a', color: 'white', cursor: 'pointer', fontSize: '12px' }}
+                                            >
+                                                🍾 Canjear botella ({currentCustomer.bottle_credits_available})
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* DISCOUNT DISPLAY */}
+                                {discountAmount > 0 && currentComanda?.status === 'open' && (
+                                    <div style={{ marginTop: '8px', fontSize: '13px', color: '#66bb6a' }}>
+                                        Descuento membresía ({membershipDiscountPct}%): -${discountAmount.toFixed(2)}
+                                        {' · '}Total con descuento: ${displayedTotal.toFixed(2)}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* MEMBERSHIP RENEWAL MODAL */}
+                        {membershipRenewalState.open && (
+                            <div style={{ marginTop: '10px', padding: '14px', background: '#1a1a1a', borderRadius: '10px', border: '1px solid #f57c00' }}>
+                                <div style={{ fontWeight: 'bold', marginBottom: '10px' }}>Activar membresía para {currentCustomer?.name}</div>
+                                <select
+                                    value={membershipRenewalState.selectedPlanId}
+                                    onChange={e => setMembershipRenewalState(p => ({ ...p, selectedPlanId: e.target.value }))}
+                                    style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #444', background: '#111', color: 'white', marginBottom: '10px' }}
+                                >
+                                    {membershipRenewalState.plans.map(plan => (
+                                        <option key={plan.id} value={plan.id}>
+                                            {plan.name} — ${plan.price_monthly}/mes
+                                            {!plan.product_id && ' ⚠ Sin producto vinculado'}
+                                        </option>
+                                    ))}
+                                </select>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button
+                                        type="button"
+                                        onClick={handleActivateMembership}
+                                        disabled={isProcessingMembership}
+                                        style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: '#2e7d32', color: 'white', cursor: 'pointer', fontWeight: 'bold' }}
+                                    >
+                                        {isProcessingMembership ? 'Activando...' : 'Activar y agregar a cuenta'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setMembershipRenewalState({ open: false, plans: [], selectedPlanId: '' })}
+                                        style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: '#555', color: 'white', cursor: 'pointer' }}
+                                    >
+                                        Cancelar
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* FREE BENEFIT SELECTOR MODAL */}
+                        {freeBenefitState.open && freeBenefitState.benefit && (
+                            <div style={{ marginTop: '10px', padding: '14px', background: '#1a1a1a', borderRadius: '10px', border: '1px solid #1565c0' }}>
+                                <div style={{ fontWeight: 'bold', marginBottom: '10px' }}>
+                                    {freeBenefitState.type === 'free_bottle_milestone' ? '🍾 Seleccionar botella gratis' : '🎁 Seleccionar producto gratis'}
+                                </div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
+                                    {(freeBenefitState.benefit.membership_benefit_products || []).map(bp => (
+                                        <button
+                                            key={bp.id}
+                                            type="button"
+                                            onClick={() => handleAddFreeBenefit(bp.product_id)}
+                                            disabled={isAddingProduct}
+                                            style={{ padding: '8px 14px', borderRadius: '8px', border: '1px solid #1565c0', background: '#111', color: 'white', cursor: 'pointer', fontSize: '13px' }}
+                                        >
+                                            {bp.products?.name}
+                                        </button>
+                                    ))}
+                                    {(freeBenefitState.benefit.membership_benefit_products || []).length === 0 && (
+                                        <span style={{ opacity: 0.5, fontSize: '13px' }}>No hay productos configurados para este beneficio.</span>
+                                    )}
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setFreeBenefitState({ open: false, type: null, benefit: null })}
+                                    style={{ padding: '6px 14px', borderRadius: '8px', border: 'none', background: '#555', color: 'white', cursor: 'pointer', fontSize: '13px' }}
+                                >
+                                    Cancelar
+                                </button>
+                            </div>
+                        )}
 
                         <div
                             style={{

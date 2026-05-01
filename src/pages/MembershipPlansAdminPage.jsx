@@ -105,6 +105,7 @@ function MembershipPlansAdminPage() {
             name: editForm.name,
             price_monthly: Number(editForm.price_monthly),
             active: true,
+            product_id: editForm.product_id || null,
         })
         if (error) { setStatus(`Error: ${error.message}`); setIsSaving(false); return }
         setEditingPlanId(null)
@@ -265,6 +266,16 @@ function MembershipPlansAdminPage() {
                                             onChange={(e) => setEditForm(p => ({ ...p, price_monthly: e.target.value }))}
                                             style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #444', background: '#111', color: 'white', width: '120px' }}
                                         />
+                                        <select
+                                            value={editForm.product_id || ''}
+                                            onChange={(e) => setEditForm(p => ({ ...p, product_id: e.target.value || null }))}
+                                            style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #444', background: '#222', color: 'white' }}
+                                        >
+                                            <option value="">Sin producto vinculado</option>
+                                            {allProducts.map(p => (
+                                                <option key={p.id} value={p.id}>{p.name} — ${p.price}</option>
+                                            ))}
+                                        </select>
                                         <button onClick={() => handleUpdatePlan(plan.id)} disabled={isSaving} style={{ padding: '8px 14px', borderRadius: '8px', border: 'none', background: '#2e7d32', color: 'white', cursor: 'pointer', fontWeight: 'bold' }}>Save</button>
                                         <button onClick={() => setEditingPlanId(null)} style={{ padding: '8px 14px', borderRadius: '8px', border: 'none', background: '#555', color: 'white', cursor: 'pointer' }}>Cancel</button>
                                     </div>
@@ -274,9 +285,16 @@ function MembershipPlansAdminPage() {
                                             <span style={{ fontSize: '20px', fontWeight: 'bold' }}>{plan.name}</span>
                                             <span style={{ marginLeft: '12px', opacity: 0.7 }}>${plan.price_monthly}/mes</span>
                                             <span style={{ marginLeft: '12px', fontSize: '12px', padding: '2px 8px', borderRadius: '10px', background: plan.active ? '#1b5e20' : '#555' }}>{plan.active ? 'Activo' : 'Inactivo'}</span>
+                                            {plan.product_id ? (
+                                                <span style={{ marginLeft: '8px', fontSize: '12px', opacity: 0.6 }}>
+                                                    🔗 {allProducts.find(p => p.id === plan.product_id)?.name || 'Producto vinculado'}
+                                                </span>
+                                            ) : (
+                                                <span style={{ marginLeft: '8px', fontSize: '12px', color: '#f57c00' }}>⚠ Sin producto vinculado</span>
+                                            )}
                                         </div>
                                         <div style={{ display: 'flex', gap: '8px' }}>
-                                            <button onClick={() => { setEditingPlanId(plan.id); setEditForm({ name: plan.name, price_monthly: plan.price_monthly }) }} style={{ padding: '8px 12px', borderRadius: '8px', border: 'none', background: '#1565c0', color: 'white', cursor: 'pointer' }}>Edit</button>
+                                            <button onClick={() => { setEditingPlanId(plan.id); setEditForm({ name: plan.name, price_monthly: plan.price_monthly, product_id: plan.product_id || '' }) }} style={{ padding: '8px 12px', borderRadius: '8px', border: 'none', background: '#1565c0', color: 'white', cursor: 'pointer' }}>Edit</button>
                                             <button onClick={() => handleTogglePlanActive(plan)} style={{ padding: '8px 12px', borderRadius: '8px', border: 'none', background: plan.active ? '#b71c1c' : '#2e7d32', color: 'white', cursor: 'pointer' }}>{plan.active ? 'Deactivate' : 'Activate'}</button>
                                         </div>
                                     </div>

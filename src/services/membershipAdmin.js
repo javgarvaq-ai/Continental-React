@@ -25,10 +25,10 @@ export async function createMembershipPlan({ name, price_monthly }) {
         .single()
 }
 
-export async function updateMembershipPlan({ id, name, price_monthly, active }) {
+export async function updateMembershipPlan({ id, name, price_monthly, active, product_id }) {
     return await supabase
         .from('membership_plans')
-        .update({ name: name.trim(), price_monthly, active })
+        .update({ name: name.trim(), price_monthly, active, product_id: product_id || null })
         .eq('id', id)
         .select()
         .single()

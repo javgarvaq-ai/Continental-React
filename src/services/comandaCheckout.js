@@ -216,7 +216,7 @@ async function validateComandaInventoryBeforePayment({ comandaId }) {
 async function descontarInventarioComanda({ comandaId, userId }) {
     const { data: comandaItems, error: itemsError } = await supabase
         .from('comanda_items')
-        .select('id, product_id, quantity')
+        .select('id, product_id, quantity, is_free_benefit')
         .eq('comanda_id', comandaId)
         .eq('status', 'active');
 
@@ -225,6 +225,9 @@ async function descontarInventarioComanda({ comandaId, userId }) {
     }
 
     for (const item of comandaItems || []) {
+        // Skip free benefit items — no inventory deduction for them
+        if (item.is_free_benefit) continue;
+
         const { data: recipeRows, error: recipeError } = await supabase
             .from('product_recipes')
             .select('inventory_item_id, deduct_amount')

@@ -30,6 +30,7 @@ function buildTicketHtml({
   items = [],
   unit,
   payment = null,
+  membershipInfo = null,
 }) {
   const folioDisplay = comanda?.folio
     ? `C-${String(comanda.folio).padStart(6, '0')}`
@@ -92,7 +93,21 @@ function buildTicketHtml({
           </div>
         `;
 
+    let membershipHtml = '';
+    if (membershipInfo) {
+      membershipHtml = `
+        <div class="divider">--------------------------------</div>
+        <div class="center small" style="font-weight:bold">MEMBRESÍA ${escapeHtml(membershipInfo.planName || '')}</div>
+        <div class="row small"><span>Cliente</span><span>#${escapeHtml(membershipInfo.customerNumber)} ${escapeHtml(membershipInfo.customerName)}</span></div>
+        ${membershipInfo.discountAmount > 0 ? `<div class="row small"><span>Descuento ${membershipInfo.discountPct}%</span><span>-${money(membershipInfo.discountAmount)}</span></div>` : ''}
+        <div class="row small"><span>Visitas este mes</span><span>${membershipInfo.newVisitCount || 0}</span></div>
+        <div class="row small"><span>Créditos botella</span><span>${membershipInfo.bottleCredits || 0}</span></div>
+        ${membershipInfo.earnedBottleCredit ? `<div class="center small" style="color:#2e7d32;font-weight:bold">🍾 ¡Ganaste una botella gratis!</div>` : ''}
+      `;
+    }
+
     footerHtml = `
+          ${membershipHtml}
           <div class="divider">--------------------------------</div>
           <div class="center footer">Gracias por su visita</div>
           <div class="center footer small">Si requiere factura</div>
@@ -326,13 +341,14 @@ function buildTicketHtml({
     `;
 }
 
-export function printTicket({ tipo = 'pagado', comanda, items, unit, payment = null }) {
+export function printTicket({ tipo = 'pagado', comanda, items, unit, payment = null, membershipInfo = null }) {
   const html = buildTicketHtml({
     tipo,
     comanda,
     items,
     unit,
     payment,
+    membershipInfo,
   });
 
   const printWindow = window.open('', '_blank', 'width=420,height=800');
