@@ -11,6 +11,7 @@ import ProductsAdminPage from './pages/ProductsAdminPage'
 import InventoryItemsAdminPage from './pages/InventoryItemsAdminPage'
 import RecipeMappingAdminPage from './pages/RecipeMappingAdminPage'
 import CategoriesAdminPage from './pages/CategoriesAdminPage'
+import MembershipPlansAdminPage from './pages/MembershipPlansAdminPage'
 
 function App() {
   return (
@@ -49,6 +50,14 @@ function App() {
           element={
             <AuthRoute>
               <InventoryItemsAdminPage />
+            </AuthRoute>
+          }
+        />
+        <Route
+          path="/admin/membership-plans"
+          element={
+            <AuthRoute>
+              <MembershipPlansAdminPage />
             </AuthRoute>
           }
         />
