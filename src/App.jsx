@@ -12,6 +12,7 @@ import InventoryItemsAdminPage from './pages/InventoryItemsAdminPage'
 import RecipeMappingAdminPage from './pages/RecipeMappingAdminPage'
 import CategoriesAdminPage from './pages/CategoriesAdminPage'
 import MembershipPlansAdminPage from './pages/MembershipPlansAdminPage'
+import CustomersAdminPage from './pages/CustomersAdminPage'
 
 function App() {
   return (
@@ -58,6 +59,14 @@ function App() {
           element={
             <AuthRoute>
               <MembershipPlansAdminPage />
+            </AuthRoute>
+          }
+        />
+        <Route
+          path="/admin/customers"
+          element={
+            <AuthRoute>
+              <CustomersAdminPage />
             </AuthRoute>
           }
         />
