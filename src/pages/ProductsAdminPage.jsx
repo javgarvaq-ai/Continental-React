@@ -312,6 +312,9 @@ function ProductsAdminPage() {
                     <button type="button" onClick={() => navigate('/admin/customers')} style={navButtonStyle}>
                         Clientes
                     </button>
+                    <button type="button" onClick={() => navigate('/admin/units')} style={navButtonStyle}>
+                        Mesas/Unidades
+                    </button>
                 </div>
                 <h1 style={{ marginTop: 0 }}>Products Administration</h1>
                 <p style={{ opacity: 0.85 }}>{status}</p>

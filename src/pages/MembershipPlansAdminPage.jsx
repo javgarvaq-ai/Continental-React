@@ -205,6 +205,9 @@ function MembershipPlansAdminPage() {
                     <button type="button" onClick={() => navigate('/admin/recipe-mappings')} style={navButtonStyle}>Recetas</button>
                     <button type="button" onClick={() => navigate('/admin/membership-plans')} style={{ ...navButtonStyle, background: '#1d3557' }}>Membresías</button>
                     <button type="button" onClick={() => navigate('/admin/customers')} style={navButtonStyle}>Clientes</button>
+                    <button type="button" onClick={() => navigate('/admin/units')} style={navButtonStyle}>
+                        Mesas/Unidades
+                    </button>
                 </div>
 
                 <h1 style={{ marginTop: 0 }}>Membership Plans</h1>

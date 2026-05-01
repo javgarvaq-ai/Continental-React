@@ -13,6 +13,7 @@ import RecipeMappingAdminPage from './pages/RecipeMappingAdminPage'
 import CategoriesAdminPage from './pages/CategoriesAdminPage'
 import MembershipPlansAdminPage from './pages/MembershipPlansAdminPage'
 import CustomersAdminPage from './pages/CustomersAdminPage'
+import UnitsAdminPage from './pages/UnitsAdminPage'
 
 function App() {
   return (
@@ -67,6 +68,14 @@ function App() {
           element={
             <AuthRoute>
               <CustomersAdminPage />
+            </AuthRoute>
+          }
+        />
+        <Route
+          path="/admin/units"
+          element={
+            <AuthRoute>
+              <UnitsAdminPage />
             </AuthRoute>
           }
         />

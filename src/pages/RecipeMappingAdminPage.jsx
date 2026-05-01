@@ -322,6 +322,9 @@ function RecipeMappingAdminPage() {
                     <button type="button" onClick={() => navigate('/admin/customers')} style={navButtonStyle}>
                         Clientes
                     </button>
+                    <button type="button" onClick={() => navigate('/admin/units')} style={navButtonStyle}>
+                        Mesas/Unidades
+                    </button>
                 </div>
 
                 <h1 style={{ marginTop: 0 }}>Recipe Mapping Administration</h1>

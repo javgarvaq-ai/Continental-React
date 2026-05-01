@@ -159,17 +159,6 @@ function PosPage() {
         navigate('/weekly-report');
     }
 
-    function handleUsersAdmin() {
-        navigate('/admin/users')
-    }
-
-    function handleRecipeMappingsAdmin() {
-        navigate('/admin/recipe-mappings')
-    }
-
-    function handleProductsAdmin() {
-        navigate('/admin/products')
-    }
 
     function resetPaymentState() {
         setPaymentData({
@@ -713,9 +702,6 @@ function PosPage() {
 
     function handleInventory() {
         navigate('/inventory');
-    }
-    function handleInventoryAdmin() {
-        navigate('/admin/inventory-items')
     }
 
     async function handleShiftCut() {
@@ -1655,12 +1641,7 @@ Diferencia: $${difference}`
                 onInventory={handleInventory}
                 onShiftCut={handleShiftCut}
                 onCloseShift={handleCloseShift}
-                onLogout={handleLogout}
                 onWeeklyReport={handleWeeklyReport}
-                onUsersAdmin={handleUsersAdmin}
-                onProductsAdmin={handleProductsAdmin}
-                onInventoryAdmin={handleInventoryAdmin}
-                onRecipeMappingsAdmin={handleRecipeMappingsAdmin}
             />
 
             {!selectedUnit ? (

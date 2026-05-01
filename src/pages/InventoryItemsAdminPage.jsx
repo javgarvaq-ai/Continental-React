@@ -175,6 +175,9 @@ function InventoryItemsAdminPage() {
                     <button type="button" onClick={() => navigate('/admin/customers')} style={navButtonStyle}>
                         Clientes
                     </button>
+                    <button type="button" onClick={() => navigate('/admin/units')} style={navButtonStyle}>
+                        Mesas/Unidades
+                    </button>
                 </div>
 
                 <h1>Inventory Items</h1>
