@@ -194,11 +194,7 @@ export async function processMembershipOnPayment({
         .select('visit_count, bottle_credits_available')
         .eq('id', customerId)
         .single()
-    const { data: customer } = await supabase
-        .from('customers')
-        .select('visit_count, bottle_credits_available')
-        .eq('id', customerId)
-        .single()
+
 
     const prevVisitCount = Number(customer?.visit_count || 0)
     const newVisitCount = prevVisitCount + 1
