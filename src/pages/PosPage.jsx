@@ -35,6 +35,7 @@ import {
     addFreeBenefitItemToComanda,
     processMembershipOnPayment,
 } from '../services/membership';
+import { getNextCustomerNumber } from '../services/customersAdmin';
 
 
 
@@ -1011,7 +1012,7 @@ Diferencia: $${difference}`
         if (!customerSearchState.newName.trim() || !currentComanda?.id) return
         setIsProcessingMembership(true)
 
-        const nextNumber = await import('../services/customersAdmin').then(m => m.getNextCustomerNumber())
+        const nextNumber = await getNextCustomerNumber()
 
         const { data: newCustomer, error } = await supabase
             .from('customers')
