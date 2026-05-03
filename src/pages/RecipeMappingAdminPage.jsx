@@ -20,7 +20,7 @@ function RecipeMappingAdminPage() {
     const [loading, setLoading] = useState(true)
     const [isSaving, setIsSaving] = useState(false)
 
-    const [selectedProductId, setSelectedProductId] = useState('')
+    const [selectedProductId, setSelectedProductId] = useState('all')
     const [newInventoryItemId, setNewInventoryItemId] = useState('')
     const [newDeductAmount, setNewDeductAmount] = useState('')
 
@@ -204,7 +204,7 @@ function RecipeMappingAdminPage() {
     }
 
     const filteredRecipeRows = recipeRows.filter(
-        (row) => row.product_id === selectedProductId
+        (row) => selectedProductId === 'all' || row.product_id === selectedProductId
     )
     const requiredInventoryProducts = products.filter(
         (product) => product.requires_inventory && product.active
@@ -494,8 +494,6 @@ function RecipeMappingAdminPage() {
 
                         {loading ? (
                             <div>Loading...</div>
-                        ) : !selectedProductId ? (
-                            <div>Select a product to view mappings.</div>
                         ) : filteredRecipeRows.length === 0 ? (
                             <div>
                                 No recipe mappings found for <strong>{getProductName(selectedProductId)}</strong>.
