@@ -5,6 +5,9 @@ import {
     createProductAdmin,
     updateProductAdmin,
     toggleProductActive,
+    getAllowedMixersForProduct,
+    addAllowedMixer,
+    removeAllowedMixer,
 } from '../services/productsAdmin'
 import AdminNav from '../components/AdminNav'
 
@@ -15,6 +18,10 @@ function ProductsAdminPage() {
     const [status, setStatus] = useState('Loading products...')
     const [loading, setLoading] = useState(true)
     const [isSaving, setIsSaving] = useState(false)
+    const [managingMixersForId, setManagingMixersForId] = useState(null)
+    const [currentMixers, setCurrentMixers] = useState([])
+    const [selectedNewMixerId, setSelectedNewMixerId] = useState('')
+    const [isMixerSaving, setIsMixerSaving] = useState(false)
     const [productSearch, setProductSearch] = useState('')
 
     const [newName, setNewName] = useState('')
@@ -244,6 +251,52 @@ function ProductsAdminPage() {
                 Access denied. Admin only.
             </div>
         )
+    }
+    async function handleOpenMixerManager(productId) {
+        if (managingMixersForId === productId) {
+            setManagingMixersForId(null)
+            setCurrentMixers([])
+            return
+        }
+        const { data, error } = await getAllowedMixersForProduct(productId)
+        if (!error) setCurrentMixers(data || [])
+        setSelectedNewMixerId('')
+        setManagingMixersForId(productId)
+    }
+
+    async function handleAddMixer(shotProductId) {
+        if (!selectedNewMixerId) return
+        const alreadyAdded = currentMixers.some(m => m.mixer_product_id === selectedNewMixerId)
+        if (alreadyAdded) {
+            setStatus('Ese mixer ya está agregado.')
+            return
+        }
+        setIsMixerSaving(true)
+        const { error } = await addAllowedMixer({ shotProductId, mixerProductId: selectedNewMixerId })
+        if (error) {
+            setStatus(`Error agregando mixer: ${error.message}`)
+            setIsMixerSaving(false)
+            return
+        }
+        const { data } = await getAllowedMixersForProduct(shotProductId)
+        setCurrentMixers(data || [])
+        setSelectedNewMixerId('')
+        setIsMixerSaving(false)
+        setStatus('Mixer agregado.')
+    }
+
+    async function handleRemoveMixer(rowId, shotProductId) {
+        setIsMixerSaving(true)
+        const { error } = await removeAllowedMixer({ id: rowId })
+        if (error) {
+            setStatus(`Error removiendo mixer: ${error.message}`)
+            setIsMixerSaving(false)
+            return
+        }
+        const { data } = await getAllowedMixersForProduct(shotProductId)
+        setCurrentMixers(data || [])
+        setIsMixerSaving(false)
+        setStatus('Mixer removido.')
     }
 
     return (
@@ -572,6 +625,19 @@ function ProductsAdminPage() {
                                                     Edit
                                                 </button>
 
+                                                {product.is_shot && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleOpenMixerManager(product.id)}
+                                                        style={{
+                                                            ...secondaryButtonStyle,
+                                                            background: managingMixersForId === product.id ? '#1a3a5c' : '#222',
+                                                        }}
+                                                    >
+                                                        Mixers
+                                                    </button>
+                                                )}
+
                                                 <button
                                                     type="button"
                                                     onClick={() => handleToggleActive(product)}
@@ -583,6 +649,70 @@ function ProductsAdminPage() {
                                                     {product.active ? 'Deactivate' : 'Activate'}
                                                 </button>
                                             </div>
+
+                                            {product.is_shot && managingMixersForId === product.id && (
+                                                <div style={{
+                                                    marginTop: '12px',
+                                                    padding: '14px',
+                                                    background: '#0d1f2d',
+                                                    borderRadius: '10px',
+                                                    border: '1px solid #1a3a5c',
+                                                }}>
+                                                    <div style={{ fontWeight: 'bold', marginBottom: '10px', fontSize: '13px' }}>
+                                                        Mixers permitidos para {product.name}
+                                                    </div>
+
+                                                    {currentMixers.length === 0 ? (
+                                                        <div style={{ fontSize: '13px', opacity: 0.6, marginBottom: '10px' }}>
+                                                            Sin mixers asignados.
+                                                        </div>
+                                                    ) : (
+                                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
+                                                            {currentMixers.map(m => (
+                                                                <div key={m.id} style={{
+                                                                    display: 'flex', alignItems: 'center', gap: '6px',
+                                                                    background: '#111', border: '1px solid #333',
+                                                                    borderRadius: '8px', padding: '4px 10px', fontSize: '13px',
+                                                                }}>
+                                                                    <span>{m.products?.name || m.mixer_product_id}</span>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleRemoveMixer(m.id, product.id)}
+                                                                        disabled={isMixerSaving}
+                                                                        style={{
+                                                                            background: 'none', border: 'none', color: '#ff8c8c',
+                                                                            cursor: 'pointer', fontSize: '14px', padding: '0 2px',
+                                                                        }}
+                                                                    >
+                                                                        ×
+                                                                    </button>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+
+                                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                                        <select
+                                                            value={selectedNewMixerId}
+                                                            onChange={e => setSelectedNewMixerId(e.target.value)}
+                                                            style={{ ...inputStyle, flex: 1 }}
+                                                        >
+                                                            <option value="">Seleccionar mixer...</option>
+                                                            {products.filter(p => p.is_mixer && p.active).map(p => (
+                                                                <option key={p.id} value={p.id}>{p.name}</option>
+                                                            ))}
+                                                        </select>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleAddMixer(product.id)}
+                                                            disabled={!selectedNewMixerId || isMixerSaving}
+                                                            style={primaryButtonStyle}
+                                                        >
+                                                            Agregar
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     )
                                 })}

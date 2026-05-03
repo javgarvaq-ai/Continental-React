@@ -94,3 +94,32 @@ export async function toggleProductActive({ productId, active }) {
         .update({ active: Boolean(active) })
         .eq('id', productId)
 }
+export async function getAllowedMixersForProduct(shotProductId) {
+    return await supabase
+        .from('product_allowed_mixers')
+        .select(`
+            id,
+            mixer_product_id,
+            active,
+            products:mixer_product_id (id, name)
+        `)
+        .eq('shot_product_id', shotProductId)
+        .eq('active', true)
+}
+
+export async function addAllowedMixer({ shotProductId, mixerProductId }) {
+    return await supabase
+        .from('product_allowed_mixers')
+        .insert([{
+            shot_product_id: shotProductId,
+            mixer_product_id: mixerProductId,
+            active: true,
+        }])
+}
+
+export async function removeAllowedMixer({ id }) {
+    return await supabase
+        .from('product_allowed_mixers')
+        .delete()
+        .eq('id', id)
+}
