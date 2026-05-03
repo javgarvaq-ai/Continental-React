@@ -21,6 +21,7 @@ function ComandaPanel({
     onIncreaseCartItem,
     onPresentBill,
     onReopenComanda,
+    onCancelMesa,
     onStartPayment,
     onPaymentFieldChange,
     onResetAutoTip,
@@ -154,6 +155,24 @@ function ComandaPanel({
                         }}
                     >
                         Cuenta
+                    </button>
+                ) : null}
+                {currentComanda?.status === 'open' ? (
+                    <button
+                        type="button"
+                        onClick={onCancelMesa}
+                        disabled={isUpdatingComandaStatus}
+                        style={{
+                            padding: '12px 16px',
+                            borderRadius: '8px',
+                            border: '1px solid #c62828',
+                            background: 'transparent',
+                            color: '#ef9a9a',
+                            cursor: 'pointer',
+                            fontWeight: 'bold',
+                        }}
+                    >
+                        Cancelar Mesa
                     </button>
                 ) : null}
 

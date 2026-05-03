@@ -49,3 +49,27 @@ export async function getOrCreateActiveComanda({ unitId, userId, customerName })
 
     return { data: newComanda, error: null }
 }
+export async function cancelComanda({ comandaId, userId }) {
+    const { error: updateError } = await supabase
+        .from('comandas')
+        .update({
+            status: 'cancelled',
+            closed_at: new Date().toISOString(),
+        })
+        .eq('id', comandaId)
+
+    if (updateError) {
+        return { error: updateError }
+    }
+
+    await supabase.from('comanda_events').insert([
+        {
+            comanda_id: comandaId,
+            user_id: userId,
+            event_type: 'cancelled',
+            event_data: { reason: 'manual_cancel' },
+        },
+    ])
+
+    return { error: null }
+}

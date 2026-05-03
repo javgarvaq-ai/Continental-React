@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getUnitsWithStatus } from '../services/units';
-import { getOrCreateActiveComanda } from '../services/comandas';
+import { getOrCreateActiveComanda, cancelComanda } from '../services/comandas';
 import MesaGrid from '../components/MesaGrid';
 import ShotMixerSelector from '../components/ShotMixerSelector';
 import PaymentPanel from '../components/PaymentPanel';
@@ -1467,6 +1467,39 @@ Diferencia: $${difference}`
         }
     }
 
+    async function handleCancelMesa() {
+        if (!currentComanda?.id || !currentUser?.id) return;
+        if (currentComanda.status !== 'open') return;
+
+        const hasItems = visibleCartItems && visibleCartItems.length > 0;
+        const msg = hasItems
+            ? `Esta mesa tiene ${visibleCartItems.length} producto(s). ¿Cancelar la mesa de todas formas? Los productos NO serán cobrados.`
+            : '¿Cancelar y liberar esta mesa?';
+
+        if (!window.confirm(msg)) return;
+        if (isUpdatingComandaStatus) return;
+
+        setIsUpdatingComandaStatus(true);
+        try {
+            const { error } = await cancelComanda({
+                comandaId: currentComanda.id,
+                userId: currentUser.id,
+            });
+            if (error) { setStatus(`Error cancelando mesa: ${error.message}`); return; }
+
+            setSelectedUnit(null);
+            setCurrentComanda(null);
+            setCartItems([]);
+            setCurrentCustomer(null);
+            setCurrentMembership(null);
+            resetPaymentState();
+            await loadUnits();
+            setStatus('Mesa cancelada y liberada.');
+        } finally {
+            setIsUpdatingComandaStatus(false);
+        }
+    }
+
     async function handleStartPayment() {
         if (!currentComanda?.id || !currentUser?.id) return;
 
@@ -1563,7 +1596,7 @@ Diferencia: $${difference}`
                 tarjeta: paymentSummary.tarjeta,
                 transferencia: paymentSummary.transferencia,
                 propina: paymentSummary.propina,
-                cambio: paymentSummary.cambio,
+                cambio: Math.round(paymentSummary.cambio * 100) / 100,
             });
 
             if (error) {
@@ -2130,6 +2163,7 @@ Diferencia: $${difference}`
                             onIncreaseCartItem={handleIncreaseCartItem}
                             onPresentBill={handlePresentBill}
                             onReopenComanda={handleReopenComanda}
+                            onCancelMesa={handleCancelMesa}
                             onStartPayment={handleStartPayment}
                             onPaymentFieldChange={handlePaymentFieldChange}
                             onResetAutoTip={handleResetAutoTip}
