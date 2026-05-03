@@ -102,6 +102,19 @@ export async function getAllActiveMembershipPlans() {
 
 export async function activateMembership({ customerId, planId, comandaId }) {
     const currentMonth = getCurrentMonthDate()
+
+    const { data: existing } = await supabase
+        .from('customer_memberships')
+        .select('id')
+        .eq('customer_id', customerId)
+        .eq('month', currentMonth)
+        .eq('status', 'active')
+        .maybeSingle()
+
+    if (existing) {
+        return { data: null, error: new Error('Este cliente ya tiene una membresía activa este mes.') }
+    }
+
     return await supabase
         .from('customer_memberships')
         .insert([{
@@ -164,6 +177,23 @@ export async function processMembershipOnPayment({
     discountAmount,
     membershipPlanBenefits,
 }) {
+    const { data: alreadyProcessed } = await supabase
+        .from('membership_benefit_usage')
+        .select('id')
+        .eq('comanda_id', comandaId)
+        .eq('customer_id', customerId)
+        .limit(1)
+        .maybeSingle()
+
+    if (alreadyProcessed) {
+        return { newVisitCount: null, earnedBottleCredit: false, newBottleCreditsAvailable: null }
+    }
+
+    const { data: customer } = await supabase
+        .from('customers')
+        .select('visit_count, bottle_credits_available')
+        .eq('id', customerId)
+        .single()
     const { data: customer } = await supabase
         .from('customers')
         .select('visit_count, bottle_credits_available')

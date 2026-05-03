@@ -225,8 +225,6 @@ async function descontarInventarioComanda({ comandaId, userId }) {
     }
 
     for (const item of comandaItems || []) {
-        // Skip free benefit items — no inventory deduction for them
-        if (item.is_free_benefit) continue;
 
         const { data: recipeRows, error: recipeError } = await supabase
             .from('product_recipes')
