@@ -29,6 +29,7 @@ import { printTicket } from '../components/Ticket';
 import { supabase } from '../services/supabase';
 import {
     getCustomerWithMembership,
+    searchCustomerByQuery,
     getCustomerByIdWithMembership,
     getAllActiveMembershipPlans,
     activateMembership,
@@ -724,19 +725,16 @@ function PosPage() {
         }
 
         alert(
-            `📊 CORTE DE TURNO
-
-Fondo inicial: $${Number(summary.shift.starting_cash || 0)}
-Efectivo neto en caja: $${summary.totalEfectivo}
-Cambio entregado: $${summary.totalCambio}
-Tarjeta: $${summary.totalTarjeta}
-Transferencia: $${summary.totalTransferencia}
-Propinas: $${summary.totalPropinas}
-
-Depósitos: +$${summary.totalDeposits}
-Retiros: -$${summary.totalWithdrawals}
-
-Caja esperada: $${summary.expectedCash}`
+            `📊 CORTE DE TURNO\n\n` +
+            `Fondo inicial: ${money(summary.shift.starting_cash)}\n` +
+            `Efectivo neto en caja: ${money(summary.totalEfectivo)}\n` +
+            `Cambio entregado: ${money(summary.totalCambio)}\n` +
+            `Tarjeta: ${money(summary.totalTarjeta)}\n` +
+            `Transferencia: ${money(summary.totalTransferencia)}\n` +
+            `Propinas: ${money(summary.totalPropinas)}\n\n` +
+            `Depósitos: +${money(summary.totalDeposits)}\n` +
+            `Retiros: -${money(summary.totalWithdrawals)}\n\n` +
+            `Caja esperada: ${money(summary.expectedCash)}`
         );
     }
 
@@ -768,22 +766,18 @@ Caja esperada: $${summary.expectedCash}`
         }
 
         const countedInput = window.prompt(
-            `🔒 CIERRE DE TURNO
-
-Fondo inicial: $${Number(summary.shift.starting_cash || 0)}
-Efectivo neto en caja: $${summary.totalEfectivo}
-Cambio entregado: $${summary.totalCambio}
-Tarjeta: $${summary.totalTarjeta}
-Transferencia: $${summary.totalTransferencia}
-Propinas: $${summary.totalPropinas}
-
-Depósitos: +$${summary.totalDeposits}
-Retiros: -$${summary.totalWithdrawals}
-
-Caja esperada: $${summary.expectedCash}
-
-Ingrese efectivo contado físicamente:`
-        )
+            `🔒 CIERRE DE TURNO\n\n` +
+            `Fondo inicial: ${money(summary.shift.starting_cash)}\n` +
+            `Efectivo neto en caja: ${money(summary.totalEfectivo)}\n` +
+            `Cambio entregado: ${money(summary.totalCambio)}\n` +
+            `Tarjeta: ${money(summary.totalTarjeta)}\n` +
+            `Transferencia: ${money(summary.totalTransferencia)}\n` +
+            `Propinas: ${money(summary.totalPropinas)}\n\n` +
+            `Depósitos: +${money(summary.totalDeposits)}\n` +
+            `Retiros: -${money(summary.totalWithdrawals)}\n\n` +
+            `Caja esperada: ${money(summary.expectedCash)}\n\n` +
+            `Ingrese efectivo contado físicamente:`
+        );
 
         if (countedInput === null || countedInput.trim() === '') return
 
@@ -819,22 +813,19 @@ Ingrese efectivo contado físicamente:`
         }
 
         alert(
-            `🔒 TURNO CERRADO
-
-Fondo inicial: $${Number(summary.shift.starting_cash || 0)}
-Efectivo neto en caja: $${summary.totalEfectivo}
-Cambio entregado: $${summary.totalCambio}
-Tarjeta: $${summary.totalTarjeta}
-Transferencia: $${summary.totalTransferencia}
-Propinas: $${summary.totalPropinas}
-
-Depósitos: +$${summary.totalDeposits}
-Retiros: -$${summary.totalWithdrawals}
-
-Caja esperada: $${summary.expectedCash}
-Caja contada: $${cashCounted}
-Diferencia: $${difference}`
-        )
+            `🔒 TURNO CERRADO\n\n` +
+            `Fondo inicial: ${money(summary.shift.starting_cash)}\n` +
+            `Efectivo neto en caja: ${money(summary.totalEfectivo)}\n` +
+            `Cambio entregado: ${money(summary.totalCambio)}\n` +
+            `Tarjeta: ${money(summary.totalTarjeta)}\n` +
+            `Transferencia: ${money(summary.totalTransferencia)}\n` +
+            `Propinas: ${money(summary.totalPropinas)}\n\n` +
+            `Depósitos: +${money(summary.totalDeposits)}\n` +
+            `Retiros: -${money(summary.totalWithdrawals)}\n\n` +
+            `Caja esperada: ${money(summary.expectedCash)}\n` +
+            `Caja contada: ${money(cashCounted)}\n` +
+            `Diferencia: ${money(difference)}`
+        );
 
         localStorage.removeItem('continentalCurrentShiftId')
         navigate('/')
@@ -973,7 +964,7 @@ Diferencia: $${difference}`
         setIsSearchingCustomer(true)
         setCustomerSearchState(p => ({ ...p, notFound: false, result: null }))
 
-        const { data } = await getCustomerWithMembership(customerSearchState.query.trim())
+        const { data } = await searchCustomerByQuery(customerSearchState.query.trim())
 
         if (data) {
             setCustomerSearchState(p => ({ ...p, result: data, notFound: false }))
@@ -1489,10 +1480,11 @@ Diferencia: $${difference}`
 
             setSelectedUnit(null);
             setCurrentComanda(null);
+            setGroupedProducts({});
             setCartItems([]);
-            setCurrentCustomer(null);
-            setCurrentMembership(null);
             resetPaymentState();
+            resetShotSelector();
+            resetCustomerState();
             await loadUnits();
             setStatus('Mesa cancelada y liberada.');
         } finally {
@@ -1604,6 +1596,19 @@ Diferencia: $${difference}`
                 return;
             }
 
+
+            // Process membership if customer is assigned
+            let membershipResult = null
+            if (currentCustomer && currentMembership) {
+                membershipResult = await processMembershipOnPayment({
+                    customerId: currentCustomer.id,
+                    membershipId: currentMembership.id,
+                    comandaId: currentComanda.id,
+                    discountPct: membershipDiscountPct,
+                    discountAmount,
+                    membershipPlanBenefits: currentMembership.membership_plans?.membership_plan_benefits || [],
+                })
+            }
             printTicket({
                 tipo: 'pagado',
                 comanda: {
@@ -1635,19 +1640,6 @@ Diferencia: $${difference}`
                     earnedBottleCredit: membershipResult?.earnedBottleCredit,
                 } : null,
             });
-
-            // Process membership if customer is assigned
-            let membershipResult = null
-            if (currentCustomer && currentMembership) {
-                membershipResult = await processMembershipOnPayment({
-                    customerId: currentCustomer.id,
-                    membershipId: currentMembership.id,
-                    comandaId: currentComanda.id,
-                    discountPct: membershipDiscountPct,
-                    discountAmount,
-                    membershipPlanBenefits: currentMembership.membership_plans?.membership_plan_benefits || [],
-                })
-            }
 
             if (data?.inventoryWarning) {
                 alert(`Cobro registrado, pero inventario avisó: ${data.inventoryWarning}`);
