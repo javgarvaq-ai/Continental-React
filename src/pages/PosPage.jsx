@@ -131,6 +131,16 @@ function PosPage() {
         benefit: null,
     });
     const [isProcessingMembership, setIsProcessingMembership] = useState(false);
+    const [customerSearchState, setCustomerSearchState] = useState({
+        open: false,
+        query: '',
+        result: null,
+        notFound: false,
+        showCreateForm: false,
+        newName: '',
+        newPhone: '',
+    });
+    const [isSearchingCustomer, setIsSearchingCustomer] = useState(false);
 
     useEffect(() => {
         const savedUser = localStorage.getItem('continentalCurrentUser');
@@ -183,8 +193,8 @@ function PosPage() {
         setCurrentMembership(null);
         setMembershipRenewalState({ open: false, plans: [], selectedPlanId: '' });
         setFreeBenefitState({ open: false, type: null, benefit: null });
+        setCustomerSearchState({ open: false, query: '', result: null, notFound: false, showCreateForm: false, newName: '', newPhone: '' });
     }
-
     function handleChangeUser() {
         const confirmed = window.confirm(
             '¿Deseas cambiar de usuario sin cerrar el turno?'
@@ -957,6 +967,80 @@ Diferencia: $${difference}`
         resetShotSelector()
         setStatus(`Comanda cargada para ${unit.name}.`)
     }
+    async function handleSearchCustomer() {
+        if (!customerSearchState.query.trim()) return
+        setIsSearchingCustomer(true)
+        setCustomerSearchState(p => ({ ...p, notFound: false, result: null }))
+
+        const { data } = await getCustomerWithMembership(customerSearchState.query.trim())
+
+        if (data) {
+            setCustomerSearchState(p => ({ ...p, result: data, notFound: false }))
+        } else {
+            setCustomerSearchState(p => ({ ...p, result: null, notFound: true }))
+        }
+        setIsSearchingCustomer(false)
+    }
+
+    async function handleAssignCustomer(customerData) {
+        if (!currentComanda?.id) return
+        setIsProcessingMembership(true)
+
+        await supabase
+            .from('comandas')
+            .update({
+                customer_id: customerData.customer.id,
+                customer_name: customerData.customer.name,
+            })
+            .eq('id', currentComanda.id)
+
+        setCurrentComanda(prev => ({
+            ...prev,
+            customer_id: customerData.customer.id,
+            customer_name: customerData.customer.name,
+        }))
+
+        setCurrentCustomer(customerData.customer)
+        setCurrentMembership(customerData.activeMembership)
+        setCustomerSearchState({ open: false, query: '', result: null, notFound: false, showCreateForm: false, newName: '', newPhone: '' })
+        setIsProcessingMembership(false)
+        setStatus(`Cliente asignado: ${customerData.customer.name}`)
+    }
+
+    async function handleCreateAndAssignCustomer() {
+        if (!customerSearchState.newName.trim() || !currentComanda?.id) return
+        setIsProcessingMembership(true)
+
+        const nextNumber = await import('../services/customersAdmin').then(m => m.getNextCustomerNumber())
+
+        const { data: newCustomer, error } = await supabase
+            .from('customers')
+            .insert([{
+                customer_number: nextNumber,
+                name: customerSearchState.newName.trim(),
+                phone: customerSearchState.newPhone.trim() || null,
+            }])
+            .select()
+            .single()
+
+        if (error || !newCustomer) {
+            setStatus(`Error creando cliente: ${error?.message}`)
+            setIsProcessingMembership(false)
+            return
+        }
+
+        await supabase
+            .from('comandas')
+            .update({ customer_id: newCustomer.id, customer_name: newCustomer.name })
+            .eq('id', currentComanda.id)
+
+        setCurrentComanda(prev => ({ ...prev, customer_id: newCustomer.id, customer_name: newCustomer.name }))
+        setCurrentCustomer(newCustomer)
+        setCurrentMembership(null)
+        setCustomerSearchState({ open: false, query: '', result: null, notFound: false, showCreateForm: false, newName: '', newPhone: '' })
+        setIsProcessingMembership(false)
+        setStatus(`Cliente creado y asignado: ${newCustomer.name} #${newCustomer.customer_number}`)
+    }
     async function handleOpenMembershipRenewal() {
         setIsProcessingMembership(true)
         const { data, error } = await getAllActiveMembershipPlans()
@@ -1675,6 +1759,126 @@ Diferencia: $${difference}`
                         </div>
 
                         {/* CUSTOMER & MEMBERSHIP INFO */}
+                        {/* ASSIGN CUSTOMER BUTTON — shown when no customer assigned */}
+                        {!currentCustomer && currentComanda?.status === 'open' && (
+                            <div style={{ marginTop: '10px' }}>
+                                {!customerSearchState.open ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => setCustomerSearchState(p => ({ ...p, open: true }))}
+                                        style={{ padding: '6px 14px', borderRadius: '8px', border: '1px solid #444', background: '#222', color: '#aaa', cursor: 'pointer', fontSize: '12px' }}
+                                    >
+                                        👤 Asignar cliente
+                                    </button>
+                                ) : (
+                                    <div style={{ padding: '12px', background: '#1a1a1a', borderRadius: '10px', border: '1px solid #444' }}>
+                                        <div style={{ fontWeight: 'bold', marginBottom: '10px', fontSize: '13px' }}>Buscar cliente por número o nombre</div>
+
+                                        {!customerSearchState.showCreateForm ? (
+                                            <>
+                                                <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+                                                    <input
+                                                        type="text"
+                                                        value={customerSearchState.query}
+                                                        onChange={e => setCustomerSearchState(p => ({ ...p, query: e.target.value }))}
+                                                        onKeyDown={e => e.key === 'Enter' && handleSearchCustomer()}
+                                                        placeholder="Número o nombre..."
+                                                        style={{ flex: 1, padding: '8px 12px', borderRadius: '8px', border: '1px solid #444', background: '#111', color: 'white' }}
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleSearchCustomer}
+                                                        disabled={isSearchingCustomer}
+                                                        style={{ padding: '8px 14px', borderRadius: '8px', border: 'none', background: '#1565c0', color: 'white', cursor: 'pointer', fontSize: '13px' }}
+                                                    >
+                                                        {isSearchingCustomer ? '...' : 'Buscar'}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setCustomerSearchState({ open: false, query: '', result: null, notFound: false, showCreateForm: false, newName: '', newPhone: '' })}
+                                                        style={{ padding: '8px 12px', borderRadius: '8px', border: 'none', background: '#333', color: 'white', cursor: 'pointer', fontSize: '13px' }}
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                </div>
+
+                                                {customerSearchState.result && (
+                                                    <div style={{ background: '#111', borderRadius: '8px', padding: '10px', marginBottom: '8px' }}>
+                                                        <div style={{ fontSize: '13px', fontWeight: 'bold' }}>
+                                                            #{customerSearchState.result.customer.customer_number} — {customerSearchState.result.customer.name}
+                                                        </div>
+                                                        <div style={{ fontSize: '12px', opacity: 0.7, marginTop: '2px' }}>
+                                                            {customerSearchState.result.activeMembership
+                                                                ? `Membresía activa: ${customerSearchState.result.activeMembership.membership_plans?.name}`
+                                                                : 'Sin membresía activa'}
+                                                            {' · '}{customerSearchState.result.customer.visit_count} visitas
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleAssignCustomer(customerSearchState.result)}
+                                                            disabled={isProcessingMembership}
+                                                            style={{ marginTop: '8px', padding: '6px 14px', borderRadius: '8px', border: 'none', background: '#2e7d32', color: 'white', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                                                        >
+                                                            Asignar a esta mesa
+                                                        </button>
+                                                    </div>
+                                                )}
+
+                                                {customerSearchState.notFound && (
+                                                    <div style={{ fontSize: '12px', marginBottom: '8px' }}>
+                                                        <span style={{ color: '#f57c00' }}>Cliente no encontrado. </span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setCustomerSearchState(p => ({ ...p, showCreateForm: true }))}
+                                                            style={{ background: 'none', border: 'none', color: '#4a90d9', cursor: 'pointer', fontSize: '12px', textDecoration: 'underline' }}
+                                                        >
+                                                            ¿Crear nuevo cliente?
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}>
+                                                    <input
+                                                        type="text"
+                                                        value={customerSearchState.newName}
+                                                        onChange={e => setCustomerSearchState(p => ({ ...p, newName: e.target.value }))}
+                                                        placeholder="Nombre del cliente *"
+                                                        style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #444', background: '#111', color: 'white' }}
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        value={customerSearchState.newPhone}
+                                                        onChange={e => setCustomerSearchState(p => ({ ...p, newPhone: e.target.value }))}
+                                                        placeholder="Teléfono (opcional)"
+                                                        style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #444', background: '#111', color: 'white' }}
+                                                    />
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '8px' }}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleCreateAndAssignCustomer}
+                                                        disabled={isProcessingMembership || !customerSearchState.newName.trim()}
+                                                        style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: '#2e7d32', color: 'white', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                                                    >
+                                                        {isProcessingMembership ? 'Creando...' : 'Crear y asignar'}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setCustomerSearchState(p => ({ ...p, showCreateForm: false }))}
+                                                        style={{ padding: '8px 14px', borderRadius: '8px', border: 'none', background: '#333', color: 'white', cursor: 'pointer', fontSize: '12px' }}
+                                                    >
+                                                        ← Volver
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         {currentCustomer && (
                             <div style={{ marginTop: '10px', padding: '10px 12px', background: '#111', borderRadius: '8px', border: '1px solid #333' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
