@@ -139,7 +139,7 @@ export async function addFreeBenefitItemToComanda({ comandaId, productId }) {
             is_free_benefit: true,
             is_free_mixer: false,
         }])
-        .select('*, products(id, name, price)')
+        .select('*, products:products!comanda_items_product_id_fkey(id, name, price)')
         .single()
 }
 
