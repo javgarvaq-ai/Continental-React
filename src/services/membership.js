@@ -128,6 +128,19 @@ export async function activateMembership({ customerId, planId, comandaId }) {
 }
 
 export async function addFreeBenefitItemToComanda({ comandaId, productId }) {
+    // Check if a free benefit item already exists for this comanda
+    const { data: existing } = await supabase
+        .from('comanda_items')
+        .select('id')
+        .eq('comanda_id', comandaId)
+        .eq('is_free_benefit', true)
+        .eq('status', 'active')
+        .maybeSingle()
+
+    if (existing) {
+        return { error: new Error('Ya se agregó un producto gratis en esta visita.'), data: null }
+    }
+
     return await supabase
         .from('comanda_items')
         .insert([{

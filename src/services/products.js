@@ -76,6 +76,7 @@ export async function addNormalProductToComanda({ comandaId, product }) {
         .eq('product_id', product.id)
         .eq('status', 'active')
         .eq('is_free_mixer', false)
+        .eq('is_free_benefit', false)
         .maybeSingle();
 
     if (existingError) {
