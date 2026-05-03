@@ -828,6 +828,7 @@ function PosPage() {
         );
 
         localStorage.removeItem('continentalCurrentShiftId')
+        localStorage.removeItem('continentalCurrentUser')
         navigate('/')
     }
 
@@ -1463,6 +1464,12 @@ function PosPage() {
         if (currentComanda.status !== 'open') return;
 
         const hasItems = visibleCartItems && visibleCartItems.length > 0;
+
+        if (hasItems && currentUser?.role === 'waiter') {
+            alert('No autorizado. Solo un manager o admin puede cancelar una mesa con productos.');
+            return;
+        }
+
         const msg = hasItems
             ? `Esta mesa tiene ${visibleCartItems.length} producto(s). ¿Cancelar la mesa de todas formas? Los productos NO serán cobrados.`
             : '¿Cancelar y liberar esta mesa?';

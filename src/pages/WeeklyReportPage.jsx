@@ -49,8 +49,8 @@ function WeeklyReportPage() {
         setLoading(true);
         setStatus('Cargando reporte semanal...');
 
-        const startIso = `${startDate}T00:00:00`;
-        const endIso = `${endDate}T23:59:59`;
+        const startIso = `${startDate}T00:00:00-06:00`;
+        const endIso = `${endDate}T23:59:59-06:00`;
 
         const [paymentsResult, cashMovementsResult, comandasResult] = await Promise.all([
             supabase
