@@ -6,6 +6,7 @@ import {
     updateInventoryItem,
     toggleInventoryItemActive,
 } from '../services/inventoryAdmin'
+import AdminNav from '../components/AdminNav'
 
 function InventoryItemsAdminPage() {
     const navigate = useNavigate()

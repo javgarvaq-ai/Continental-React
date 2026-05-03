@@ -6,6 +6,7 @@ import {
     updateRecipeMapping,
     toggleRecipeMappingActive,
 } from '../services/recipeMappingsAdmin'
+import AdminNav from '../components/AdminNav'
 
 function RecipeMappingAdminPage() {
     const navigate = useNavigate()

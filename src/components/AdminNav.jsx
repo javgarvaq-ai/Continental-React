@@ -27,7 +27,7 @@ function AdminNav({ currentPath }) {
     const navigate = useNavigate()
 
     return (
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'nowrap', overflowX: 'auto', paddingBottom: '4px' }}>
             {NAV_ITEMS.map(item => (
                 <button
                     key={item.path}
