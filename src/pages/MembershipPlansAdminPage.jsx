@@ -10,16 +10,8 @@ import {
     removeBenefitProduct,
     getProductsForBenefitSelection,
 } from '../services/membershipAdmin'
+import AdminNav from '../components/AdminNav'
 
-const navButtonStyle = {
-    padding: '10px 14px',
-    borderRadius: '8px',
-    border: '1px solid #555',
-    background: '#222',
-    color: 'white',
-    cursor: 'pointer',
-    fontWeight: 'bold',
-}
 
 const BENEFIT_LABELS = {
     discount: '% Descuento',
@@ -196,19 +188,7 @@ function MembershipPlansAdminPage() {
         <div style={{ minHeight: '100vh', background: '#111', color: 'white', padding: '24px', boxSizing: 'border-box' }}>
             <div style={{ maxWidth: '900px', margin: '0 auto' }}>
 
-                <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
-                    <button type="button" onClick={() => navigate('/pos')} style={navButtonStyle}>POS</button>
-                    <button type="button" onClick={() => navigate('/admin/users')} style={navButtonStyle}>Usuarios</button>
-                    <button type="button" onClick={() => navigate('/admin/categories')} style={navButtonStyle}>Categorías</button>
-                    <button type="button" onClick={() => navigate('/admin/products')} style={navButtonStyle}>Productos</button>
-                    <button type="button" onClick={() => navigate('/admin/inventory-items')} style={navButtonStyle}>Inventario</button>
-                    <button type="button" onClick={() => navigate('/admin/recipe-mappings')} style={navButtonStyle}>Recetas</button>
-                    <button type="button" onClick={() => navigate('/admin/membership-plans')} style={{ ...navButtonStyle, background: '#1d3557' }}>Membresías</button>
-                    <button type="button" onClick={() => navigate('/admin/customers')} style={navButtonStyle}>Clientes</button>
-                    <button type="button" onClick={() => navigate('/admin/units')} style={navButtonStyle}>
-                        Mesas/Unidades
-                    </button>
-                </div>
+                <AdminNav currentPath="/admin/membership-plans" />
 
                 <h1 style={{ marginTop: 0 }}>Membership Plans</h1>
                 <p style={{ opacity: 0.85 }}>{status}</p>

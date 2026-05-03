@@ -6,6 +6,7 @@ import {
     updateProductAdmin,
     toggleProductActive,
 } from '../services/productsAdmin'
+import AdminNav from '../components/AdminNav'
 
 function ProductsAdminPage() {
     const [products, setProducts] = useState([])
@@ -256,66 +257,7 @@ function ProductsAdminPage() {
             }}
         >
             <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-                <div
-                    style={{
-                        display: 'flex',
-                        gap: '10px',
-                        marginBottom: '16px',
-                        flexWrap: 'wrap',
-                    }}
-                >
-                    <button
-                        type="button"
-                        onClick={() => navigate('/pos')}
-                        style={navButtonStyle}
-                    >
-                        POS
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={() => navigate('/admin/users')}
-                        style={navButtonStyle}
-                    >
-                        Usuarios
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={() => navigate('/admin/products')}
-                        style={{ ...navButtonStyle, background: '#3d2c1d' }}
-                    >
-                        Productos
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={() => navigate('/admin/inventory-items')}
-                        style={navButtonStyle}
-                    >
-                        Inventario
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={() => navigate('/admin/recipe-mappings')}
-                        style={navButtonStyle}
-                    >
-                        Recetas
-                    </button>
-                    <button type="button" onClick={() => navigate('/admin/categories')} style={navButtonStyle}>
-                        Categorías
-                    </button>
-                    <button type="button" onClick={() => navigate('/admin/membership-plans')} style={navButtonStyle}>
-                        Membresías
-                    </button>
-                    <button type="button" onClick={() => navigate('/admin/customers')} style={navButtonStyle}>
-                        Clientes
-                    </button>
-                    <button type="button" onClick={() => navigate('/admin/units')} style={navButtonStyle}>
-                        Mesas/Unidades
-                    </button>
-                </div>
+                <AdminNav currentPath="/admin/products" />
                 <h1 style={{ marginTop: 0 }}>Products Administration</h1>
                 <p style={{ opacity: 0.85 }}>{status}</p>
 
@@ -700,13 +642,5 @@ const cardStyle = {
     gap: '12px',
     background: '#121212',
 }
-const navButtonStyle = {
-    padding: '10px 14px',
-    borderRadius: '8px',
-    border: '1px solid #555',
-    background: '#222',
-    color: 'white',
-    cursor: 'pointer',
-    fontWeight: 'bold',
-}
+
 export default ProductsAdminPage
