@@ -1,15 +1,21 @@
 import { supabase } from './supabase'
 
-export async function getOrCreateActiveComanda({ unitId, userId, customerName }) {
-    const { data: existing, error: existingError } = await supabase
-        .from('comandas')
-        .select('*')
-        .eq('unit_id', unitId)
-        .in('status', ['open', 'pending_payment', 'processing_payment'])
-        .limit(1)
+export async function getOrCreateActiveComanda({ unitId, userId, customerName, prefetchedExisting = undefined }) {
+    let existing = prefetchedExisting
 
-    if (existingError) {
-        return { data: null, error: existingError }
+    if (existing === undefined) {
+        const { data, error: existingError } = await supabase
+            .from('comandas')
+            .select('*')
+            .eq('unit_id', unitId)
+            .in('status', ['open', 'pending_payment', 'processing_payment'])
+            .limit(1)
+
+        if (existingError) {
+            return { data: null, error: existingError }
+        }
+
+        existing = data
     }
 
     if (existing && existing.length > 0) {

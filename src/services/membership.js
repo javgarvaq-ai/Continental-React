@@ -240,13 +240,22 @@ export async function processMembershipOnPayment({
         ? Math.max(creditsAfterEarning - 1, 0)
         : creditsAfterEarning
 
-    await supabase
+    const { error: updateCustomerError } = await supabase
         .from('customers')
         .update({
             visit_count: newVisitCount,
             bottle_credits_available: creditsAfterRedemption,
         })
         .eq('id', customerId)
+
+    if (updateCustomerError) {
+        return {
+            newVisitCount: null,
+            earnedBottleCredit: false,
+            newBottleCreditsAvailable: null,
+            membershipWarning: 'No se pudo actualizar el contador de visitas del cliente.',
+        }
+    }
 
     const usageEntries = []
 
@@ -284,10 +293,21 @@ export async function processMembershipOnPayment({
     }
 
     if (usageEntries.length > 0) {
-        await supabase.from('membership_benefit_usage').insert(usageEntries)
+        const { error: usageError } = await supabase
+            .from('membership_benefit_usage')
+            .insert(usageEntries)
+
+        if (usageError) {
+            return {
+                newVisitCount,
+                earnedBottleCredit,
+                newBottleCreditsAvailable: creditsAfterRedemption,
+                membershipWarning: 'Visita registrada, pero no se pudo guardar el detalle de beneficios usados.',
+            }
+        }
     }
 
-    return { newVisitCount, earnedBottleCredit, newBottleCreditsAvailable: creditsAfterRedemption }
+    return { newVisitCount, earnedBottleCredit, newBottleCreditsAvailable: creditsAfterRedemption, membershipWarning: null }
 }
 export async function searchCustomerByQuery(query) {
     const trimmed = query.trim()

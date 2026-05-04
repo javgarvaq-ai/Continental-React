@@ -930,6 +930,7 @@ function PosPage() {
             unitId: unit.id,
             userId: currentUser.id,
             customerName,
+            prefetchedExisting: existing,
         })
 
         if (error || !data) {
@@ -1660,6 +1661,10 @@ function PosPage() {
                     discountAmount,
                     membershipPlanBenefits: currentMembership.membership_plans?.membership_plan_benefits || [],
                 })
+
+                if (membershipResult?.membershipWarning) {
+                    alert(`Cobro registrado, pero hubo un problema con la membresía:\n${membershipResult.membershipWarning}\n\nAvisa al administrador.`)
+                }
             }
             printTicket({
                 tipo: 'pagado',
