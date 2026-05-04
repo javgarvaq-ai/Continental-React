@@ -33,6 +33,7 @@ import {
     getCustomerByIdWithMembership,
     getAllActiveMembershipPlans,
     activateMembership,
+    cancelMembershipOnComanda,
     addFreeBenefitItemToComanda,
     processMembershipOnPayment,
 } from '../services/membership';
@@ -1093,6 +1094,34 @@ function PosPage() {
         setIsProcessingMembership(false)
         setStatus('Membresía activada correctamente.')
     }
+    async function handleCancelMembership() {
+        if (!currentMembership || !currentComanda?.id) return
+
+        const confirmed = window.confirm(
+            `¿Cancelar la membresía "${currentMembership.membership_plans?.name}"? ` +
+            `Se eliminará el cargo y todos los beneficios usados en esta comanda.`
+        )
+        if (!confirmed) return
+
+        setIsProcessingMembership(true)
+
+        const { error } = await cancelMembershipOnComanda({
+            membershipId: currentMembership.id,
+            comandaId: currentComanda.id,
+            productId: currentMembership.membership_plans?.product_id || null,
+        })
+
+        if (error) {
+            alert(`Error cancelando membresía: ${error.message}`)
+            setIsProcessingMembership(false)
+            return
+        }
+
+        setCurrentMembership(null)
+        await loadComandaView(currentComanda.id)
+        setIsProcessingMembership(false)
+        setStatus('Membresía cancelada y cargo removido.')
+    }
 
     async function handleOpenFreeBenefitSelector(type) {
         if (!currentMembership) return
@@ -1962,6 +1991,16 @@ function PosPage() {
                                                 style={{ padding: '6px 12px', borderRadius: '8px', border: 'none', background: '#f57c00', color: 'white', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
                                             >
                                                 {isProcessingMembership ? 'Cargando...' : '+ Activar membresía'}
+                                            </button>
+                                        )}
+                                        {currentMembership && currentComanda?.status === 'open' && (
+                                            <button
+                                                type="button"
+                                                onClick={handleCancelMembership}
+                                                disabled={isProcessingMembership}
+                                                style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #c62828', background: 'transparent', color: '#ef9a9a', cursor: 'pointer', fontSize: '12px' }}
+                                            >
+                                                {isProcessingMembership ? 'Cancelando...' : 'Cancelar membresía'}
                                             </button>
                                         )}
                                         {currentMembership && currentMembership.membership_plans?.membership_plan_benefits?.some(b => b.benefit_type === 'free_product') && (

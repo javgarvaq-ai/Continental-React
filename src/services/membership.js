@@ -327,3 +327,31 @@ export async function searchCustomerByQuery(query) {
         error: null,
     }
 }
+export async function cancelMembershipOnComanda({ membershipId, comandaId, productId }) {
+    // 1. Delete the membership record
+    const { error: deleteError } = await supabase
+        .from('customer_memberships')
+        .delete()
+        .eq('id', membershipId)
+
+    if (deleteError) return { error: deleteError }
+
+    // 2. Remove the membership product from the comanda if it exists
+    if (productId) {
+        await supabase
+            .from('comanda_items')
+            .delete()
+            .eq('comanda_id', comandaId)
+            .eq('product_id', productId)
+            .eq('status', 'active')
+    }
+
+    // 3. Remove any free benefit items that were added as part of this membership
+    await supabase
+        .from('comanda_items')
+        .delete()
+        .eq('comanda_id', comandaId)
+        .eq('is_free_benefit', true)
+
+    return { error: null }
+}
