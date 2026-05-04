@@ -1702,7 +1702,7 @@ function PosPage() {
         b => b.benefit_type === 'discount'
     );
     const membershipDiscountPct = Number(membershipDiscountBenefit?.discount_percentage || 0);
-    const discountAmount = currentComanda?.status === 'open' && membershipDiscountPct > 0
+    const discountAmount = membershipDiscountPct > 0
         ? Math.round(cartTotal * (membershipDiscountPct / 100) * 100) / 100
         : 0;
 

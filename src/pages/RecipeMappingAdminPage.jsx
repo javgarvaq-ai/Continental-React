@@ -80,7 +80,7 @@ function RecipeMappingAdminPage() {
             return
         }
 
-        if (!selectedProductId) {
+        if (!selectedProductId || selectedProductId === 'all') {
             setStatus('Select a product.')
             return
         }
@@ -483,7 +483,8 @@ function RecipeMappingAdminPage() {
                                 onChange={(event) => setSelectedProductId(event.target.value)}
                                 style={inputStyle}
                             >
-                                <option value="">Select product</option>
+                                <option value="all">Todos los productos</option>
+                                <option value="">— Seleccionar para crear —</option>
                                 {requiredInventoryProducts.map((product) => (
                                     <option key={product.id} value={product.id}>
                                         {product.name}
