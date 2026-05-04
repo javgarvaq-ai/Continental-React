@@ -165,12 +165,13 @@ export async function addShotWithFreeMixers({
         return { error: new Error('El producto seleccionado no es shot.') };
     }
 
-    if (safeMixers.length !== freeMixersQty) {
+    if (safeMixers.length > freeMixersQty) {
         return {
+            data: null,
             error: new Error(
-                `Debes seleccionar exactamente ${freeMixersQty} mixer(s).`
+                `Puedes seleccionar hasta ${freeMixersQty} mixer(s).`
             ),
-        };
+        }
     }
 
     const { data: existingShot, error: existingShotError } = await supabase

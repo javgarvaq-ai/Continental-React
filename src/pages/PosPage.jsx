@@ -1333,8 +1333,8 @@ function PosPage() {
 
         const requiredMixers = Number(shotSelectorState.shotProduct?.free_mixers_qty || 0);
 
-        if (shotSelectorState.selectedMixers.length !== requiredMixers) {
-            alert(`Debes seleccionar exactamente ${requiredMixers} mixer(s).`);
+        if (shotSelectorState.selectedMixers.length > requiredMixers) {
+            alert(`Puedes seleccionar hasta ${requiredMixers} mixer(s).`);
             return;
         }
 

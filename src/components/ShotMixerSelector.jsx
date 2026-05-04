@@ -25,7 +25,7 @@ function ShotMixerSelector({
             </h2>
 
             <div style={{ marginBottom: '12px', opacity: 0.9 }}>
-                Elige {requiredMixers} mixer(s). Seleccionados:{' '}
+                Elige hasta {requiredMixers} mixer(s) gratis. Seleccionados:{' '}
                 {state.selectedMixers.length} / {requiredMixers}
             </div>
 
@@ -120,19 +120,19 @@ function ShotMixerSelector({
                     onClick={onConfirm}
                     disabled={
                         isAddingProduct ||
-                        state.selectedMixers.length !== requiredMixers
+                        state.selectedMixers.length > requiredMixers
                     }
                     style={{
                         padding: '12px 16px',
                         borderRadius: '8px',
                         border: 'none',
                         background:
-                            state.selectedMixers.length === requiredMixers
+                            state.selectedMixers.length <= requiredMixers
                                 ? '#2e7d32'
                                 : '#666',
                         color: 'white',
                         cursor:
-                            state.selectedMixers.length === requiredMixers
+                            state.selectedMixers.length <= requiredMixers
                                 ? 'pointer'
                                 : 'not-allowed',
                         fontWeight: 'bold',
