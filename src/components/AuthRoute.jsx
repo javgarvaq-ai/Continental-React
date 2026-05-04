@@ -7,7 +7,13 @@ function AuthRoute({ children }) {
         return <Navigate to="/login" replace />
     }
 
-    const user = JSON.parse(storedUser)
+    let user
+    try {
+        user = JSON.parse(storedUser)
+    } catch {
+        localStorage.removeItem('continentalCurrentUser')
+        return <Navigate to="/login" replace />
+    }
 
     if (user.role !== 'admin') {
         return <Navigate to="/pos" replace />

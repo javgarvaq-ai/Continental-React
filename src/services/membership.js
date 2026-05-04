@@ -292,41 +292,69 @@ export async function processMembershipOnPayment({
 export async function searchCustomerByQuery(query) {
     const trimmed = query.trim()
     const isNumber = /^\d+$/.test(trimmed)
-
-    const { data: customer, error: customerError } = isNumber
-        ? await supabase.from('customers').select('*').eq('customer_number', trimmed).maybeSingle()
-        : await supabase.from('customers').select('*').ilike('name', `%${trimmed}%`).limit(1).maybeSingle()
-
-    if (customerError || !customer) {
-        return { data: null, error: null }
-    }
-
     const currentMonth = getCurrentMonthDate()
 
-    const { data: membership } = await supabase
-        .from('customer_memberships')
-        .select(`
-            id, month, status, plan_id,
-            membership_plans (
-                id, name, price_monthly, product_id,
-                membership_plan_benefits (
-                    id, benefit_type, discount_percentage, milestone_visits,
-                    membership_benefit_products (
-                        id, product_id,
-                        products ( id, name, price )
-                    )
+    const membershipSelect = `
+        id, month, status, plan_id,
+        membership_plans (
+            id, name, price_monthly, product_id,
+            membership_plan_benefits (
+                id, benefit_type, discount_percentage, milestone_visits,
+                membership_benefit_products (
+                    id, product_id,
+                    products ( id, name, price )
                 )
             )
-        `)
-        .eq('customer_id', customer.id)
-        .eq('month', currentMonth)
-        .eq('status', 'active')
-        .maybeSingle()
+        )
+    `
 
-    return {
-        data: { customer, activeMembership: membership || null },
-        error: null,
+    if (isNumber) {
+        const { data: customer, error: customerError } = await supabase
+            .from('customers')
+            .select('*')
+            .eq('customer_number', trimmed)
+            .maybeSingle()
+
+        if (customerError || !customer) {
+            return { data: [], error: null }
+        }
+
+        const { data: membership } = await supabase
+            .from('customer_memberships')
+            .select(membershipSelect)
+            .eq('customer_id', customer.id)
+            .eq('month', currentMonth)
+            .eq('status', 'active')
+            .maybeSingle()
+
+        return { data: [{ customer, activeMembership: membership || null }], error: null }
     }
+
+    const { data: customers, error: customersError } = await supabase
+        .from('customers')
+        .select('*')
+        .ilike('name', `%${trimmed}%`)
+        .limit(5)
+
+    if (customersError || !customers || customers.length === 0) {
+        return { data: [], error: null }
+    }
+
+    const results = await Promise.all(
+        customers.map(async (customer) => {
+            const { data: membership } = await supabase
+                .from('customer_memberships')
+                .select(membershipSelect)
+                .eq('customer_id', customer.id)
+                .eq('month', currentMonth)
+                .eq('status', 'active')
+                .maybeSingle()
+
+            return { customer, activeMembership: membership || null }
+        })
+    )
+
+    return { data: results, error: null }
 }
 export async function cancelMembershipOnComanda({ membershipId, comandaId, productId }) {
     // 1. Delete the membership record

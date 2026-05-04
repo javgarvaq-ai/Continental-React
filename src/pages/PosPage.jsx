@@ -137,7 +137,7 @@ function PosPage() {
     const [customerSearchState, setCustomerSearchState] = useState({
         open: false,
         query: '',
-        result: null,
+        results: [],
         notFound: false,
         showCreateForm: false,
         newName: '',
@@ -196,7 +196,7 @@ function PosPage() {
         setCurrentMembership(null);
         setMembershipRenewalState({ open: false, plans: [], selectedPlanId: '' });
         setFreeBenefitState({ open: false, type: null, benefit: null });
-        setCustomerSearchState({ open: false, query: '', result: null, notFound: false, showCreateForm: false, newName: '', newPhone: '' });
+        setCustomerSearchState({ open: false, query: '', results: [], notFound: false, showCreateForm: false, newName: '', newPhone: '' });
     }
     function handleChangeUser() {
         const confirmed = window.confirm(
@@ -964,14 +964,14 @@ function PosPage() {
     async function handleSearchCustomer() {
         if (!customerSearchState.query.trim()) return
         setIsSearchingCustomer(true)
-        setCustomerSearchState(p => ({ ...p, notFound: false, result: null }))
+        setCustomerSearchState(p => ({ ...p, notFound: false, results: [] }))
 
         const { data } = await searchCustomerByQuery(customerSearchState.query.trim())
 
-        if (data) {
-            setCustomerSearchState(p => ({ ...p, result: data, notFound: false }))
+        if (data && data.length > 0) {
+            setCustomerSearchState(p => ({ ...p, results: data, notFound: false }))
         } else {
-            setCustomerSearchState(p => ({ ...p, result: null, notFound: true }))
+            setCustomerSearchState(p => ({ ...p, results: [], notFound: true }))
         }
         setIsSearchingCustomer(false)
     }
@@ -996,7 +996,7 @@ function PosPage() {
 
         setCurrentCustomer(customerData.customer)
         setCurrentMembership(customerData.activeMembership)
-        setCustomerSearchState({ open: false, query: '', result: null, notFound: false, showCreateForm: false, newName: '', newPhone: '' })
+        setCustomerSearchState({ open: false, query: '', results: [], notFound: false, showCreateForm: false, newName: '', newPhone: '' })
         setIsProcessingMembership(false)
         setStatus(`Cliente asignado: ${customerData.customer.name}`)
     }
@@ -1031,7 +1031,7 @@ function PosPage() {
         setCurrentComanda(prev => ({ ...prev, customer_id: newCustomer.id, customer_name: newCustomer.name }))
         setCurrentCustomer(newCustomer)
         setCurrentMembership(null)
-        setCustomerSearchState({ open: false, query: '', result: null, notFound: false, showCreateForm: false, newName: '', newPhone: '' })
+        setCustomerSearchState({ open: false, query: '', results: [], notFound: false, showCreateForm: false, newName: '', newPhone: '' })
         setIsProcessingMembership(false)
         setStatus(`Cliente creado y asignado: ${newCustomer.name} #${newCustomer.customer_number}`)
     }
@@ -1873,32 +1873,39 @@ function PosPage() {
                                                     </button>
                                                     <button
                                                         type="button"
-                                                        onClick={() => setCustomerSearchState({ open: false, query: '', result: null, notFound: false, showCreateForm: false, newName: '', newPhone: '' })}
+                                                        onClick={() => setCustomerSearchState({ open: false, query: '', results: [], notFound: false, showCreateForm: false, newName: '', newPhone: '' })}
                                                         style={{ padding: '8px 12px', borderRadius: '8px', border: 'none', background: '#333', color: 'white', cursor: 'pointer', fontSize: '13px' }}
                                                     >
                                                         ✕
                                                     </button>
                                                 </div>
 
-                                                {customerSearchState.result && (
-                                                    <div style={{ background: '#111', borderRadius: '8px', padding: '10px', marginBottom: '8px' }}>
-                                                        <div style={{ fontSize: '13px', fontWeight: 'bold' }}>
-                                                            #{customerSearchState.result.customer.customer_number} — {customerSearchState.result.customer.name}
-                                                        </div>
-                                                        <div style={{ fontSize: '12px', opacity: 0.7, marginTop: '2px' }}>
-                                                            {customerSearchState.result.activeMembership
-                                                                ? `Membresía activa: ${customerSearchState.result.activeMembership.membership_plans?.name}`
-                                                                : 'Sin membresía activa'}
-                                                            {' · '}{customerSearchState.result.customer.visit_count} visitas
-                                                        </div>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleAssignCustomer(customerSearchState.result)}
-                                                            disabled={isProcessingMembership}
-                                                            style={{ marginTop: '8px', padding: '6px 14px', borderRadius: '8px', border: 'none', background: '#2e7d32', color: 'white', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
-                                                        >
-                                                            Asignar a esta mesa
-                                                        </button>
+                                                {customerSearchState.results.length > 0 && (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '8px' }}>
+                                                        {customerSearchState.results.map((item) => (
+                                                            <div key={item.customer.id} style={{ background: '#111', borderRadius: '8px', padding: '10px' }}>
+                                                                <div style={{ fontSize: '13px', fontWeight: 'bold' }}>
+                                                                    #{item.customer.customer_number} — {item.customer.name}
+                                                                </div>
+                                                                <div style={{ fontSize: '12px', opacity: 0.7, marginTop: '2px' }}>
+                                                                    {item.customer.phone && (
+                                                                        <span>{item.customer.phone}{' · '}</span>
+                                                                    )}
+                                                                    {item.activeMembership
+                                                                        ? `Membresía activa: ${item.activeMembership.membership_plans?.name}`
+                                                                        : 'Sin membresía activa'}
+                                                                    {' · '}{item.customer.visit_count} visitas
+                                                                </div>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleAssignCustomer(item)}
+                                                                    disabled={isProcessingMembership}
+                                                                    style={{ marginTop: '8px', padding: '6px 14px', borderRadius: '8px', border: 'none', background: '#2e7d32', color: 'white', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                                                                >
+                                                                    Asignar a esta mesa
+                                                                </button>
+                                                            </div>
+                                                        ))}
                                                     </div>
                                                 )}
 
