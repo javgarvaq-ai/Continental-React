@@ -80,22 +80,9 @@ function buildTicketHtml({
   let paymentHtml = '';
   let footerHtml = '';
 
-  if (tipo === 'cuenta') {
-    ticketLabelHtml = `
-          <div class="ticket-badge">TICKET DE CONSUMO</div>
-        `;
-
-    totalsHtml = `
-          <div class="divider">--------------------------------</div>
-          <div class="row total-row">
-            <span>TOTAL</span>
-            <span>${money(subtotal)}</span>
-          </div>
-        `;
-
-    let membershipHtml = '';
-    if (membershipInfo) {
-      membershipHtml = `
+  let membershipHtml = '';
+  if (membershipInfo) {
+    membershipHtml = `
         <div class="divider">--------------------------------</div>
         <div class="center small" style="font-weight:bold">MEMBRESÍA ${escapeHtml(membershipInfo.planName || '')}</div>
         <div class="row small"><span>Cliente</span><span>#${escapeHtml(membershipInfo.customerNumber)} ${escapeHtml(membershipInfo.customerName)}</span></div>
@@ -104,7 +91,33 @@ function buildTicketHtml({
         <div class="row small"><span>Créditos botella</span><span>${membershipInfo.bottleCredits || 0}</span></div>
         ${membershipInfo.earnedBottleCredit ? `<div class="center small" style="color:#2e7d32;font-weight:bold">🍾 ¡Ganaste una botella gratis!</div>` : ''}
       `;
-    }
+  }
+
+  if (tipo === 'cuenta') {
+    ticketLabelHtml = `
+          <div class="ticket-badge">TICKET DE CONSUMO</div>
+        `;
+
+    const itemsSubtotal = membershipInfo?.discountAmount > 0
+      ? subtotal + membershipInfo.discountAmount
+      : subtotal;
+
+    totalsHtml = `
+          <div class="divider">--------------------------------</div>
+          ${membershipInfo?.discountAmount > 0 ? `
+          <div class="row small">
+            <span>Subtotal</span>
+            <span>${money(itemsSubtotal)}</span>
+          </div>
+          <div class="row small">
+            <span>Descuento ${membershipInfo.discountPct}%</span>
+            <span>-${money(membershipInfo.discountAmount)}</span>
+          </div>` : ''}
+          <div class="row total-row">
+            <span>TOTAL</span>
+            <span>${money(subtotal)}</span>
+          </div>
+        `;
 
     footerHtml = `
           ${membershipHtml}
@@ -121,10 +134,23 @@ function buildTicketHtml({
           <div class="center small">Para uso interno</div>
         `;
 
+    const itemsSubtotalPagado = membershipInfo?.discountAmount > 0
+      ? subtotal + membershipInfo.discountAmount
+      : subtotal;
+
     totalsHtml = `
           <div class="divider">--------------------------------</div>
-          <div class="row">
+          ${membershipInfo?.discountAmount > 0 ? `
+          <div class="row small">
             <span>Subtotal</span>
+            <span>${money(itemsSubtotalPagado)}</span>
+          </div>
+          <div class="row small">
+            <span>Descuento ${membershipInfo.discountPct}%</span>
+            <span>-${money(membershipInfo.discountAmount)}</span>
+          </div>` : ''}
+          <div class="row">
+            <span>Subtotal con descuento</span>
             <span>${money(subtotal)}</span>
           </div>
           <div class="row">
@@ -158,6 +184,7 @@ function buildTicketHtml({
 `;
 
     footerHtml = `
+          ${membershipHtml}
           <div class="divider">--------------------------------</div>
           <div class="center footer">Gracias por su visita</div>
         `;
