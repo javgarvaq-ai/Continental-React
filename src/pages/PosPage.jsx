@@ -1183,7 +1183,11 @@ function PosPage() {
             alert('Esta comanda no se puede editar.');
             return;
         }
-
+        // Block adding the membership product if membership is already active
+        if (currentMembership?.membership_plans?.product_id === product.id) {
+            alert('La membresía ya está activada en esta comanda.');
+            return;
+        }
         if (isAddingProduct || isChangingCart || isUpdatingComandaStatus) return;
 
         setIsAddingProduct(true);
@@ -1219,6 +1223,12 @@ function PosPage() {
             return;
         }
 
+        const membershipProductId = currentMembership?.membership_plans?.product_id;
+        if (membershipProductId && item.product_id === membershipProductId) {
+            alert('No puedes agregar más unidades del producto de membresía.');
+            return;
+        }
+
         await handleAddProduct(product);
     }
 
@@ -1227,6 +1237,12 @@ function PosPage() {
 
         if (currentComanda.status !== 'open') {
             alert('Esta comanda no se puede editar.');
+            return;
+        }
+        // Block removing the membership product directly
+        const membershipProductId = currentMembership?.membership_plans?.product_id;
+        if (membershipProductId && item.product_id === membershipProductId) {
+            alert('No puedes eliminar el producto de membresía directamente. Cancela la membresía desde el panel de cliente.');
             return;
         }
 
