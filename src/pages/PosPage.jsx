@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useCustomer } from '../hooks/useCustomer';
-import { getUnitsWithStatus } from '../services/units';
+import { useComanda } from '../hooks/useComanda';
 import { getOrCreateActiveComanda, cancelComanda } from '../services/comandas';
 import MesaGrid from '../components/MesaGrid';
 import ShotMixerSelector from '../components/ShotMixerSelector';
@@ -12,16 +12,11 @@ import ProductCatalog from '../components/ProductCatalog';
 import TopBar from '../components/TopBar'
 import CashMovementPanel from '../components/CashMovementPanel'
 import ShiftPanel from '../components/ShiftPanel';
-import { requireOnline } from '../utils/requireOnline';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { requireOnline } from '../utils/requireOnline';
 import {
     getProductsCatalog,
     getActiveCartItems,
-    addNormalProductToComanda,
-    getAvailableMixersForProduct,
-    addShotWithFreeMixers,
-    decreaseCartItem,
-    updateComandaPersonas,
 } from '../services/products';
 import {
     presentBill,
@@ -79,15 +74,11 @@ function PosPage() {
     const currentShiftId = useAuthStore(state => state.shiftId);
     const clearAuth = useAuthStore(state => state.clearAuth);
     const clearUser = useAuthStore(state => state.clearUser);
-    const [units, setUnits] = useState([]);
     const [status, setStatus] = useState('Cargando mesas...');
-    const [selectedUnit, setSelectedUnit] = useState(null);
+    // Shared state — owned by PosPage because multiple hooks need it
     const [currentComanda, setCurrentComanda] = useState(null);
     const [groupedProducts, setGroupedProducts] = useState({});
     const [cartItems, setCartItems] = useState([]);
-    const [isAddingProduct, setIsAddingProduct] = useState(false);
-    const [isChangingCart, setIsChangingCart] = useState(false);
-    const [isUpdatingPersonas, setIsUpdatingPersonas] = useState(false);
     const [isUpdatingComandaStatus, setIsUpdatingComandaStatus] = useState(false);
     const [isConfirmingPayment, setIsConfirmingPayment] = useState(false);
     const isOnline = useOnlineStatus()
@@ -98,12 +89,8 @@ function PosPage() {
         propina: '',
         propinaManual: false,
     });
-    const [availableMixers, setAvailableMixers] = useState([]);
-    const [shotSelectorState, setShotSelectorState] = useState({
-        open: false,
-        shotProduct: null,
-        selectedMixers: [],
-    });
+
+    // Derived cart values — computed before hooks so they can be passed down
     const visibleCartItems = useMemo(() => {
         return cartItems.filter((item) => !item.is_free_mixer);
     }, [cartItems]);
@@ -124,6 +111,7 @@ function PosPage() {
         }, 0);
     }, [visibleCartItems]);
 
+    // useCustomer — needs cartTotal (computed above)
     const {
         currentCustomer,
         setCurrentCustomer,
@@ -155,6 +143,38 @@ function PosPage() {
         onUpdateComanda: (fields) => setCurrentComanda(prev => ({ ...prev, ...fields })),
         onReloadComanda: loadComandaView,
     });
+
+    // useComanda — needs currentMembership (from useCustomer above)
+    const {
+        units,
+        selectedUnit,
+        setSelectedUnit,
+        isAddingProduct,
+        isChangingCart,
+        isUpdatingPersonas,
+        availableMixers,
+        shotSelectorState,
+        requiredShotMixers,
+        canEditPersonas,
+        loadUnits,
+        resetShotSelector,
+        handleAddProduct,
+        handleIncreaseCartItem,
+        handleDecreaseCartItem,
+        handlePersonasChange,
+        toggleMixerSelection,
+        removeSelectedMixer,
+        handleConfirmShotMixers,
+    } = useComanda({
+        currentUser,
+        currentMembership,
+        currentComanda,
+        setCurrentComanda,
+        productsById,
+        isOnline,
+        setStatus,
+        onLoadComanda: loadComandaView,
+    });
     const [cashPanelOpen, setCashPanelOpen] = useState(false);
     const [isSubmittingCash, setIsSubmittingCash] = useState(false);
     const [shiftPanelOpen, setShiftPanelOpen] = useState(false);
@@ -184,14 +204,6 @@ function PosPage() {
         });
     }
 
-    function resetShotSelector() {
-        setShotSelectorState({
-            open: false,
-            shotProduct: null,
-            selectedMixers: [],
-        });
-    }
-
     function handleChangeUser() {
         const confirmed = window.confirm(
             '¿Deseas cambiar de usuario sin cerrar el turno?'
@@ -205,7 +217,6 @@ function PosPage() {
         setCurrentComanda(null);
         setGroupedProducts({});
         setCartItems([]);
-        setAvailableMixers([]);
         resetPaymentState();
         resetShotSelector();
 
@@ -630,19 +641,6 @@ function PosPage() {
         return { error: null }
     }
 
-    async function loadUnits() {
-        setStatus('Cargando mesas...');
-        const { data, error } = await getUnitsWithStatus();
-
-        if (error) {
-            setStatus(`Error cargando mesas: ${error.message}`);
-            return;
-        }
-
-        setUnits(data || []);
-        setStatus('Mesas cargadas.');
-    }
-
     async function loadComandaView(comandaId) {
         const [productsResult, cartResult] = await Promise.all([
             getProductsCatalog(),
@@ -770,248 +768,6 @@ function PosPage() {
 
         if (customStatus) {
             setStatus(customStatus);
-        }
-    }
-
-    async function openShotMixerSelector(product) {
-        try {
-            const freeMixersQty = Number(product?.free_mixers_qty || 0);
-
-            if (freeMixersQty <= 0) {
-                const { error } = await addShotWithFreeMixers({
-                    comandaId: currentComanda.id,
-                    shotProduct: product,
-                    selectedMixers: [],
-                    userId: currentUser?.id,
-                });
-
-                if (error) {
-                    setStatus(`Error agregando shot: ${error.message}`);
-                    return;
-                }
-
-                await loadComandaView(currentComanda.id);
-                setStatus(`${product.name} agregado.`);
-                return;
-            }
-
-            const { data, error } = await getAvailableMixersForProduct(product.id);
-
-            if (error) {
-                setStatus(`Error cargando mixers: ${error.message}`);
-                return;
-            }
-
-            setAvailableMixers(data || []);
-            setShotSelectorState({
-                open: true,
-                shotProduct: product,
-                selectedMixers: [],
-            });
-        } finally {
-            setIsAddingProduct(false);
-        }
-    }
-
-    async function handleAddProduct(product) {
-        if (!requireOnline(isOnline, setStatus)) return
-        if (!currentComanda?.id) return;
-
-        if (currentComanda.status !== 'open') {
-            alert('Esta comanda no se puede editar.');
-            return;
-        }
-        // Block adding the membership product if membership is already active
-        if (currentMembership?.membership_plans?.product_id === product.id) {
-            alert('La membresía ya está activada en esta comanda.');
-            return;
-        }
-        if (isAddingProduct || isChangingCart || isUpdatingComandaStatus) return;
-
-        setIsAddingProduct(true);
-
-        try {
-            if (product.is_shot) {
-                await openShotMixerSelector(product);
-                return;
-            }
-
-            const { error } = await addNormalProductToComanda({
-                comandaId: currentComanda.id,
-                product,
-            });
-
-            if (error) {
-                setStatus(`Error agregando producto: ${error.message}`);
-                return;
-            }
-
-            await loadComandaView(currentComanda.id);
-            setStatus(`${product.name} agregado.`);
-        } finally {
-            setIsAddingProduct(false);
-        }
-    }
-
-    async function handleIncreaseCartItem(item) {
-        const product = productsById[item.product_id];
-
-        if (!product) {
-            setStatus('No se encontró el producto en catálogo para aumentar la cantidad.');
-            return;
-        }
-
-        const membershipProductId = currentMembership?.membership_plans?.product_id;
-        if (membershipProductId && item.product_id === membershipProductId) {
-            alert('No puedes agregar más unidades del producto de membresía.');
-            return;
-        }
-
-        await handleAddProduct(product);
-    }
-
-    async function handleDecreaseCartItem(item) {
-        if (!currentComanda?.id || !currentUser?.id) return;
-
-        if (currentComanda.status !== 'open') {
-            alert('Esta comanda no se puede editar.');
-            return;
-        }
-        // Block removing the membership product directly
-        const membershipProductId = currentMembership?.membership_plans?.product_id;
-        if (membershipProductId && item.product_id === membershipProductId) {
-            alert('No puedes eliminar el producto de membresía directamente. Cancela la membresía desde el panel de cliente.');
-            return;
-        }
-
-        const currentQty = Number(item.quantity || 0);
-        const confirmed = window.confirm(
-            currentQty <= 1
-                ? '¿Eliminar este producto de la comanda?'
-                : '¿Disminuir este producto?'
-        );
-
-        if (!confirmed) return;
-        if (isChangingCart || isAddingProduct || isUpdatingComandaStatus) return;
-
-        setIsChangingCart(true);
-
-        try {
-            const { error } = await decreaseCartItem({
-                comandaId: currentComanda.id,
-                itemId: item.id,
-                productId: item.product_id,
-                currentQty,
-                userId: currentUser.id,
-            });
-
-            if (error) {
-                setStatus(`Error disminuyendo producto: ${error.message}`);
-                return;
-            }
-
-            await loadComandaView(currentComanda.id);
-            setStatus(
-                currentQty <= 1
-                    ? `${item.products?.name || 'Producto'} eliminado.`
-                    : `${item.products?.name || 'Producto'} disminuido.`
-            );
-        } finally {
-            setIsChangingCart(false);
-        }
-    }
-
-    async function handlePersonasChange(delta) {
-        if (!currentComanda?.id) return;
-
-        const canEditPersonas =
-            currentComanda.status === 'open' || currentComanda.status === 'processing_payment';
-
-        if (!canEditPersonas) {
-            alert('Las personas solo se pueden editar con la comanda abierta o en cobro.');
-            return;
-        }
-
-        if (isUpdatingPersonas) return;
-
-        const nextPersonas = Math.max(0, Number(currentComanda.personas || 0) + delta);
-
-        setIsUpdatingPersonas(true);
-
-        try {
-            const { data, error } = await updateComandaPersonas({
-                comandaId: currentComanda.id,
-                personas: nextPersonas,
-            });
-
-            if (error) {
-                setStatus(`Error actualizando personas: ${error.message}`);
-                return;
-            }
-
-            setCurrentComanda((prev) => ({
-                ...prev,
-                personas: data,
-            }));
-
-            setStatus(`Personas actualizadas: ${data}.`);
-        } finally {
-            setIsUpdatingPersonas(false);
-        }
-    }
-
-    function toggleMixerSelection(mixer) {
-        const requiredMixers = Number(shotSelectorState.shotProduct?.free_mixers_qty || 0);
-
-        setShotSelectorState((prev) => {
-            if (prev.selectedMixers.length >= requiredMixers) {
-                return prev;
-            }
-
-            return {
-                ...prev,
-                selectedMixers: [...prev.selectedMixers, mixer],
-            };
-        });
-    }
-
-    function removeSelectedMixer(indexToRemove) {
-        setShotSelectorState((prev) => ({
-            ...prev,
-            selectedMixers: prev.selectedMixers.filter((_, index) => index !== indexToRemove),
-        }));
-    }
-
-    async function handleConfirmShotMixers() {
-        if (!currentComanda?.id || !shotSelectorState.shotProduct) return;
-
-        const requiredMixers = Number(shotSelectorState.shotProduct?.free_mixers_qty || 0);
-
-        if (shotSelectorState.selectedMixers.length > requiredMixers) {
-            alert(`Puedes seleccionar hasta ${requiredMixers} mixer(s).`);
-            return;
-        }
-
-        setIsAddingProduct(true);
-
-        try {
-            const { error } = await addShotWithFreeMixers({
-                comandaId: currentComanda.id,
-                shotProduct: shotSelectorState.shotProduct,
-                selectedMixers: shotSelectorState.selectedMixers,
-                userId: currentUser?.id,
-            });
-
-            if (error) {
-                setStatus(`Error agregando shot: ${error.message}`);
-                return;
-            }
-
-            await loadComandaView(currentComanda.id);
-            setStatus(`${shotSelectorState.shotProduct.name} agregado con mixers.`);
-            resetShotSelector();
-        } finally {
-            setIsAddingProduct(false);
         }
     }
 
@@ -1345,14 +1101,9 @@ function PosPage() {
         return getPaymentSummary(displayedTotal, paymentData);
     }, [displayedTotal, paymentData]);
 
-    const canEditPersonas =
-        currentComanda?.status === 'open' || currentComanda?.status === 'processing_payment';
-
     const propinaFieldValue = paymentData.propinaManual
         ? paymentData.propina
         : String(paymentSummary.propina || 0);
-
-    const requiredShotMixers = Number(shotSelectorState.shotProduct?.free_mixers_qty || 0);
 
     return (
         <div style={{ padding: '16px' }}>
