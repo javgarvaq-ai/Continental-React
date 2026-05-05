@@ -79,3 +79,11 @@ export async function cancelComanda({ comandaId, userId }) {
 
     return { error: null }
 }
+export async function assignCustomerToComanda({ comandaId, customerId, customerName }) {
+    const { error } = await supabase
+        .from('comandas')
+        .update({ customer_id: customerId, customer_name: customerName })
+        .eq('id', comandaId)
+
+    return { error }
+}

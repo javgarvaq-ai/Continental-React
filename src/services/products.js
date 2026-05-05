@@ -401,3 +401,12 @@ export async function updateComandaPersonas({ comandaId, personas }) {
         error,
     };
 }
+export async function getProductById(productId) {
+    const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('id', productId)
+        .single()
+
+    return { data, error }
+}

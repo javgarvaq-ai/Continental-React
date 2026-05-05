@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { supabase } from '../services/supabase'
 import {
     searchCustomerByQuery,
     getAllActiveMembershipPlans,
@@ -7,8 +6,10 @@ import {
     cancelMembershipOnComanda,
     addFreeBenefitItemToComanda,
 } from '../services/membership'
-import { addNormalProductToComanda } from '../services/products'
+import { addNormalProductToComanda, getProductById } from '../services/products'
 import { getNextCustomerNumber } from '../services/customersAdmin'
+import { createCustomer } from '../services/customers'
+import { assignCustomerToComanda } from '../services/comandas'
 
 /**
  * Manages all customer and membership state for a comanda session.
@@ -94,13 +95,11 @@ export function useCustomer({ currentComanda, cartTotal, setStatus, onUpdateComa
         if (!currentComanda?.id) return
         setIsProcessingMembership(true)
 
-        const { error } = await supabase
-            .from('comandas')
-            .update({
-                customer_id: customerData.customer.id,
-                customer_name: customerData.customer.name,
-            })
-            .eq('id', currentComanda.id)
+        const { error } = await assignCustomerToComanda({
+            comandaId: currentComanda.id,
+            customerId: customerData.customer.id,
+            customerName: customerData.customer.name,
+        })
 
         if (error) {
             setStatus(`Error asignando cliente: ${error.message}`)
@@ -128,26 +127,29 @@ export function useCustomer({ currentComanda, cartTotal, setStatus, onUpdateComa
 
         const nextNumber = await getNextCustomerNumber()
 
-        const { data: newCustomer, error } = await supabase
-            .from('customers')
-            .insert([{
-                customer_number: nextNumber,
-                name: customerSearchState.newName.trim(),
-                phone: customerSearchState.newPhone.trim() || null,
-            }])
-            .select()
-            .single()
+        const { data: newCustomer, error: createError } = await createCustomer({
+            customerNumber: nextNumber,
+            name: customerSearchState.newName.trim(),
+            phone: customerSearchState.newPhone.trim() || null,
+        })
 
-        if (error || !newCustomer) {
-            setStatus(`Error creando cliente: ${error?.message}`)
+        if (createError || !newCustomer) {
+            setStatus(`Error creando cliente: ${createError?.message}`)
             setIsProcessingMembership(false)
             return
         }
 
-        await supabase
-            .from('comandas')
-            .update({ customer_id: newCustomer.id, customer_name: newCustomer.name })
-            .eq('id', currentComanda.id)
+        const { error: assignError } = await assignCustomerToComanda({
+            comandaId: currentComanda.id,
+            customerId: newCustomer.id,
+            customerName: newCustomer.name,
+        })
+
+        if (assignError) {
+            setStatus(`Cliente creado pero no se pudo asignar: ${assignError.message}`)
+            setIsProcessingMembership(false)
+            return
+        }
 
         onUpdateComanda({ customer_id: newCustomer.id, customer_name: newCustomer.name })
         setCurrentCustomer(newCustomer)
@@ -195,11 +197,7 @@ export function useCustomer({ currentComanda, cartTotal, setStatus, onUpdateComa
         }
 
         if (selectedPlan?.product_id) {
-            const { data: product } = await supabase
-                .from('products')
-                .select('*')
-                .eq('id', selectedPlan.product_id)
-                .single()
+            const { data: product } = await getProductById(selectedPlan.product_id)
 
             if (product) {
                 await addNormalProductToComanda({ comandaId: currentComanda.id, product })
@@ -283,7 +281,7 @@ export function useCustomer({ currentComanda, cartTotal, setStatus, onUpdateComa
         membershipRenewalState,
         setMembershipRenewalState,
         freeBenefitState,
-        setFreeBenefitState,  // exposed for direct close actions in JSX
+        setFreeBenefitState,
         isProcessingMembership,
         isSearchingCustomer,
         // Derived
