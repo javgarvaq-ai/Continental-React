@@ -39,28 +39,11 @@ import {
     addFreeBenefitItemToComanda,
     processMembershipOnPayment,
 } from '../services/membership';
-import { getNextCustomerNumber } from '../services/customersAdmin';
+import { getNextCustomerNumber } from '../services/customersAdmin'
+import { getCategoryColor } from '../config/categoryColors';
 
 
 
-function getCategoryColor(categoryName) {
-    switch (categoryName) {
-        case 'Cerveza':
-            return '#1565c0';
-        case 'Tequila':
-            return '#ef6c00';
-        case 'Whisky':
-            return '#6d4c41';
-        case 'Refresco':
-            return '#2e7d32';
-        case 'Promo':
-            return '#8e24aa';
-        case 'Comida':
-            return '#c62828';
-        default:
-            return '#444';
-    }
-}
 
 function money(value) {
     return `$${Number(value || 0).toFixed(2)}`;
