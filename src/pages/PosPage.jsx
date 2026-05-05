@@ -7,7 +7,9 @@ import ShotMixerSelector from '../components/ShotMixerSelector';
 import PaymentPanel from '../components/PaymentPanel';
 import ComandaPanel from '../components/ComandaPanel';
 import ProductCatalog from '../components/ProductCatalog';
-import TopBar from '../components/TopBar';
+import TopBar from '../components/TopBar'
+import CashMovementPanel from '../components/CashMovementPanel'
+import ShiftPanel from '../components/ShiftPanel';
 import { requireOnline } from '../utils/requireOnline';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import {
@@ -144,6 +146,9 @@ function PosPage() {
         newPhone: '',
     });
     const [isSearchingCustomer, setIsSearchingCustomer] = useState(false);
+    const [cashPanelOpen, setCashPanelOpen] = useState(false);
+    const [isSubmittingCash, setIsSubmittingCash] = useState(false);
+    const [shiftPanelOpen, setShiftPanelOpen] = useState(false);
 
     useEffect(() => {
         const savedUser = localStorage.getItem('continentalCurrentUser');
@@ -532,226 +537,48 @@ function PosPage() {
         };
     }
 
-    async function handleAddCash() {
-        if (!currentUser?.id) {
-            alert('No hay usuario activo.');
-            return;
-        }
+    async function handleCashMovementSubmit({ category, amount, note }) {
+        if (!currentUser?.id || !currentShiftId) return
 
-        const option = window.prompt(
-            `Seleccione tipo de depósito:
+        const config = getCashMovementConfig(category)
+        if (!config) return
 
-1 = Regreso de resguardo (casa → caja)
-2 = Retiro de banco a caja
-3 = Aportación socio
-4 = Ajuste ingreso`
-        );
-
-        if (!option) return;
-
-        const categoryMap = {
-            '1': 'regreso_resguardo',
-            '2': 'retiro_banco_a_caja',
-            '3': 'aportacion_socio',
-            '4': 'ajuste_ingreso',
-        };
-
-        const category = categoryMap[option];
-
-        if (!category) {
-            alert('Opción inválida.');
-            return;
-        }
-
-        const config = getCashMovementConfig(category);
-
-        if (!config) {
-            alert('No se encontró configuración para el movimiento.');
-            return;
-        }
-
-        const amountInput = window.prompt('Monto a depositar:');
-
-        if (!amountInput) return;
-
-        const amount = Number(amountInput);
-
-        if (isNaN(amount) || amount <= 0) {
-            alert('Monto inválido.');
-            return;
-        }
-
-        const noteInput = window.prompt('Motivo / referencia del depósito:');
-
-        if (!noteInput || !noteInput.trim()) {
-            alert('Debes ingresar un motivo.');
-            return;
-        }
+        setIsSubmittingCash(true)
 
         const { error } = await supabase
             .from('cash_movements')
-            .insert([
-                {
-                    shift_id: currentShiftId,
-                    user_id: currentUser.id,
-                    type: config.type,
-                    amount,
-                    note: noteInput.trim(),
-                    category,
-                    movement_nature: config.movementNature,
-                    source_location: config.sourceLocation,
-                    destination_location: config.destinationLocation,
-                },
-            ]);
+            .insert([{
+                shift_id: currentShiftId,
+                user_id: currentUser.id,
+                type: config.type,
+                amount,
+                note,
+                category,
+                movement_nature: config.movementNature,
+                source_location: config.sourceLocation,
+                destination_location: config.destinationLocation,
+            }])
+
+        setIsSubmittingCash(false)
 
         if (error) {
-            alert('No se pudo registrar el depósito.');
-            return;
+            setStatus(`Error registrando movimiento: ${error.message}`)
+            return
         }
 
-        alert('Depósito registrado correctamente.');
-    }
-
-    async function handleRemoveCash() {
-        if (!currentUser?.id) {
-            alert('No hay usuario activo.');
-            return;
-        }
-
-        const option = window.prompt(
-            `Seleccione tipo de retiro:
-
-1 = Resguardo a casa
-2 = Depósito a banco
-3 = Pago proveedor (caja)
-4 = Pago proveedor (banco)
-5 = Nómina (caja)
-6 = Nómina (banco)
-7 = Renta (caja)
-8 = Renta (banco)
-9 = Propinas entregadas
-10 = Gasto operativo (caja)
-11 = Gasto operativo (banco)
-12 = Pago proveedor (resguardo)`
-        );
-
-        if (!option) return;
-
-        const categoryMap = {
-            '1': 'resguardo_casa',
-            '2': 'deposito_banco',
-            '3': 'pago_proveedor_caja',
-            '4': 'pago_proveedor_banco',
-            '5': 'nomina_caja',
-            '6': 'nomina_banco',
-            '7': 'renta_caja',
-            '8': 'renta_banco',
-            '9': 'propinas_entregadas',
-            '10': 'gasto_operativo_caja',
-            '11': 'gasto_operativo_banco',
-            '12': 'pago_proveedor_resguardo',
-        };
-
-        const category = categoryMap[option];
-
-        if (!category) {
-            alert('Opción inválida.');
-            return;
-        }
-
-        const config = getCashMovementConfig(category);
-
-        if (!config) {
-            alert('No se encontró configuración para el movimiento.');
-            return;
-        }
-
-        if (config.sourceLocation === 'drawer' && !currentShiftId) {
-            alert('No hay turno activo.');
-            return;
-        }
-
-        const amountInput = window.prompt('Monto a retirar:');
-
-        if (!amountInput) return;
-
-        const amount = Number(amountInput);
-
-        if (isNaN(amount) || amount <= 0) {
-            alert('Monto inválido.');
-            return;
-        }
-
-        const noteInput = window.prompt('Motivo / referencia del retiro:');
-
-        if (!noteInput || !noteInput.trim()) {
-            alert('Debes ingresar un motivo.');
-            return;
-        }
-
-        const { error } = await supabase
-            .from('cash_movements')
-            .insert([
-                {
-                    shift_id: currentShiftId,
-                    user_id: currentUser.id,
-                    type: config.type,
-                    amount,
-                    note: noteInput.trim(),
-                    category,
-                    movement_nature: config.movementNature,
-                    source_location: config.sourceLocation,
-                    destination_location: config.destinationLocation,
-                },
-            ]);
-
-        if (error) {
-            alert('No se pudo registrar el retiro.');
-            return;
-        }
-
-        alert('Retiro registrado correctamente.');
+        setCashPanelOpen(false)
+        setStatus('Movimiento de caja registrado correctamente.')
     }
 
     function handleInventory() {
         navigate('/inventory');
     }
 
-    async function handleShiftCut() {
-        const { data: summary, error } = await calculateShiftSummary();
+    async function fetchShiftPanelData() {
+        const { data: summary, error } = await calculateShiftSummary()
 
         if (error || !summary) {
-            alert(error?.message || 'No se pudo calcular el corte.');
-            return;
-        }
-
-        alert(
-            `📊 CORTE DE TURNO\n\n` +
-            `Fondo inicial: ${money(summary.shift.starting_cash)}\n` +
-            `Efectivo neto en caja: ${money(summary.totalEfectivo)}\n` +
-            `Cambio entregado: ${money(summary.totalCambio)}\n` +
-            `Tarjeta: ${money(summary.totalTarjeta)}\n` +
-            `Transferencia: ${money(summary.totalTransferencia)}\n` +
-            `Propinas: ${money(summary.totalPropinas)}\n\n` +
-            `Depósitos: +${money(summary.totalDeposits)}\n` +
-            `Retiros: -${money(summary.totalWithdrawals)}\n\n` +
-            `Caja esperada: ${money(summary.expectedCash)}`
-        );
-    }
-
-
-
-    async function handleCloseShift() {
-        if (!currentShiftId || !currentUser?.id) {
-            alert('No hay turno activo.')
-            return
-        }
-
-        const { data: summary, error: summaryError } = await calculateShiftSummary()
-
-        if (summaryError || !summary) {
-            alert(summaryError?.message || 'No se pudo calcular el cierre de turno.')
-            return
+            return { data: null, error: error || new Error('No se pudo calcular el corte.') }
         }
 
         const { data: openComandas } = await supabase
@@ -761,34 +588,31 @@ function PosPage() {
             .gte('opened_at', summary.shift.opened_at)
             .limit(1)
 
-        if (openComandas && openComandas.length > 0) {
-            alert('No se puede cerrar turno: hay comandas abiertas o en proceso.')
-            return
+        return {
+            data: {
+                summary,
+                hasOpenComandas: !!(openComandas && openComandas.length > 0),
+            },
+            error: null,
+        }
+    }
+
+    async function handleConfirmCloseShift(cashCounted) {
+        if (!currentShiftId || !currentUser?.id) {
+            return { error: new Error('No hay turno activo.') }
         }
 
-        const countedInput = window.prompt(
-            `🔒 CIERRE DE TURNO\n\n` +
-            `Fondo inicial: ${money(summary.shift.starting_cash)}\n` +
-            `Efectivo neto en caja: ${money(summary.totalEfectivo)}\n` +
-            `Cambio entregado: ${money(summary.totalCambio)}\n` +
-            `Tarjeta: ${money(summary.totalTarjeta)}\n` +
-            `Transferencia: ${money(summary.totalTransferencia)}\n` +
-            `Propinas: ${money(summary.totalPropinas)}\n\n` +
-            `Depósitos: +${money(summary.totalDeposits)}\n` +
-            `Retiros: -${money(summary.totalWithdrawals)}\n\n` +
-            `Caja esperada: ${money(summary.expectedCash)}\n\n` +
-            `Ingrese efectivo contado físicamente:`
-        );
+        const { data: panelData, error: panelError } = await fetchShiftPanelData()
 
-        if (countedInput === null || countedInput.trim() === '') return
-
-        const cashCounted = Number(countedInput)
-
-        if (isNaN(cashCounted)) {
-            alert('Cantidad inválida.')
-            return
+        if (panelError || !panelData) {
+            return { error: panelError || new Error('No se pudo calcular el cierre.') }
         }
 
+        if (panelData.hasOpenComandas) {
+            return { error: new Error('Hay mesas abiertas. Ciérralas antes de cerrar el turno.') }
+        }
+
+        const { summary } = panelData
         const difference = cashCounted - Number(summary.expectedCash || 0)
 
         const { error: updateError } = await supabase
@@ -809,28 +633,14 @@ function PosPage() {
             .eq('id', currentShiftId)
 
         if (updateError) {
-            alert(updateError.message || 'No se pudo cerrar el turno.')
-            return
+            return { error: updateError }
         }
-
-        alert(
-            `🔒 TURNO CERRADO\n\n` +
-            `Fondo inicial: ${money(summary.shift.starting_cash)}\n` +
-            `Efectivo neto en caja: ${money(summary.totalEfectivo)}\n` +
-            `Cambio entregado: ${money(summary.totalCambio)}\n` +
-            `Tarjeta: ${money(summary.totalTarjeta)}\n` +
-            `Transferencia: ${money(summary.totalTransferencia)}\n` +
-            `Propinas: ${money(summary.totalPropinas)}\n\n` +
-            `Depósitos: +${money(summary.totalDeposits)}\n` +
-            `Retiros: -${money(summary.totalWithdrawals)}\n\n` +
-            `Caja esperada: ${money(summary.expectedCash)}\n` +
-            `Caja contada: ${money(cashCounted)}\n` +
-            `Diferencia: ${money(difference)}`
-        );
 
         localStorage.removeItem('continentalCurrentShiftId')
         localStorage.removeItem('continentalCurrentUser')
         navigate('/')
+
+        return { error: null }
     }
 
     async function loadUnits() {
@@ -1803,12 +1613,26 @@ function PosPage() {
                 currentUser={currentUser}
                 onChangeUser={handleChangeUser}
                 onReprintTicket={handleReprintTicket}
-                onAddCash={handleAddCash}
-                onRemoveCash={handleRemoveCash}
+                onCashMovement={() => setCashPanelOpen(true)}
+                onShiftPanel={() => setShiftPanelOpen(true)}
                 onInventory={handleInventory}
-                onShiftCut={handleShiftCut}
-                onCloseShift={handleCloseShift}
                 onWeeklyReport={handleWeeklyReport}
+            />
+
+            <CashMovementPanel
+                open={cashPanelOpen}
+                onClose={() => setCashPanelOpen(false)}
+                onSubmit={handleCashMovementSubmit}
+                isSubmitting={isSubmittingCash}
+            />
+
+            <ShiftPanel
+                open={shiftPanelOpen}
+                onClose={() => setShiftPanelOpen(false)}
+                currentUser={currentUser}
+                onFetchData={fetchShiftPanelData}
+                onConfirmClose={handleConfirmCloseShift}
+                onOpenCashMovement={() => setCashPanelOpen(true)}
             />
 
             {!selectedUnit ? (

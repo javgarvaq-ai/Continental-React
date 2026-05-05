@@ -5,11 +5,9 @@ function TopBar({
     currentUser,
     onChangeUser,
     onReprintTicket,
-    onAddCash,
-    onRemoveCash,
+    onCashMovement,
+    onShiftPanel,
     onInventory,
-    onShiftCut,
-    onCloseShift,
     onWeeklyReport,
 }) {
     const navigate = useNavigate()
@@ -53,12 +51,8 @@ function TopBar({
 
                 {isManagerOrAdmin && (
                     <>
-                        <button type="button" onClick={onAddCash} style={{ ...baseButtonStyle, background: '#1f3a25' }}>
-                            Depósito
-                        </button>
-
-                        <button type="button" onClick={onRemoveCash} style={{ ...baseButtonStyle, background: '#3a1f1f' }}>
-                            Retiro
+                        <button type="button" onClick={onCashMovement} style={{ ...baseButtonStyle, background: '#2a2a2a' }}>
+                            Movimiento de caja
                         </button>
 
                         <button type="button" onClick={onWeeklyReport} style={{ ...baseButtonStyle, background: '#222' }}>
@@ -69,30 +63,20 @@ function TopBar({
                             Inventario
                         </button>
 
-                        <button type="button" onClick={onShiftCut} style={{ ...baseButtonStyle, background: '#222' }}>
-                            Corte
+                        <button type="button" onClick={onShiftPanel} style={{ ...baseButtonStyle, background: '#2a1f1f' }}>
+                            Corte / Cierre
                         </button>
                     </>
                 )}
 
                 {isAdmin && (
-                    <>
-                        <button
-                            type="button"
-                            onClick={() => navigate('/admin/users')}
-                            style={{ ...baseButtonStyle, background: '#1d3557' }}
-                        >
-                            Admin
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={onCloseShift}
-                            style={{ ...baseButtonStyle, background: '#4a2616' }}
-                        >
-                            Cerrar turno
-                        </button>
-                    </>
+                    <button
+                        type="button"
+                        onClick={() => navigate('/admin/users')}
+                        style={{ ...baseButtonStyle, background: '#1d3557' }}
+                    >
+                        Admin
+                    </button>
                 )}
             </div>
         </>
