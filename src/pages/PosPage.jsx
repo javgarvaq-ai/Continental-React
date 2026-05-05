@@ -7,7 +7,6 @@ import { usePayment } from '../hooks/usePayment';
 import { getOrCreateActiveComanda, cancelComanda } from '../services/comandas';
 import MesaGrid from '../components/MesaGrid';
 import ShotMixerSelector from '../components/ShotMixerSelector';
-import PaymentPanel from '../components/PaymentPanel';
 import ComandaPanel from '../components/ComandaPanel';
 import ProductCatalog from '../components/ProductCatalog';
 import TopBar from '../components/TopBar'
@@ -100,7 +99,7 @@ function PosPage() {
         cartTotal,
         setStatus,
         onUpdateComanda: (fields) => setCurrentComanda(prev => ({ ...prev, ...fields })),
-        onReloadComanda: loadComandaView,
+        onReloadComanda: reloadCart,
     });
 
     // useComanda — needs currentMembership (from useCustomer above)
@@ -132,7 +131,7 @@ function PosPage() {
         productsById,
         isOnline,
         setStatus,
-        onLoadComanda: loadComandaView,
+        onLoadComanda: reloadCart,
     });
 
     // usePayment — needs membershipDiscountPct/discountAmount (from useCustomer) and loadUnits (from useComanda)
@@ -623,6 +622,7 @@ function PosPage() {
         return { error: null }
     }
 
+    // Full load: fetches catalog + cart. Used when first opening a comanda.
     async function loadComandaView(comandaId) {
         const [productsResult, cartResult] = await Promise.all([
             getProductsCatalog(),
@@ -642,6 +642,18 @@ function PosPage() {
         setGroupedProducts(productsResult.data?.groupedProducts || {});
         setCartItems(cartResult.data || []);
         setStatus('Comanda cargada.');
+    }
+
+    // Cart-only reload: used after add/remove/benefit operations — catalog doesn't change.
+    async function reloadCart(comandaId) {
+        const { data, error } = await getActiveCartItems(comandaId);
+
+        if (error) {
+            setStatus(`Error actualizando carrito: ${error.message}`);
+            return;
+        }
+
+        setCartItems(data || []);
     }
 
     function handleLogout() {
@@ -716,10 +728,13 @@ function PosPage() {
 
         // Link customer to comanda if found
         if (isNew && pendingCustomerData) {
-            await supabase
+            const { error: linkError } = await supabase
                 .from('comandas')
                 .update({ customer_id: pendingCustomerData.customer.id })
                 .eq('id', data.id)
+            if (linkError) {
+                setStatus(`Comanda abierta, pero no se pudo vincular el cliente: ${linkError.message}`)
+            }
             setCurrentCustomer(pendingCustomerData.customer)
             setCurrentMembership(pendingCustomerData.activeMembership)
         } else if (!isNew && data.customer_id) {

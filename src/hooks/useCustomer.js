@@ -94,13 +94,19 @@ export function useCustomer({ currentComanda, cartTotal, setStatus, onUpdateComa
         if (!currentComanda?.id) return
         setIsProcessingMembership(true)
 
-        await supabase
+        const { error } = await supabase
             .from('comandas')
             .update({
                 customer_id: customerData.customer.id,
                 customer_name: customerData.customer.name,
             })
             .eq('id', currentComanda.id)
+
+        if (error) {
+            setStatus(`Error asignando cliente: ${error.message}`)
+            setIsProcessingMembership(false)
+            return
+        }
 
         onUpdateComanda({
             customer_id: customerData.customer.id,
