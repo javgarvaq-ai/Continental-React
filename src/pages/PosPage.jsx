@@ -25,6 +25,7 @@ import {
     getCustomerWithMembership,
     getCustomerByIdWithMembership,
 } from '../services/membership';
+import { getComandaByFolio, getReprintData } from '../services/tickets';
 import { getCategoryColor } from '../config/categoryColors';
 import { money } from '../utils/money';
 
@@ -232,12 +233,7 @@ function PosPage() {
             return;
         }
 
-        // 🔹 Buscar comanda
-        const { data: comanda, error } = await supabase
-            .from('comandas')
-            .select('*')
-            .eq('folio', folioNumero)
-            .single();
+        const { data: comanda, error } = await getComandaByFolio(folioNumero);
 
         if (error || !comanda) {
             alert('No se encontró una comanda con ese folio.');
@@ -246,7 +242,6 @@ function PosPage() {
 
         let tipo = 'cuenta';
 
-        // 🔹 Si está pagada → elegir tipo
         if (comanda.status === 'paid') {
             const opcion = window.prompt(
                 `La comanda C-${String(comanda.folio).padStart(6, '0')} está pagada.\n\n` +
@@ -266,58 +261,13 @@ function PosPage() {
             }
         }
 
-        // 🔹 Traer items
-        const { data: items } = await supabase
-            .from('comanda_items')
-            .select('*, products:products!comanda_items_product_id_fkey(name)')
-            .eq('comanda_id', comanda.id)
-            .eq('status', 'active');
-
-        // 🔹 Traer mesa
-        const { data: unit } = await supabase
-            .from('units')
-            .select('*')
-            .eq('id', comanda.unit_id)
-            .single();
-
-        // 🔹 Traer pago si aplica
-        let payment = null;
-
-        if (tipo === 'pagado') {
-            const { data: paymentData } = await supabase
-                .from('payments')
-                .select('*')
-                .eq('comanda_id', comanda.id)
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .single();
-
-            payment = paymentData;
-        }
-
-        // 🔹 Imprimir
-        printTicket({
-            tipo,
+        const { items, unit, payment } = await getReprintData({
             comanda,
-            items: items || [],
-            unit,
-            payment,
+            tipo,
+            userId: currentUser?.id,
         });
 
-        // 🔹 Log (opcional pero recomendado)
-        if (currentUser?.id) {
-            await supabase.from('comanda_events').insert([
-                {
-                    comanda_id: comanda.id,
-                    user_id: currentUser.id,
-                    event_type: 'ticket_reprinted',
-                    event_data: {
-                        folio: comanda.folio,
-                        tipo_ticket: tipo,
-                    },
-                },
-            ]);
-        }
+        printTicket({ tipo, comanda, items, unit, payment });
     }
 
     function handleInventory() {
