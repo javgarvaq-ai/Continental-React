@@ -378,6 +378,11 @@ export async function confirmPayment({
         ]);
 
     if (paymentError) {
+        // Rollback: revert comanda to processing_payment so the cashier can retry
+        await supabase
+            .from('comandas')
+            .update({ status: 'processing_payment' })
+            .eq('id', comandaId);
         return { error: paymentError };
     }
 

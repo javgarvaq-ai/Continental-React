@@ -298,11 +298,20 @@ export async function processMembershipOnPayment({
             .insert(usageEntries)
 
         if (usageError) {
+            // Rollback: revert customer counters so the idempotency check passes on retry
+            await supabase
+                .from('customers')
+                .update({
+                    visit_count: prevVisitCount,
+                    bottle_credits_available: currentBottleCredits,
+                })
+                .eq('id', customerId)
+
             return {
-                newVisitCount,
-                earnedBottleCredit,
-                newBottleCreditsAvailable: creditsAfterRedemption,
-                membershipWarning: 'Visita registrada, pero no se pudo guardar el detalle de beneficios usados.',
+                newVisitCount: null,
+                earnedBottleCredit: false,
+                newBottleCreditsAvailable: null,
+                membershipWarning: 'No se pudo registrar el uso de beneficios. La visita no fue contabilizada — intenta de nuevo.',
             }
         }
     }

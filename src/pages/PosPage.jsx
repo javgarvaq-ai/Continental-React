@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
+import { useCustomer } from '../hooks/useCustomer';
 import { getUnitsWithStatus } from '../services/units';
 import { getOrCreateActiveComanda, cancelComanda } from '../services/comandas';
 import MesaGrid from '../components/MesaGrid';
@@ -32,15 +33,9 @@ import { printTicket } from '../components/Ticket';
 import { supabase } from '../services/supabase';
 import {
     getCustomerWithMembership,
-    searchCustomerByQuery,
     getCustomerByIdWithMembership,
-    getAllActiveMembershipPlans,
-    activateMembership,
-    cancelMembershipOnComanda,
-    addFreeBenefitItemToComanda,
     processMembershipOnPayment,
 } from '../services/membership';
-import { getNextCustomerNumber } from '../services/customersAdmin'
 import { getCategoryColor } from '../config/categoryColors';
 
 
@@ -109,29 +104,57 @@ function PosPage() {
         shotProduct: null,
         selectedMixers: [],
     });
-    const [currentCustomer, setCurrentCustomer] = useState(null);
-    const [currentMembership, setCurrentMembership] = useState(null);
-    const [membershipRenewalState, setMembershipRenewalState] = useState({
-        open: false,
-        plans: [],
-        selectedPlanId: '',
+    const visibleCartItems = useMemo(() => {
+        return cartItems.filter((item) => !item.is_free_mixer);
+    }, [cartItems]);
+
+    const productsById = useMemo(() => {
+        const map = {};
+        Object.values(groupedProducts).forEach((products) => {
+            products.forEach((product) => {
+                map[product.id] = product;
+            });
+        });
+        return map;
+    }, [groupedProducts]);
+
+    const cartTotal = useMemo(() => {
+        return visibleCartItems.reduce((sum, item) => {
+            return sum + Number(item.quantity || 0) * Number(item.unit_price || 0);
+        }, 0);
+    }, [visibleCartItems]);
+
+    const {
+        currentCustomer,
+        setCurrentCustomer,
+        currentMembership,
+        setCurrentMembership,
+        customerSearchState,
+        setCustomerSearchState,
+        membershipRenewalState,
+        setMembershipRenewalState,
+        freeBenefitState,
+        setFreeBenefitState,
+        isProcessingMembership,
+        isSearchingCustomer,
+        membershipDiscountPct,
+        discountAmount,
+        resetCustomerState,
+        handleSearchCustomer,
+        handleAssignCustomer,
+        handleCreateAndAssignCustomer,
+        handleOpenMembershipRenewal,
+        handleActivateMembership,
+        handleCancelMembership,
+        handleOpenFreeBenefitSelector,
+        handleAddFreeBenefit,
+    } = useCustomer({
+        currentComanda,
+        cartTotal,
+        setStatus,
+        onUpdateComanda: (fields) => setCurrentComanda(prev => ({ ...prev, ...fields })),
+        onReloadComanda: loadComandaView,
     });
-    const [freeBenefitState, setFreeBenefitState] = useState({
-        open: false,
-        type: null,
-        benefit: null,
-    });
-    const [isProcessingMembership, setIsProcessingMembership] = useState(false);
-    const [customerSearchState, setCustomerSearchState] = useState({
-        open: false,
-        query: '',
-        results: [],
-        notFound: false,
-        showCreateForm: false,
-        newName: '',
-        newPhone: '',
-    });
-    const [isSearchingCustomer, setIsSearchingCustomer] = useState(false);
     const [cashPanelOpen, setCashPanelOpen] = useState(false);
     const [isSubmittingCash, setIsSubmittingCash] = useState(false);
     const [shiftPanelOpen, setShiftPanelOpen] = useState(false);
@@ -169,13 +192,6 @@ function PosPage() {
         });
     }
 
-    function resetCustomerState() {
-        setCurrentCustomer(null);
-        setCurrentMembership(null);
-        setMembershipRenewalState({ open: false, plans: [], selectedPlanId: '' });
-        setFreeBenefitState({ open: false, type: null, benefit: null });
-        setCustomerSearchState({ open: false, query: '', results: [], notFound: false, showCreateForm: false, newName: '', newPhone: '' });
-    }
     function handleChangeUser() {
         const confirmed = window.confirm(
             '¿Deseas cambiar de usuario sin cerrar el turno?'
@@ -741,194 +757,6 @@ function PosPage() {
         resetPaymentState()
         resetShotSelector()
         setStatus(`Comanda cargada para ${unit.name}.`)
-    }
-    async function handleSearchCustomer() {
-        if (!customerSearchState.query.trim()) return
-        setIsSearchingCustomer(true)
-        setCustomerSearchState(p => ({ ...p, notFound: false, results: [] }))
-
-        const { data } = await searchCustomerByQuery(customerSearchState.query.trim())
-
-        if (data && data.length > 0) {
-            setCustomerSearchState(p => ({ ...p, results: data, notFound: false }))
-        } else {
-            setCustomerSearchState(p => ({ ...p, results: [], notFound: true }))
-        }
-        setIsSearchingCustomer(false)
-    }
-
-    async function handleAssignCustomer(customerData) {
-        if (!currentComanda?.id) return
-        setIsProcessingMembership(true)
-
-        await supabase
-            .from('comandas')
-            .update({
-                customer_id: customerData.customer.id,
-                customer_name: customerData.customer.name,
-            })
-            .eq('id', currentComanda.id)
-
-        setCurrentComanda(prev => ({
-            ...prev,
-            customer_id: customerData.customer.id,
-            customer_name: customerData.customer.name,
-        }))
-
-        setCurrentCustomer(customerData.customer)
-        setCurrentMembership(customerData.activeMembership)
-        setCustomerSearchState({ open: false, query: '', results: [], notFound: false, showCreateForm: false, newName: '', newPhone: '' })
-        setIsProcessingMembership(false)
-        setStatus(`Cliente asignado: ${customerData.customer.name}`)
-    }
-
-    async function handleCreateAndAssignCustomer() {
-        if (!customerSearchState.newName.trim() || !currentComanda?.id) return
-        setIsProcessingMembership(true)
-
-        const nextNumber = await getNextCustomerNumber()
-
-        const { data: newCustomer, error } = await supabase
-            .from('customers')
-            .insert([{
-                customer_number: nextNumber,
-                name: customerSearchState.newName.trim(),
-                phone: customerSearchState.newPhone.trim() || null,
-            }])
-            .select()
-            .single()
-
-        if (error || !newCustomer) {
-            setStatus(`Error creando cliente: ${error?.message}`)
-            setIsProcessingMembership(false)
-            return
-        }
-
-        await supabase
-            .from('comandas')
-            .update({ customer_id: newCustomer.id, customer_name: newCustomer.name })
-            .eq('id', currentComanda.id)
-
-        setCurrentComanda(prev => ({ ...prev, customer_id: newCustomer.id, customer_name: newCustomer.name }))
-        setCurrentCustomer(newCustomer)
-        setCurrentMembership(null)
-        setCustomerSearchState({ open: false, query: '', results: [], notFound: false, showCreateForm: false, newName: '', newPhone: '' })
-        setIsProcessingMembership(false)
-        setStatus(`Cliente creado y asignado: ${newCustomer.name} #${newCustomer.customer_number}`)
-    }
-    async function handleOpenMembershipRenewal() {
-        setIsProcessingMembership(true)
-        const { data, error } = await getAllActiveMembershipPlans()
-        if (error || !data || data.length === 0) {
-            alert('No hay planes de membresía activos configurados.')
-            setIsProcessingMembership(false)
-            return
-        }
-        setMembershipRenewalState({
-            open: true,
-            plans: data,
-            selectedPlanId: data[0].id,
-        })
-        setIsProcessingMembership(false)
-    }
-
-    async function handleActivateMembership() {
-        if (!currentCustomer || !currentComanda?.id || !membershipRenewalState.selectedPlanId) return
-        setIsProcessingMembership(true)
-
-        const selectedPlan = membershipRenewalState.plans.find(
-            p => p.id === membershipRenewalState.selectedPlanId
-        )
-
-        // 1. Create the membership record
-        const { data: newMembership, error: membershipError } = await activateMembership({
-            customerId: currentCustomer.id,
-            planId: membershipRenewalState.selectedPlanId,
-            comandaId: currentComanda.id,
-        })
-
-        if (membershipError || !newMembership) {
-            alert(`Error activando membresía: ${membershipError?.message}`)
-            setIsProcessingMembership(false)
-            return
-        }
-
-        // 2. Add membership product to bill if linked
-        if (selectedPlan?.product_id) {
-            const { data: product } = await supabase
-                .from('products')
-                .select('*')
-                .eq('id', selectedPlan.product_id)
-                .single()
-
-            if (product) {
-                await addNormalProductToComanda({
-                    comandaId: currentComanda.id,
-                    product,
-                })
-                await loadComandaView(currentComanda.id)
-            }
-        }
-
-        setCurrentMembership(newMembership)
-        setMembershipRenewalState({ open: false, plans: [], selectedPlanId: '' })
-        setIsProcessingMembership(false)
-        setStatus('Membresía activada correctamente.')
-    }
-    async function handleCancelMembership() {
-        if (!currentMembership || !currentComanda?.id) return
-
-        const confirmed = window.confirm(
-            `¿Cancelar la membresía "${currentMembership.membership_plans?.name}"? ` +
-            `Se eliminará el cargo y todos los beneficios usados en esta comanda.`
-        )
-        if (!confirmed) return
-
-        setIsProcessingMembership(true)
-
-        const { error } = await cancelMembershipOnComanda({
-            membershipId: currentMembership.id,
-            comandaId: currentComanda.id,
-            productId: currentMembership.membership_plans?.product_id || null,
-        })
-
-        if (error) {
-            alert(`Error cancelando membresía: ${error.message}`)
-            setIsProcessingMembership(false)
-            return
-        }
-
-        setCurrentMembership(null)
-        await loadComandaView(currentComanda.id)
-        setIsProcessingMembership(false)
-        setStatus('Membresía cancelada y cargo removido.')
-    }
-
-    async function handleOpenFreeBenefitSelector(type) {
-        if (!currentMembership) return
-        const benefit = currentMembership.membership_plans?.membership_plan_benefits?.find(
-            b => b.benefit_type === type
-        )
-        if (!benefit) return
-        setFreeBenefitState({ open: true, type, benefit })
-    }
-
-    async function handleAddFreeBenefit(productId) {
-        if (!currentComanda?.id || !productId) return
-        setIsAddingProduct(true)
-        const { error } = await addFreeBenefitItemToComanda({
-            comandaId: currentComanda.id,
-            productId,
-        })
-        if (error) {
-            setStatus(`Error agregando beneficio: ${error.message}`)
-            setIsAddingProduct(false)
-            return
-        }
-        await loadComandaView(currentComanda.id)
-        setFreeBenefitState({ open: false, type: null, benefit: null })
-        setIsAddingProduct(false)
-        setStatus('Beneficio agregado.')
     }
     async function handleBackToUnits(customStatus = null) {
         setSelectedUnit(null);
@@ -1506,35 +1334,7 @@ function PosPage() {
         ? ` • ${currentComanda.customer_name}`
         : '';
 
-    const visibleCartItems = useMemo(() => {
-        return cartItems.filter((item) => !item.is_free_mixer);
-    }, [cartItems]);
 
-    const productsById = useMemo(() => {
-        const map = {};
-
-        Object.values(groupedProducts).forEach((products) => {
-            products.forEach((product) => {
-                map[product.id] = product;
-            });
-        });
-
-        return map;
-    }, [groupedProducts]);
-
-    const cartTotal = useMemo(() => {
-        return visibleCartItems.reduce((sum, item) => {
-            return sum + Number(item.quantity || 0) * Number(item.unit_price || 0);
-        }, 0);
-    }, [visibleCartItems]);
-
-    const membershipDiscountBenefit = currentMembership?.membership_plans?.membership_plan_benefits?.find(
-        b => b.benefit_type === 'discount'
-    );
-    const membershipDiscountPct = Number(membershipDiscountBenefit?.discount_percentage || 0);
-    const discountAmount = membershipDiscountPct > 0
-        ? Math.round(cartTotal * (membershipDiscountPct / 100) * 100) / 100
-        : 0;
 
     const displayedTotal =
         currentComanda?.status === 'open'
