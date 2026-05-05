@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
     getAllInventoryItems,
@@ -8,6 +8,7 @@ import {
     adjustInventoryStock,
 } from '../services/inventoryAdmin'
 import AdminNav from '../components/AdminNav'
+import { useAuthStore } from '../store/authStore'
 
 const STATUS_COLOR = (stock, unitType) => {
     if (stock <= 0) return '#b71c1c'
@@ -33,10 +34,7 @@ function InventoryItemsAdminPage() {
     const [adjustingId, setAdjustingId] = useState(null)
     const [adjustForm, setAdjustForm] = useState({ amount: '', type: 'entry', note: '' })
 
-    const currentUser = useMemo(() => {
-        const raw = localStorage.getItem('continentalCurrentUser')
-        return raw ? JSON.parse(raw) : null
-    }, [])
+    const currentUser = useAuthStore(state => state.user)
     const isAdmin = currentUser?.role === 'admin'
 
     useEffect(() => { loadItems() }, [])

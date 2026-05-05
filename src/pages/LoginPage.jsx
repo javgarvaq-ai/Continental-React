@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getActiveUsers } from '../services/users'
 import { loginWithPin, getOpenShift, createShift } from '../services/auth'
+import { useAuthStore } from '../store/authStore'
 
 function LoginPage() {
     const navigate = useNavigate()
+    const setAuth = useAuthStore(state => state.setAuth)
 
     const [status, setStatus] = useState('Loading users...')
     const [users, setUsers] = useState([])
@@ -110,8 +112,7 @@ function LoginPage() {
             currentShiftId = newShift.id
         }
 
-        localStorage.setItem('continentalCurrentUser', JSON.stringify(user))
-        localStorage.setItem('continentalCurrentShiftId', currentShiftId)
+        setAuth(user, currentShiftId)
 
         setStatus('Login successful.')
         setPin('')

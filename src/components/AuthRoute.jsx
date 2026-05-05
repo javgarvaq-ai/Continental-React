@@ -1,17 +1,10 @@
 import { Navigate } from 'react-router-dom'
+import { useAuthStore } from '../store/authStore'
 
 function AuthRoute({ children }) {
-    const storedUser = localStorage.getItem('continentalCurrentUser')
+    const user = useAuthStore(state => state.user)
 
-    if (!storedUser) {
-        return <Navigate to="/login" replace />
-    }
-
-    let user
-    try {
-        user = JSON.parse(storedUser)
-    } catch {
-        localStorage.removeItem('continentalCurrentUser')
+    if (!user) {
         return <Navigate to="/login" replace />
     }
 

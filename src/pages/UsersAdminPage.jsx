@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
     getAllUsers,
@@ -7,6 +7,7 @@ import {
     resetUserPin,
 } from '../services/usersAdmin'
 import AdminNav from '../components/AdminNav'
+import { useAuthStore } from '../store/authStore'
 
 function UsersAdminPage() {
     const [users, setUsers] = useState([])
@@ -20,11 +21,7 @@ function UsersAdminPage() {
     const [newPin, setNewPin] = useState('')
     const [confirmNewPin, setConfirmNewPin] = useState('')
 
-    const currentUser = useMemo(() => {
-        const raw = localStorage.getItem('continentalCurrentUser')
-        return raw ? JSON.parse(raw) : null
-    }, [])
-
+    const currentUser = useAuthStore(state => state.user)
     const isAdmin = currentUser?.role === 'admin'
 
     useEffect(() => {

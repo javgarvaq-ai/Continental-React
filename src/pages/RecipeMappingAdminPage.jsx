@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
     getRecipeMappingsAdminData,
@@ -7,6 +7,7 @@ import {
     toggleRecipeMappingActive,
 } from '../services/recipeMappingsAdmin'
 import AdminNav from '../components/AdminNav'
+import { useAuthStore } from '../store/authStore'
 
 function RecipeMappingAdminPage() {
     const navigate = useNavigate()
@@ -31,11 +32,7 @@ function RecipeMappingAdminPage() {
         active: true,
     })
 
-    const currentUser = useMemo(() => {
-        const raw = localStorage.getItem('continentalCurrentUser')
-        return raw ? JSON.parse(raw) : null
-    }, [])
-
+    const currentUser = useAuthStore(state => state.user)
     const isAdmin = currentUser?.role === 'admin'
 
     useEffect(() => {

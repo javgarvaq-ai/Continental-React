@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../store/authStore';
 import { getUnitsWithStatus } from '../services/units';
 import { getOrCreateActiveComanda, cancelComanda } from '../services/comandas';
 import MesaGrid from '../components/MesaGrid';
@@ -79,8 +80,10 @@ function getPaymentSummary(totalCuenta, paymentData) {
 
 function PosPage() {
     const navigate = useNavigate();
-    const [currentUser, setCurrentUser] = useState(null);
-    const [currentShiftId, setCurrentShiftId] = useState('');
+    const currentUser = useAuthStore(state => state.user);
+    const currentShiftId = useAuthStore(state => state.shiftId);
+    const clearAuth = useAuthStore(state => state.clearAuth);
+    const clearUser = useAuthStore(state => state.clearUser);
     const [units, setUnits] = useState([]);
     const [status, setStatus] = useState('Cargando mesas...');
     const [selectedUnit, setSelectedUnit] = useState(null);
@@ -134,19 +137,6 @@ function PosPage() {
     const [shiftPanelOpen, setShiftPanelOpen] = useState(false);
 
     useEffect(() => {
-        const savedUser = localStorage.getItem('continentalCurrentUser');
-        const savedShiftId = localStorage.getItem('continentalCurrentShiftId');
-
-        if (!savedUser || !savedShiftId) {
-            navigate('/login');
-            return;
-        }
-
-        setCurrentUser(JSON.parse(savedUser));
-        setCurrentShiftId(savedShiftId);
-    }, [navigate]);
-
-    useEffect(() => {
         loadUnits();
     }, []);
 
@@ -193,9 +183,8 @@ function PosPage() {
 
         if (!confirmed) return;
 
-        localStorage.removeItem('continentalCurrentUser');
+        clearUser();
 
-        setCurrentUser(null);
         setSelectedUnit(null);
         setCurrentComanda(null);
         setGroupedProducts({});
@@ -619,8 +608,7 @@ function PosPage() {
             return { error: updateError }
         }
 
-        localStorage.removeItem('continentalCurrentShiftId')
-        localStorage.removeItem('continentalCurrentUser')
+        clearAuth()
         navigate('/')
 
         return { error: null }
@@ -661,8 +649,7 @@ function PosPage() {
     }
 
     function handleLogout() {
-        localStorage.removeItem('continentalCurrentUser');
-        localStorage.removeItem('continentalCurrentShiftId');
+        clearAuth();
         navigate('/login');
     }
 

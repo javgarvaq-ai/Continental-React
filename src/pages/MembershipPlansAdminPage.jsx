@@ -11,6 +11,7 @@ import {
     getProductsForBenefitSelection,
 } from '../services/membershipAdmin'
 import AdminNav from '../components/AdminNav'
+import { useAuthStore } from '../store/authStore'
 
 
 const BENEFIT_LABELS = {
@@ -45,10 +46,7 @@ function MembershipPlansAdminPage() {
     const [addingProductToBenefitId, setAddingProductToBenefitId] = useState(null)
     const [selectedProductId, setSelectedProductId] = useState('')
 
-    const currentUser = (() => {
-        const raw = localStorage.getItem('continentalCurrentUser')
-        return raw ? JSON.parse(raw) : null
-    })()
+    const currentUser = useAuthStore(state => state.user)
     const isAdmin = currentUser?.role === 'admin'
 
     useEffect(() => {

@@ -7,6 +7,7 @@ import {
     deleteCategory,
 } from '../services/categoriesAdmin'
 import AdminNav from '../components/AdminNav'
+import { useAuthStore } from '../store/authStore'
 
 
 function CategoriesAdminPage() {
@@ -19,11 +20,7 @@ function CategoriesAdminPage() {
     const [editingId, setEditingId] = useState(null)
     const [editingName, setEditingName] = useState('')
 
-    const currentUser = (() => {
-        const raw = localStorage.getItem('continentalCurrentUser')
-        return raw ? JSON.parse(raw) : null
-    })()
-
+    const currentUser = useAuthStore(state => state.user)
     const isAdmin = currentUser?.role === 'admin'
 
     useEffect(() => {

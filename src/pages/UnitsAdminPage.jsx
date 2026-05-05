@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getAllUnits, createUnit, updateUnit, deleteUnit } from '../services/unitsAdmin'
 import AdminNav from '../components/AdminNav'
+import { useAuthStore } from '../store/authStore'
 
 
 const UNIT_TYPES = ['mesa', 'barra', 'terraza', 'privado', 'otro']
@@ -17,10 +18,7 @@ function UnitsAdminPage() {
     const [editingId, setEditingId] = useState(null)
     const [editForm, setEditForm] = useState({ name: '', type: '' })
 
-    const currentUser = (() => {
-        const raw = localStorage.getItem('continentalCurrentUser')
-        return raw ? JSON.parse(raw) : null
-    })()
+    const currentUser = useAuthStore(state => state.user)
     const isAdmin = currentUser?.role === 'admin'
 
     useEffect(() => { loadUnits() }, [])

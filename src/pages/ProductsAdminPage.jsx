@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
     getAllProductsAdmin,
@@ -10,6 +10,7 @@ import {
     removeAllowedMixer,
 } from '../services/productsAdmin'
 import AdminNav from '../components/AdminNav'
+import { useAuthStore } from '../store/authStore'
 
 function ProductsAdminPage() {
     const [products, setProducts] = useState([])
@@ -44,11 +45,7 @@ function ProductsAdminPage() {
         active: true,
     })
 
-    const currentUser = useMemo(() => {
-        const raw = localStorage.getItem('continentalCurrentUser')
-        return raw ? JSON.parse(raw) : null
-    }, [])
-
+    const currentUser = useAuthStore(state => state.user)
     const isAdmin = currentUser?.role === 'admin'
     const filteredProducts = products.filter((product) =>
         product.name.toLowerCase().includes(productSearch.toLowerCase())

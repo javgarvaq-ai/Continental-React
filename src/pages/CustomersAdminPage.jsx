@@ -8,6 +8,7 @@ import {
     getCustomerBenefitUsage,
 } from '../services/customersAdmin'
 import AdminNav from '../components/AdminNav'
+import { useAuthStore } from '../store/authStore'
 
 
 function formatMonth(monthStr) {
@@ -44,10 +45,7 @@ function CustomersAdminPage() {
     const [usageHistory, setUsageHistory] = useState([])
     const [loadingUsage, setLoadingUsage] = useState(false)
 
-    const currentUser = (() => {
-        const raw = localStorage.getItem('continentalCurrentUser')
-        return raw ? JSON.parse(raw) : null
-    })()
+    const currentUser = useAuthStore(state => state.user)
     const isAdmin = currentUser?.role === 'admin'
 
     useEffect(() => {
