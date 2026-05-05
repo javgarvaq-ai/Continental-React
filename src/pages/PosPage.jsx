@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/authStore';
 import { useCustomer } from '../hooks/useCustomer';
 import { useComanda } from '../hooks/useComanda';
 import { usePayment } from '../hooks/usePayment';
+import { useShift } from '../hooks/useShift';
 import { getOrCreateActiveComanda, cancelComanda } from '../services/comandas';
 import MesaGrid from '../components/MesaGrid';
 import ShotMixerSelector from '../components/ShotMixerSelector';
@@ -25,7 +26,6 @@ import {
     getCustomerByIdWithMembership,
 } from '../services/membership';
 import { getCategoryColor } from '../config/categoryColors';
-import { getCashMovementConfig } from '../config/cashMovements';
 import { money } from '../utils/money';
 
 
@@ -161,9 +161,22 @@ function PosPage() {
         onLoadUnits: loadUnits,
     });
 
-    const [cashPanelOpen, setCashPanelOpen] = useState(false);
-    const [isSubmittingCash, setIsSubmittingCash] = useState(false);
-    const [shiftPanelOpen, setShiftPanelOpen] = useState(false);
+    // useShift — shift lifecycle, cash movements, panel state
+    const {
+        cashPanelOpen,
+        setCashPanelOpen,
+        isSubmittingCash,
+        shiftPanelOpen,
+        setShiftPanelOpen,
+        fetchShiftPanelData,
+        handleConfirmCloseShift,
+        handleCashMovementSubmit,
+    } = useShift({
+        currentUser,
+        currentShiftId,
+        setStatus,
+        onShiftClosed: () => { clearAuth(); navigate('/'); },
+    });
 
     useEffect(() => {
         loadUnits();
@@ -307,211 +320,8 @@ function PosPage() {
         }
     }
 
-    async function calculateShiftSummary() {
-        if (!currentShiftId) {
-            return {
-                error: new Error('No hay turno activo.'),
-                data: null,
-            };
-        }
-
-        const { data: shift, error: shiftError } = await supabase
-            .from('shifts')
-            .select('*')
-            .eq('id', currentShiftId)
-            .single();
-
-        if (shiftError || !shift) {
-            return {
-                error: shiftError || new Error('No se pudo obtener el turno.'),
-                data: null,
-            };
-        }
-
-        const { data: payments, error: paymentsError } = await supabase
-            .from('payments')
-            .select(`
-            *,
-            comandas (
-                tip_total
-            )
-        `)
-            .eq('shift_id', currentShiftId);
-
-        if (paymentsError) {
-            return { error: paymentsError, data: null };
-        }
-
-        const { data: cashMovements, error: cashMovementsError } = await supabase
-            .from('cash_movements')
-            .select('*')
-            .eq('shift_id', currentShiftId);
-
-        if (cashMovementsError) {
-            return { error: cashMovementsError, data: null };
-        }
-
-        let totalEfectivo = 0;
-        let totalTarjeta = 0;
-        let totalTransferencia = 0;
-        let totalPropinas = 0;
-        let totalCambio = 0;
-        let totalWithdrawals = 0;
-        let totalDeposits = 0;
-
-        (payments || []).forEach((p) => {
-            const efectivoRecibido = Number(p.efectivo || 0);
-            const tarjetaRecibida = Number(p.tarjeta || 0);
-            const transferenciaRecibida = Number(p.transferencia || 0);
-            const cambioDado = Number(p.change_given || 0);
-            const propina = Number((p.tip_amount ?? p.comandas?.tip_total) || 0);
-
-            totalEfectivo += efectivoRecibido;
-            totalTarjeta += tarjetaRecibida;
-            totalTransferencia += transferenciaRecibida;
-            totalPropinas += propina;
-            totalCambio += cambioDado;
-        });
-
-        (cashMovements || []).forEach((m) => {
-            const amount = Number(m.amount || 0);
-
-            // Money leaving drawer
-            if (m.source_location === 'drawer') {
-                totalWithdrawals += amount;
-            }
-
-            // Money entering drawer
-            if (m.destination_location === 'drawer') {
-                totalDeposits += amount;
-            }
-        });
-
-        const expectedCash =
-            Number(shift.starting_cash || 0) +
-            totalEfectivo +
-            totalDeposits -
-            totalWithdrawals;
-
-        return {
-            error: null,
-            data: {
-                shift,
-                totalEfectivo,
-                totalTarjeta,
-                totalTransferencia,
-                totalPropinas,
-                totalCambio,
-                totalWithdrawals,
-                totalDeposits,
-                expectedCash,
-            },
-        };
-    }
-
-    async function handleCashMovementSubmit({ category, amount, note }) {
-        if (!currentUser?.id || !currentShiftId) return
-
-        const config = getCashMovementConfig(category)
-        if (!config) return
-
-        setIsSubmittingCash(true)
-
-        const { error } = await supabase
-            .from('cash_movements')
-            .insert([{
-                shift_id: currentShiftId,
-                user_id: currentUser.id,
-                type: config.type,
-                amount,
-                note,
-                category,
-                movement_nature: config.movementNature,
-                source_location: config.sourceLocation,
-                destination_location: config.destinationLocation,
-            }])
-
-        setIsSubmittingCash(false)
-
-        if (error) {
-            setStatus(`Error registrando movimiento: ${error.message}`)
-            return
-        }
-
-        setCashPanelOpen(false)
-        setStatus('Movimiento de caja registrado correctamente.')
-    }
-
     function handleInventory() {
         navigate('/inventory');
-    }
-
-    async function fetchShiftPanelData() {
-        const { data: summary, error } = await calculateShiftSummary()
-
-        if (error || !summary) {
-            return { data: null, error: error || new Error('No se pudo calcular el corte.') }
-        }
-
-        const { data: openComandas } = await supabase
-            .from('comandas')
-            .select('id')
-            .in('status', ['open', 'pending_payment', 'processing_payment'])
-            .gte('opened_at', summary.shift.opened_at)
-            .limit(1)
-
-        return {
-            data: {
-                summary,
-                hasOpenComandas: !!(openComandas && openComandas.length > 0),
-            },
-            error: null,
-        }
-    }
-
-    async function handleConfirmCloseShift(cashCounted) {
-        if (!currentShiftId || !currentUser?.id) {
-            return { error: new Error('No hay turno activo.') }
-        }
-
-        const { data: panelData, error: panelError } = await fetchShiftPanelData()
-
-        if (panelError || !panelData) {
-            return { error: panelError || new Error('No se pudo calcular el cierre.') }
-        }
-
-        if (panelData.hasOpenComandas) {
-            return { error: new Error('Hay mesas abiertas. Ciérralas antes de cerrar el turno.') }
-        }
-
-        const { summary } = panelData
-        const difference = cashCounted - Number(summary.expectedCash || 0)
-
-        const { error: updateError } = await supabase
-            .from('shifts')
-            .update({
-                status: 'closed',
-                closed_at: new Date().toISOString(),
-                closed_by_user_id: currentUser.id,
-                cash_counted: cashCounted,
-                difference,
-                total_efectivo: summary.totalEfectivo,
-                total_tarjeta: summary.totalTarjeta,
-                total_transferencia: summary.totalTransferencia,
-                total_propinas: summary.totalPropinas,
-                total_retiros: summary.totalWithdrawals,
-                expected_cash: summary.expectedCash,
-            })
-            .eq('id', currentShiftId)
-
-        if (updateError) {
-            return { error: updateError }
-        }
-
-        clearAuth()
-        navigate('/')
-
-        return { error: null }
     }
 
     // Full load: fetches catalog + cart. Used when first opening a comanda.
