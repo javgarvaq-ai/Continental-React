@@ -1,4 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect } from 'react'
+import { useAuthStore } from './store/authStore'
 import LoginPage from './pages/LoginPage'
 import PosPage from './pages/PosPage'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -6,6 +8,7 @@ import WeeklyReportPage from './pages/WeeklyReportPage'
 import InventoryPage from './pages/InventoryPage'
 import SetupAdminPage from './pages/SetupAdminPage'
 import AuthRoute from './components/AuthRoute'
+import ManagerRoute from './components/ManagerRoute'
 import UsersAdminPage from './pages/UsersAdminPage'
 import ProductsAdminPage from './pages/ProductsAdminPage'
 import InventoryItemsAdminPage from './pages/InventoryItemsAdminPage'
@@ -16,6 +19,12 @@ import CustomersAdminPage from './pages/CustomersAdminPage'
 import UnitsAdminPage from './pages/UnitsAdminPage'
 
 function App() {
+  const verifySession = useAuthStore(state => state.verifySession)
+
+  useEffect(() => {
+    verifySession()
+  }, [])
+
   return (
     <BrowserRouter>
       <Routes>
@@ -98,18 +107,18 @@ function App() {
         <Route
           path="/inventory"
           element={
-            <ProtectedRoute>
+            <ManagerRoute>
               <InventoryPage />
-            </ProtectedRoute>
+            </ManagerRoute>
           }
         />
 
         <Route
           path="/weekly-report"
           element={
-            <ProtectedRoute>
+            <ManagerRoute>
               <WeeklyReportPage />
-            </ProtectedRoute>
+            </ManagerRoute>
           }
         />
       </Routes>
