@@ -7,10 +7,7 @@ import {
 } from '../services/comandaCheckout'
 import { processMembershipOnPayment } from '../services/membership'
 import { printTicket } from '../components/Ticket'
-
-function money(value) {
-    return `$${Number(value || 0).toFixed(2)}`
-}
+import { money } from '../utils/money'
 
 function getPaymentSummary(totalCuenta, paymentData) {
     const efectivo = Number(paymentData.efectivo || 0)

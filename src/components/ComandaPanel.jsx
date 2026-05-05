@@ -1,8 +1,5 @@
 import PaymentPanel from './PaymentPanel';
-
-function money(value) {
-    return `$${Number(value || 0).toFixed(2)}`;
-}
+import { money } from '../utils/money';
 
 function ComandaPanel({
     currentComanda,

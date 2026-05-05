@@ -1,10 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../services/supabase';
 import { useNavigate } from 'react-router-dom';
-
-function money(value) {
-    return `$${Number(value || 0).toFixed(2)}`;
-}
+import { money } from '../utils/money';
 
 function WeeklyReportPage() {
     const today = new Date();

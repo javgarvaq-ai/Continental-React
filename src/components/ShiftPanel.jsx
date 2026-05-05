@@ -1,8 +1,5 @@
 import { useState, useEffect } from 'react'
-
-function money(value) {
-    return `$${Number(value || 0).toFixed(2)}`
-}
+import { money } from '../utils/money'
 
 function SummaryRow({ label, value, muted, accent, bold }) {
     return (
