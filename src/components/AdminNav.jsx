@@ -21,6 +21,7 @@ const NAV_ITEMS = [
     { label: 'Membresías', path: '/admin/membership-plans' },
     { label: 'Clientes', path: '/admin/customers' },
     { label: 'Mesas/Unidades', path: '/admin/units' },
+    { label: 'Empleados', path: '/admin/employees' },
 ]
 
 function AdminNav({ currentPath }) {
