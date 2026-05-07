@@ -37,24 +37,50 @@ export const useAuthStore = create((set) => ({
         set({ user: null })
     },
 
-    // Called on app load to validate the stored shiftId is still open in the DB.
-    // If the shift was closed externally (or never existed), clears auth so the
-    // user is redirected to login instead of operating in a ghost session.
+    // Called on app load to validate:
+    // 1. The stored shiftId is still open in the DB
+    // 2. The stored user still exists, is active, and has the same role
+    // If either check fails, clears auth and redirects to login.
     verifySession: async () => {
-        const { shiftId } = useAuthStore.getState()
+        const { shiftId, user } = useAuthStore.getState()
 
         if (!shiftId) return
 
-        const { data: shift, error } = await supabase
+        // Check shift is still open
+        const { data: shift, error: shiftError } = await supabase
             .from('shifts')
             .select('id, status')
             .eq('id', shiftId)
             .single()
 
-        if (error || !shift || shift.status !== 'open') {
+        if (shiftError || !shift || shift.status !== 'open') {
             localStorage.removeItem('continentalCurrentUser')
             localStorage.removeItem('continentalCurrentShiftId')
             set({ user: null, shiftId: null })
+            return
+        }
+
+        // Check user is still active and role hasn't changed
+        if (user?.id) {
+            const { data: freshUser, error: userError } = await supabase
+                .from('users')
+                .select('id, active, role')
+                .eq('id', user.id)
+                .single()
+
+            if (userError || !freshUser || !freshUser.active || freshUser.role !== user.role) {
+                localStorage.removeItem('continentalCurrentUser')
+                localStorage.removeItem('continentalCurrentShiftId')
+                set({ user: null, shiftId: null })
+                return
+            }
+
+            // Role is confirmed fresh — update stored user if role somehow drifted
+            if (freshUser.role !== user.role) {
+                const updatedUser = { ...user, role: freshUser.role }
+                localStorage.setItem('continentalCurrentUser', JSON.stringify(updatedUser))
+                set({ user: updatedUser })
+            }
         }
     },
 }))
