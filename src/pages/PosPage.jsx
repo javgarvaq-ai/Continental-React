@@ -520,20 +520,37 @@ function PosPage() {
                 <MesaGrid units={units} onUnitClick={handleUnitClick} />
             ) : (
                 <main>
-                    <div style={{ marginBottom: '16px' }}>
-                        <button onClick={() => handleBackToUnits()}>← Volver a mesas</button>
+                    <div style={{ marginBottom: '14px' }}>
+                        <button
+                            onClick={() => handleBackToUnits()}
+                            style={{
+                                padding: '7px 14px',
+                                borderRadius: '6px',
+                                border: '1px solid #2a2a2a',
+                                background: 'transparent',
+                                color: '#666',
+                                cursor: 'pointer',
+                                fontSize: '13px',
+                            }}
+                        >
+                            ← Mesas
+                        </button>
                     </div>
 
                     <div
                         style={{
-                            borderLeft: '6px solid #1565c0',
-                            background: '#181818',
+                            borderLeft: `4px solid ${
+                                currentComanda?.status === 'pending_payment' ? '#fb923c'
+                                : currentComanda?.status === 'processing_payment' ? '#a78bfa'
+                                : '#60a5fa'
+                            }`,
+                            background: '#141414',
                             borderRadius: '8px',
                             padding: '14px 16px',
                             marginBottom: '16px',
                         }}
                     >
-                        <div style={{ fontSize: '13px', opacity: 0.75, marginBottom: '4px' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#444', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>
                             Mesa activa
                         </div>
 
@@ -835,8 +852,18 @@ function PosPage() {
                                 flexWrap: 'wrap',
                             }}
                         >
-                            <div style={{ fontSize: '15px', opacity: 0.9 }}>
-                                Estado: {currentComanda?.status}
+                            <div>
+                                {(() => {
+                                    const STATUS_COLOR = { open: '#60a5fa', pending_payment: '#fb923c', processing_payment: '#a78bfa' }
+                                    const STATUS_LABEL = { open: 'Abierta', pending_payment: 'Cuenta presentada', processing_payment: 'Cobrando' }
+                                    const s = currentComanda?.status
+                                    const c = STATUS_COLOR[s] || '#888'
+                                    return (
+                                        <span style={{ fontSize: '12px', fontWeight: 600, padding: '3px 10px', borderRadius: '10px', background: `${c}18`, color: c, border: `1px solid ${c}30` }}>
+                                            {STATUS_LABEL[s] || s}
+                                        </span>
+                                    )
+                                })()}
                             </div>
 
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

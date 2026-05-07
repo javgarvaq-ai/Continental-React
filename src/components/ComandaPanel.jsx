@@ -1,6 +1,12 @@
 import PaymentPanel from './PaymentPanel';
 import { money } from '../utils/money';
 
+const STATUS_LABEL = {
+    open: { label: 'Abierta', color: '#60a5fa' },
+    pending_payment: { label: 'Cuenta presentada', color: '#fb923c' },
+    processing_payment: { label: 'Cobrando', color: '#a78bfa' },
+}
+
 function ComandaPanel({
     currentComanda,
     visibleCartItems,
@@ -25,87 +31,109 @@ function ComandaPanel({
     onResetAutoTip,
     onConfirmPayment,
 }) {
-    return (
-        <section
-            style={{
-                border: '1px solid #444',
-                borderRadius: '8px',
-                padding: '16px',
-            }}
-        >
-            <h2>Comanda</h2>
+    const statusInfo = STATUS_LABEL[currentComanda?.status] || null
 
+    return (
+        <section style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+            {/* Header */}
+            <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '10px',
+            }}>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: '#444', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                    Comanda
+                </span>
+                {statusInfo && (
+                    <span style={{
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        padding: '2px 8px',
+                        borderRadius: '10px',
+                        background: `${statusInfo.color}18`,
+                        color: statusInfo.color,
+                        border: `1px solid ${statusInfo.color}30`,
+                    }}>
+                        {statusInfo.label}
+                    </span>
+                )}
+            </div>
+
+            {/* Cart items */}
             {visibleCartItems.length === 0 ? (
-                <p>Sin productos.</p>
+                <p style={{ fontSize: '13px', color: '#444', margin: '16px 0' }}>Sin productos.</p>
             ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
                     {visibleCartItems.map((item) => (
                         <div
                             key={item.id}
                             style={{
-                                borderBottom: '1px solid #333',
-                                paddingBottom: '8px',
                                 display: 'flex',
                                 justifyContent: 'space-between',
-                                gap: '12px',
                                 alignItems: 'center',
+                                gap: '10px',
+                                padding: '8px 0',
+                                borderBottom: '1px solid #1a1a1a',
                             }}
                         >
-                            <div style={{ flex: 1 }}>
-                                <div style={{ fontWeight: 'bold' }}>
+                            {/* Product info */}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: '13px', fontWeight: 600, color: '#e2e2e2', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                     {item.products?.name || 'Producto'}
                                 </div>
-
-                                <div style={{ fontSize: '14px', opacity: 0.9 }}>
-                                    {item.quantity} x {money(item.unit_price)} ={' '}
-                                    {money(
-                                        Number(item.quantity || 0) *
-                                        Number(item.unit_price || 0)
-                                    )}
+                                <div style={{ fontSize: '12px', color: '#555', marginTop: '1px' }}>
+                                    {item.quantity} × {money(item.unit_price)}
+                                    <span style={{ color: '#888', marginLeft: '6px' }}>
+                                        = {money(Number(item.quantity || 0) * Number(item.unit_price || 0))}
+                                    </span>
                                 </div>
                             </div>
 
+                            {/* +/- controls */}
                             {currentComanda?.status === 'open' ? (
-                                <div
-                                    style={{
-                                        display: 'flex',
-                                        gap: '8px',
-                                        alignItems: 'center',
-                                    }}
-                                >
+                                <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexShrink: 0 }}>
                                     <button
                                         type="button"
                                         onClick={() => onDecreaseCartItem(item)}
                                         disabled={isChangingCart || isAddingProduct || shotSelectorState.open}
                                         style={{
-                                            width: '34px',
-                                            height: '34px',
-                                            borderRadius: '6px',
-                                            border: '1px solid #444',
-                                            background: '#222',
-                                            color: 'white',
+                                            width: '28px',
+                                            height: '28px',
+                                            borderRadius: '5px',
+                                            border: '1px solid #2a2a2a',
+                                            background: '#111',
+                                            color: '#777',
                                             cursor: 'pointer',
-                                            fontSize: '18px',
-                                            fontWeight: 'bold',
+                                            fontSize: '16px',
+                                            lineHeight: 1,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
                                         }}
                                     >
-                                        -
+                                        −
                                     </button>
-
+                                    <span style={{ minWidth: '20px', textAlign: 'center', fontSize: '13px', fontWeight: 700, color: '#ccc' }}>
+                                        {item.quantity}
+                                    </span>
                                     <button
                                         type="button"
                                         onClick={() => onIncreaseCartItem(item)}
                                         disabled={isChangingCart || isAddingProduct || shotSelectorState.open}
                                         style={{
-                                            width: '34px',
-                                            height: '34px',
-                                            borderRadius: '6px',
-                                            border: '1px solid #444',
-                                            background: '#222',
-                                            color: 'white',
+                                            width: '28px',
+                                            height: '28px',
+                                            borderRadius: '5px',
+                                            border: '1px solid #2a2a2a',
+                                            background: '#111',
+                                            color: '#777',
                                             cursor: 'pointer',
-                                            fontSize: '18px',
-                                            fontWeight: 'bold',
+                                            fontSize: '16px',
+                                            lineHeight: 1,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
                                         }}
                                     >
                                         +
@@ -117,81 +145,83 @@ function ComandaPanel({
                 </div>
             )}
 
-            <div
-                style={{
-                    marginTop: '16px',
-                    paddingTop: '12px',
-                    borderTop: '1px solid #444',
-                    fontSize: '20px',
-                    fontWeight: 'bold',
-                }}
-            >
-                Total: {money(displayedTotal)}
+            {/* Total */}
+            <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'baseline',
+                marginTop: '12px',
+                paddingTop: '12px',
+                borderTop: '1px solid #222',
+            }}>
+                <span style={{ fontSize: '12px', color: '#555', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total</span>
+                <span style={{ fontSize: '22px', fontWeight: 700, color: '#e2e2e2', letterSpacing: '-0.5px' }}>
+                    {money(displayedTotal)}
+                </span>
             </div>
 
-            <div
-                style={{
-                    marginTop: '16px',
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    gap: '10px',
-                }}
-            >
-                {currentComanda?.status === 'open' && displayedTotal > 0 ? (
+            {/* Action buttons */}
+            <div style={{ marginTop: '14px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+
+                {currentComanda?.status === 'open' && displayedTotal > 0 && (
                     <button
                         type="button"
                         onClick={onPresentBill}
                         disabled={isUpdatingComandaStatus || shotSelectorState.open}
                         style={{
-                            padding: '12px 16px',
-                            borderRadius: '8px',
-                            border: 'none',
-                            background: '#1565c0',
-                            color: 'white',
+                            padding: '10px 16px',
+                            borderRadius: '7px',
+                            border: '1px solid #1e3a5a',
+                            background: '#1a2e47',
+                            color: '#93c5fd',
                             cursor: 'pointer',
-                            fontWeight: 'bold',
+                            fontWeight: 700,
+                            fontSize: '13px',
                         }}
                     >
-                        Cuenta
+                        Presentar cuenta
                     </button>
-                ) : null}
-                {currentComanda?.status === 'open' ? (
+                )}
+
+                {currentComanda?.status === 'open' && (
                     <button
                         type="button"
                         onClick={onCancelMesa}
                         disabled={isUpdatingComandaStatus}
                         style={{
-                            padding: '12px 16px',
-                            borderRadius: '8px',
-                            border: cancelConfirming ? '1px solid #ef4444' : '1px solid #3d1a1a',
+                            padding: '10px 14px',
+                            borderRadius: '7px',
+                            border: cancelConfirming ? '1px solid #ef4444' : '1px solid #2a1a1a',
                             background: cancelConfirming ? '#3d1a1a' : 'transparent',
-                            color: cancelConfirming ? '#ef4444' : '#7a3a3a',
+                            color: cancelConfirming ? '#ef4444' : '#3d2020',
                             cursor: 'pointer',
-                            fontWeight: 'bold',
+                            fontWeight: 600,
+                            fontSize: '13px',
                             transition: 'all 0.15s',
                         }}
                     >
-                        {cancelConfirming ? '¿Confirmar cancelación?' : 'Cancelar Mesa'}
+                        {cancelConfirming ? '¿Confirmar cancelación?' : 'Cancelar mesa'}
                     </button>
-                ) : null}
+                )}
 
-                {currentComanda?.status === 'pending_payment' ? (
+                {currentComanda?.status === 'pending_payment' && (
                     <>
                         <button
                             type="button"
                             onClick={onReopenComanda}
                             disabled={isUpdatingComandaStatus}
                             style={{
-                                padding: '12px 16px',
-                                borderRadius: '8px',
-                                border: '1px solid #555',
-                                background: '#222',
-                                color: 'white',
+                                padding: '10px 14px',
+                                borderRadius: '7px',
+                                border: '1px solid #2a2a2a',
+                                background: 'transparent',
+                                color: '#666',
                                 cursor: 'pointer',
-                                fontWeight: 'bold',
+                                fontWeight: 600,
+                                fontSize: '13px',
                             }}
                         >
-                            Reabrir
+                            ← Reabrir
                         </button>
 
                         <button
@@ -199,39 +229,41 @@ function ComandaPanel({
                             onClick={onStartPayment}
                             disabled={isUpdatingComandaStatus}
                             style={{
-                                padding: '12px 16px',
-                                borderRadius: '8px',
-                                border: 'none',
-                                background: '#2e7d32',
-                                color: 'white',
+                                padding: '10px 18px',
+                                borderRadius: '7px',
+                                border: '1px solid #2a5a3a',
+                                background: '#1a3a2a',
+                                color: '#4ade80',
                                 cursor: 'pointer',
-                                fontWeight: 'bold',
+                                fontWeight: 700,
+                                fontSize: '13px',
                             }}
                         >
                             Cobrar
                         </button>
                     </>
-                ) : null}
+                )}
 
                 {currentComanda?.status === 'processing_payment' &&
-                    (currentUser?.role === 'manager' || currentUser?.role === 'admin') ? (
+                    (currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
                     <button
                         type="button"
                         onClick={onReopenComanda}
                         disabled={isUpdatingComandaStatus || isConfirmingPayment}
                         style={{
-                            padding: '12px 16px',
-                            borderRadius: '8px',
-                            border: '1px solid #555',
-                            background: '#222',
-                            color: 'white',
+                            padding: '10px 14px',
+                            borderRadius: '7px',
+                            border: '1px solid #2a2a2a',
+                            background: 'transparent',
+                            color: '#666',
                             cursor: 'pointer',
-                            fontWeight: 'bold',
+                            fontWeight: 600,
+                            fontSize: '13px',
                         }}
                     >
-                        Reabrir
+                        ← Reabrir
                     </button>
-                ) : null}
+                )}
             </div>
 
             <PaymentPanel

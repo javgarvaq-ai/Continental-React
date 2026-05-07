@@ -1,3 +1,43 @@
+import { money } from '../utils/money';
+
+const labelStyle = {
+    display: 'block',
+    fontSize: '10px',
+    fontWeight: 600,
+    color: '#555',
+    textTransform: 'uppercase',
+    letterSpacing: '0.08em',
+    marginBottom: '5px',
+}
+
+const inputStyle = {
+    width: '100%',
+    padding: '9px 10px',
+    borderRadius: '6px',
+    border: '1px solid #2a2a2a',
+    background: '#0e0e0e',
+    color: '#e2e2e2',
+    fontSize: '15px',
+    fontWeight: '500',
+    boxSizing: 'border-box',
+    outline: 'none',
+}
+
+function SummaryRow({ label, value, highlight }) {
+    return (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '12px', color: '#555' }}>{label}</span>
+            <span style={{
+                fontSize: '13px',
+                fontWeight: highlight ? 700 : 500,
+                color: highlight === 'red' ? '#f87171' : highlight === 'green' ? '#4ade80' : '#aaa',
+            }}>
+                {value}
+            </span>
+        </div>
+    )
+}
+
 function PaymentPanel({
     currentComanda,
     paymentData,
@@ -12,161 +52,133 @@ function PaymentPanel({
         return null;
     }
 
+    const isReady = paymentSummary.pendiente <= 0
+    const pendiente = Number(paymentSummary.pendiente || 0)
+    const cambio = Number(paymentSummary.cambio || 0)
+
     return (
-        <div
-            style={{
-                marginTop: '18px',
-                paddingTop: '16px',
-                borderTop: '1px solid #444',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px',
-            }}
-        >
-            <h3 style={{ margin: 0 }}>Cobro</h3>
-
-            <div>
-                <label style={{ display: 'block', marginBottom: '6px' }}>
-                    Efectivo
-                </label>
-                <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={paymentData.efectivo}
-                    onChange={(e) => onPaymentFieldChange('efectivo', e.target.value)}
-                    style={{
-                        width: '100%',
-                        padding: '12px',
-                        borderRadius: '8px',
-                        border: '1px solid #444',
-                        background: '#222',
-                        color: 'white',
-                    }}
-                />
+        <div style={{ marginTop: '18px', paddingTop: '16px', borderTop: '1px solid #2a2a2a' }}>
+            <div style={{ fontSize: '11px', fontWeight: 600, color: '#444', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '14px' }}>
+                Desglose de cobro
             </div>
 
-            <div>
-                <label style={{ display: 'block', marginBottom: '6px' }}>
-                    Tarjeta
-                </label>
-                <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={paymentData.tarjeta}
-                    onChange={(e) => onPaymentFieldChange('tarjeta', e.target.value)}
-                    style={{
-                        width: '100%',
-                        padding: '12px',
-                        borderRadius: '8px',
-                        border: '1px solid #444',
-                        background: '#222',
-                        color: 'white',
-                    }}
-                />
-            </div>
-
-            <div>
-                <label style={{ display: 'block', marginBottom: '6px' }}>
-                    Transferencia
-                </label>
-                <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={paymentData.transferencia}
-                    onChange={(e) => onPaymentFieldChange('transferencia', e.target.value)}
-                    style={{
-                        width: '100%',
-                        padding: '12px',
-                        borderRadius: '8px',
-                        border: '1px solid #444',
-                        background: '#222',
-                        color: 'white',
-                    }}
-                />
-            </div>
-
-            <div>
-                <label style={{ display: 'block', marginBottom: '6px' }}>
-                    Propina
-                </label>
-                <div style={{ display: 'flex', gap: '8px' }}>
+            {/* Payment fields — 2×2 grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
+                <div>
+                    <label style={labelStyle}>Efectivo</label>
                     <input
                         type="number"
                         min="0"
                         step="0.01"
-                        value={propinaFieldValue}
-                        onChange={(e) => onPaymentFieldChange('propina', e.target.value)}
-                        style={{
-                            flex: 1,
-                            padding: '12px',
-                            borderRadius: '8px',
-                            border: '1px solid #444',
-                            background: '#222',
-                            color: 'white',
-                        }}
+                        value={paymentData.efectivo}
+                        onChange={(e) => onPaymentFieldChange('efectivo', e.target.value)}
+                        style={inputStyle}
                     />
-                    <button
-                        type="button"
-                        onClick={onResetAutoTip}
-                        style={{
-                            padding: '12px',
-                            borderRadius: '8px',
-                            border: '1px solid #444',
-                            background: '#222',
-                            color: 'white',
-                            cursor: 'pointer',
-                        }}
-                    >
-                        Auto
-                    </button>
+                </div>
+
+                <div>
+                    <label style={labelStyle}>Tarjeta</label>
+                    <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={paymentData.tarjeta}
+                        onChange={(e) => onPaymentFieldChange('tarjeta', e.target.value)}
+                        style={inputStyle}
+                    />
+                </div>
+
+                <div>
+                    <label style={labelStyle}>Transferencia</label>
+                    <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={paymentData.transferencia}
+                        onChange={(e) => onPaymentFieldChange('transferencia', e.target.value)}
+                        style={inputStyle}
+                    />
+                </div>
+
+                <div>
+                    <label style={labelStyle}>Propina</label>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                        <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={propinaFieldValue}
+                            onChange={(e) => onPaymentFieldChange('propina', e.target.value)}
+                            style={{ ...inputStyle, flex: 1 }}
+                        />
+                        <button
+                            type="button"
+                            onClick={onResetAutoTip}
+                            title="Calcular propina automática"
+                            style={{
+                                padding: '9px 10px',
+                                borderRadius: '6px',
+                                border: '1px solid #2a2a2a',
+                                background: '#161616',
+                                color: '#666',
+                                cursor: 'pointer',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                letterSpacing: '0.05em',
+                                whiteSpace: 'nowrap',
+                            }}
+                        >
+                            Auto
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            <div
-                style={{
-                    marginTop: '6px',
-                    padding: '12px',
-                    borderRadius: '8px',
-                    background: '#181818',
-                    border: '1px solid #333',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '6px',
-                }}
-            >
-                <div>Personas: {currentComanda?.personas ?? 0}</div>
-                <div>Total recibido: ${Number(paymentSummary.totalRecibido || 0).toFixed(2)}</div>
-                <div>Propina: ${Number(paymentSummary.propina || 0).toFixed(2)}</div>
-                <div>Cambio: ${Number(paymentSummary.cambio || 0).toFixed(2)}</div>
-                <div>Pendiente: ${Number(paymentSummary.pendiente || 0).toFixed(2)}</div>
+            {/* Summary box */}
+            <div style={{
+                padding: '10px 12px',
+                borderRadius: '8px',
+                background: '#0e0e0e',
+                border: '1px solid #1e1e1e',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '5px',
+                marginBottom: '12px',
+            }}>
+                <SummaryRow label="Personas" value={currentComanda?.personas ?? 0} />
+                <SummaryRow label="Total recibido" value={money(paymentSummary.totalRecibido || 0)} />
+                <SummaryRow label="Propina" value={money(paymentSummary.propina || 0)} />
+                {cambio > 0 && (
+                    <SummaryRow label="Cambio" value={money(cambio)} highlight="green" />
+                )}
+                {pendiente > 0 && (
+                    <SummaryRow label="Pendiente" value={money(pendiente)} highlight="red" />
+                )}
+                {pendiente <= 0 && cambio <= 0 && (
+                    <SummaryRow label="Estado" value="Exacto ✓" highlight="green" />
+                )}
             </div>
 
+            {/* Confirm button */}
             <button
                 type="button"
                 onClick={onConfirmPayment}
-                disabled={paymentSummary.pendiente > 0 || isConfirmingPayment}
+                disabled={!isReady || isConfirmingPayment}
                 style={{
-                    marginTop: '6px',
-                    padding: '14px 16px',
+                    width: '100%',
+                    padding: '13px',
                     borderRadius: '8px',
-                    border: 'none',
-                    background:
-                        paymentSummary.pendiente > 0
-                            ? '#666'
-                            : '#2e7d32',
-                    color: 'white',
-                    cursor:
-                        paymentSummary.pendiente > 0
-                            ? 'not-allowed'
-                            : 'pointer',
-                    fontWeight: 'bold',
-                    fontSize: '16px',
+                    border: isReady ? '1px solid #2a5a3a' : '1px solid #1e1e1e',
+                    background: isReady ? '#1a3a2a' : '#111',
+                    color: isReady ? '#4ade80' : '#333',
+                    cursor: isReady && !isConfirmingPayment ? 'pointer' : 'not-allowed',
+                    fontWeight: 700,
+                    fontSize: '14px',
+                    letterSpacing: '0.03em',
+                    transition: 'all 0.15s',
                 }}
             >
-                Confirmar Cobro
+                {isConfirmingPayment ? 'Procesando...' : isReady ? '✓ Confirmar cobro' : `Faltan ${money(pendiente)}`}
             </button>
         </div>
     );
