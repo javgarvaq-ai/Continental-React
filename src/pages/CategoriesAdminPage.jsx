@@ -19,6 +19,7 @@ function CategoriesAdminPage() {
     const [newName, setNewName] = useState('')
     const [editingId, setEditingId] = useState(null)
     const [editingName, setEditingName] = useState('')
+    const [confirmingDeleteId, setConfirmingDeleteId] = useState(null)
 
     const currentUser = useAuthStore(state => state.user)
     const isAdmin = currentUser?.role === 'admin'
@@ -80,10 +81,12 @@ function CategoriesAdminPage() {
 
     async function handleDelete(category) {
         if (!isAdmin) { setStatus('Admin only.'); return }
-        const confirmed = window.confirm(
-            `Archive category "${category.name}"? Reassign its products first. History is preserved.`
-        )
-        if (!confirmed) return
+        if (confirmingDeleteId !== category.id) {
+            setConfirmingDeleteId(category.id)
+            setTimeout(() => setConfirmingDeleteId(null), 3000)
+            return
+        }
+        setConfirmingDeleteId(null)
         setStatus('Deleting category...')
         const { error } = await deactivateCategory({ id: category.id })
         if (error) {
@@ -180,9 +183,9 @@ function CategoriesAdminPage() {
                                                     </button>
                                                     <button
                                                         onClick={() => handleDelete(cat)}
-                                                        style={{ padding: '8px 12px', borderRadius: '8px', border: 'none', background: '#b71c1c', color: 'white', cursor: 'pointer' }}
+                                                        style={{ padding: '8px 12px', borderRadius: '8px', border: confirmingDeleteId === cat.id ? '1px solid #ef4444' : 'none', background: confirmingDeleteId === cat.id ? '#3d1a1a' : '#b71c1c', color: confirmingDeleteId === cat.id ? '#ef4444' : 'white', cursor: 'pointer', transition: 'all 0.15s' }}
                                                     >
-                                                        Delete
+                                                        {confirmingDeleteId === cat.id ? '¿Archivar?' : 'Delete'}
                                                     </button>
                                                 </div>
                                             </div>

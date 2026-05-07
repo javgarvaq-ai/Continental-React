@@ -34,6 +34,7 @@ function EmployeesAdminPage() {
     const [newName, setNewName] = useState('')
     const [newPosition, setNewPosition] = useState('')
     const [isSubmitting, setIsSubmitting] = useState(false)
+    const [confirmingDeactivateId, setConfirmingDeactivateId] = useState(null)
 
     const load = useCallback(async () => {
         const { data, error } = await getAllEmployeesWithStatus()
@@ -79,8 +80,12 @@ function EmployeesAdminPage() {
     }
 
     async function handleDeactivate(emp) {
-        const confirmed = window.confirm(`¿Dar de baja a "${emp.name}"? Se ocultará del sistema.`)
-        if (!confirmed) return
+        if (confirmingDeactivateId !== emp.id) {
+            setConfirmingDeactivateId(emp.id)
+            setTimeout(() => setConfirmingDeactivateId(null), 3000)
+            return
+        }
+        setConfirmingDeactivateId(null)
         const { error } = await deactivateEmployee({ id: emp.id })
         if (error) { setStatus('Error al dar de baja.'); return }
         setStatus(`${emp.name} dado de baja.`)
@@ -265,14 +270,15 @@ function EmployeesAdminPage() {
                                         style={{
                                             padding: '5px 8px',
                                             borderRadius: '5px',
-                                            border: '1px solid #2a2a2a',
-                                            background: 'transparent',
-                                            color: '#444',
+                                            border: confirmingDeactivateId === emp.id ? '1px solid #ef4444' : '1px solid #2a2a2a',
+                                            background: confirmingDeactivateId === emp.id ? '#3d1a1a' : 'transparent',
+                                            color: confirmingDeactivateId === emp.id ? '#ef4444' : '#444',
                                             fontSize: '12px',
                                             cursor: 'pointer',
+                                            transition: 'all 0.15s',
                                         }}
                                     >
-                                        ✕
+                                        {confirmingDeactivateId === emp.id ? '¿Baja?' : '✕'}
                                     </button>
                                 </div>
                             </div>

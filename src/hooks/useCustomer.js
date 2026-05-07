@@ -45,6 +45,7 @@ export function useCustomer({ currentComanda, cartTotal, setStatus, onUpdateComa
         newPhone: '',
     })
     const [isSearchingCustomer, setIsSearchingCustomer] = useState(false)
+    const [cancelMembershipConfirming, setCancelMembershipConfirming] = useState(false)
 
     // --- Derived values ---
 
@@ -214,11 +215,12 @@ export function useCustomer({ currentComanda, cartTotal, setStatus, onUpdateComa
     async function handleCancelMembership() {
         if (!currentMembership || !currentComanda?.id) return
 
-        const confirmed = window.confirm(
-            `¿Cancelar la membresía "${currentMembership.membership_plans?.name}"? ` +
-            `Se eliminará el cargo y todos los beneficios usados en esta comanda.`
-        )
-        if (!confirmed) return
+        if (!cancelMembershipConfirming) {
+            setCancelMembershipConfirming(true)
+            setTimeout(() => setCancelMembershipConfirming(false), 3000)
+            return
+        }
+        setCancelMembershipConfirming(false)
 
         setIsProcessingMembership(true)
 
@@ -229,7 +231,7 @@ export function useCustomer({ currentComanda, cartTotal, setStatus, onUpdateComa
         })
 
         if (error) {
-            alert(`Error cancelando membresía: ${error.message}`)
+            setStatus(`Error cancelando membresía: ${error.message}`)
             setIsProcessingMembership(false)
             return
         }
@@ -284,6 +286,7 @@ export function useCustomer({ currentComanda, cartTotal, setStatus, onUpdateComa
         setFreeBenefitState,
         isProcessingMembership,
         isSearchingCustomer,
+        cancelMembershipConfirming,
         // Derived
         membershipDiscountPct,
         discountAmount,

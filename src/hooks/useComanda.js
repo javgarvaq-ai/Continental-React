@@ -221,24 +221,16 @@ export function useComanda({
         if (!currentComanda?.id || !currentUser?.id) return
 
         if (currentComanda.status !== 'open') {
-            alert('Esta comanda no se puede editar.')
+            setStatus('Esta comanda no se puede editar.')
             return
         }
 
         const membershipProductId = currentMembership?.membership_plans?.product_id
         if (membershipProductId && item.product_id === membershipProductId) {
-            alert('No puedes eliminar el producto de membresía directamente. Cancela la membresía desde el panel de cliente.')
+            setStatus('No puedes eliminar el producto de membresía directamente. Cancela la membresía desde el panel de cliente.')
             return
         }
 
-        const currentQty = Number(item.quantity || 0)
-        const confirmed = window.confirm(
-            currentQty <= 1
-                ? '¿Eliminar este producto de la comanda?'
-                : '¿Disminuir este producto?'
-        )
-
-        if (!confirmed) return
         if (isChangingCart || isAddingProduct) return
 
         setIsChangingCart(true)

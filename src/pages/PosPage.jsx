@@ -42,6 +42,7 @@ function PosPage() {
     const [cartItems, setCartItems] = useState([]);
     const [isCancellingMesa, setIsCancellingMesa] = useState(false);
     const [cancelConfirming, setCancelConfirming] = useState(false)
+    const [changeUserDialog, setChangeUserDialog] = useState(false)
     const [openTableDialog, setOpenTableDialog] = useState({ open: false, unit: null, existing: null, input: '', searching: false, notFound: false })
     const [reprintDialog, setReprintDialog] = useState({ open: false, folioInput: '', phase: 'folio', comanda: null, loading: false, error: '' })
     const isOnline = useOnlineStatus()
@@ -81,6 +82,7 @@ function PosPage() {
         setFreeBenefitState,
         isProcessingMembership,
         isSearchingCustomer,
+        cancelMembershipConfirming,
         membershipDiscountPct,
         discountAmount,
         resetCustomerState,
@@ -197,22 +199,19 @@ function PosPage() {
 
 
     function handleChangeUser() {
-        const confirmed = window.confirm(
-            '¿Deseas cambiar de usuario sin cerrar el turno?'
-        );
+        setChangeUserDialog(true)
+    }
 
-        if (!confirmed) return;
-
-        clearUser();
-
-        setSelectedUnit(null);
-        setCurrentComanda(null);
-        setGroupedProducts({});
-        setCartItems([]);
-        resetPaymentState();
-        resetShotSelector();
-
-        navigate('/login');
+    function doChangeUser() {
+        setChangeUserDialog(false)
+        clearUser()
+        setSelectedUnit(null)
+        setCurrentComanda(null)
+        setGroupedProducts({})
+        setCartItems([])
+        resetPaymentState()
+        resetShotSelector()
+        navigate('/login')
     }
 
     function handleReprintTicket() {
@@ -716,9 +715,14 @@ function PosPage() {
                                                 type="button"
                                                 onClick={handleCancelMembership}
                                                 disabled={isProcessingMembership}
-                                                style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #c62828', background: 'transparent', color: '#ef9a9a', cursor: 'pointer', fontSize: '12px' }}
+                                                style={{
+                                                    padding: '6px 12px', borderRadius: '8px', fontSize: '12px', cursor: 'pointer', transition: 'all 0.15s',
+                                                    border: cancelMembershipConfirming ? '1px solid #ef4444' : '1px solid #c62828',
+                                                    background: cancelMembershipConfirming ? '#3d1a1a' : 'transparent',
+                                                    color: cancelMembershipConfirming ? '#ef4444' : '#ef9a9a',
+                                                }}
                                             >
-                                                {isProcessingMembership ? 'Cancelando...' : 'Cancelar membresía'}
+                                                {isProcessingMembership ? 'Cancelando...' : cancelMembershipConfirming ? '¿Confirmar?' : 'Cancelar membresía'}
                                             </button>
                                         )}
                                         {currentMembership && currentMembership.membership_plans?.membership_plan_benefits?.some(b => b.benefit_type === 'free_product') && (
@@ -998,6 +1002,36 @@ function PosPage() {
                                 style={{ flex: 2, padding: '10px', borderRadius: '7px', border: '1px solid #2a5a3a', background: '#1a3a2a', color: '#4ade80', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}
                             >
                                 {openTableDialog.searching ? 'Buscando...' : 'Abrir mesa'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Change User Dialog ── */}
+            {changeUserDialog && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+                    <div style={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: '12px', padding: '24px', width: '100%', maxWidth: '340px', boxShadow: '0 20px 60px rgba(0,0,0,0.6)' }}>
+                        <h3 style={{ margin: '0 0 8px 0', fontSize: '17px', fontWeight: 700, color: '#e8e8e8' }}>
+                            Cambiar usuario
+                        </h3>
+                        <p style={{ margin: '0 0 24px 0', fontSize: '13px', color: '#666' }}>
+                            El turno permanece abierto. Volverás al login para seleccionar otro usuario.
+                        </p>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <button
+                                type="button"
+                                onClick={() => setChangeUserDialog(false)}
+                                style={{ flex: 1, padding: '10px', borderRadius: '7px', border: '1px solid #222', background: 'transparent', color: '#666', fontSize: '13px', cursor: 'pointer' }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={doChangeUser}
+                                style={{ flex: 2, padding: '10px', borderRadius: '7px', border: '1px solid #3a5a8a', background: '#1a2e47', color: '#93c5fd', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}
+                            >
+                                Cambiar usuario
                             </button>
                         </div>
                     </div>

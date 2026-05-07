@@ -45,6 +45,8 @@ function MembershipPlansAdminPage() {
     // Add product to benefit
     const [addingProductToBenefitId, setAddingProductToBenefitId] = useState(null)
     const [selectedProductId, setSelectedProductId] = useState('')
+    const [confirmingDeleteBenefitId, setConfirmingDeleteBenefitId] = useState(null)
+    const [confirmingRemoveProductId, setConfirmingRemoveProductId] = useState(null)
 
     const currentUser = useAuthStore(state => state.user)
     const isAdmin = currentUser?.role === 'admin'
@@ -144,8 +146,12 @@ function MembershipPlansAdminPage() {
 
     async function handleDeleteBenefit(benefitId) {
         if (!isAdmin) return
-        const confirmed = window.confirm('Delete this benefit and all its product assignments?')
-        if (!confirmed) return
+        if (confirmingDeleteBenefitId !== benefitId) {
+            setConfirmingDeleteBenefitId(benefitId)
+            setTimeout(() => setConfirmingDeleteBenefitId(null), 3000)
+            return
+        }
+        setConfirmingDeleteBenefitId(null)
         setStatus('Deleting benefit...')
         const { error } = await deleteBenefit({ id: benefitId })
         if (error) { setStatus(`Error: ${error.message}`); return }
@@ -170,8 +176,12 @@ function MembershipPlansAdminPage() {
 
     async function handleRemoveBenefitProduct(productEntryId) {
         if (!isAdmin) return
-        const confirmed = window.confirm('Remove this product from the benefit?')
-        if (!confirmed) return
+        if (confirmingRemoveProductId !== productEntryId) {
+            setConfirmingRemoveProductId(productEntryId)
+            setTimeout(() => setConfirmingRemoveProductId(null), 3000)
+            return
+        }
+        setConfirmingRemoveProductId(null)
         const { error } = await removeBenefitProduct({ id: productEntryId })
         if (error) { setStatus(`Error: ${error.message}`); return }
         setStatus('Product removed.')
@@ -375,9 +385,9 @@ function MembershipPlansAdminPage() {
                                                         </div>
                                                         <button
                                                             onClick={() => handleDeleteBenefit(benefit.id)}
-                                                            style={{ padding: '4px 10px', borderRadius: '6px', border: 'none', background: '#b71c1c', color: 'white', cursor: 'pointer', fontSize: '12px' }}
+                                                            style={{ padding: '4px 10px', borderRadius: '6px', border: confirmingDeleteBenefitId === benefit.id ? '1px solid #ef4444' : 'none', background: confirmingDeleteBenefitId === benefit.id ? '#3d1a1a' : '#b71c1c', color: confirmingDeleteBenefitId === benefit.id ? '#ef4444' : 'white', cursor: 'pointer', fontSize: '12px', transition: 'all 0.15s' }}
                                                         >
-                                                            Delete
+                                                            {confirmingDeleteBenefitId === benefit.id ? '¿Eliminar?' : 'Delete'}
                                                         </button>
                                                     </div>
 
@@ -391,8 +401,9 @@ function MembershipPlansAdminPage() {
                                                                         {bp.products?.name}
                                                                         <button
                                                                             onClick={() => handleRemoveBenefitProduct(bp.id)}
-                                                                            style={{ background: 'none', border: 'none', color: '#f44336', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', lineHeight: 1, padding: 0 }}
-                                                                        >×</button>
+                                                                            style={{ background: 'none', border: 'none', color: confirmingRemoveProductId === bp.id ? '#ef4444' : '#888', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', lineHeight: 1, padding: 0, transition: 'color 0.15s' }}
+                                                                            title={confirmingRemoveProductId === bp.id ? '¿Confirmar?' : 'Quitar'}
+                                                                        >{confirmingRemoveProductId === bp.id ? '¿?' : '×'}</button>
                                                                     </span>
                                                                 ))}
                                                                 {(benefit.membership_benefit_products || []).length === 0 && (

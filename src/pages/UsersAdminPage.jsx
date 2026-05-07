@@ -20,6 +20,7 @@ function UsersAdminPage() {
     const [newRole, setNewRole] = useState('waiter')
     const [newPin, setNewPin] = useState('')
     const [confirmNewPin, setConfirmNewPin] = useState('')
+    const [pinResetDialog, setPinResetDialog] = useState({ open: false, user: null, pin: '', confirm: '', error: '', saving: false })
 
     const currentUser = useAuthStore(state => state.user)
     const isAdmin = currentUser?.role === 'admin'
@@ -128,52 +129,32 @@ function UsersAdminPage() {
         await loadUsers()
     }
 
-    async function handleResetPin(user) {
+    function handleResetPin(user) {
         if (!isAdmin) {
             setStatus('Only admin can reset PIN.')
             return
         }
+        setPinResetDialog({ open: true, user, pin: '', confirm: '', error: '', saving: false })
+    }
 
-        const pin = window.prompt(`Enter new 6-digit PIN for ${user.name}:`)
-
-        if (pin === null) return
-
-        const cleanedPin = pin.replace(/\D/g, '')
-
-        if (cleanedPin.length !== 6 || pin.trim() !== cleanedPin) {
-            setStatus('PIN must be exactly 6 numeric digits.')
+    async function handlePinResetSubmit() {
+        const { user, pin, confirm } = pinResetDialog
+        if (pin.length !== 6) {
+            setPinResetDialog(d => ({ ...d, error: 'El PIN debe tener exactamente 6 dígitos.' }))
             return
         }
-
-        const confirmPin = window.prompt(`Confirm new 6-digit PIN for ${user.name}:`)
-
-        if (confirmPin === null) return
-
-        const cleanedConfirm = confirmPin.replace(/\D/g, '')
-
-        if (cleanedConfirm.length !== 6 || confirmPin.trim() !== cleanedConfirm) {
-            setStatus('Confirmation PIN must be exactly 6 numeric digits.')
+        if (pin !== confirm) {
+            setPinResetDialog(d => ({ ...d, error: 'Los PINs no coinciden.' }))
             return
         }
-
-        if (cleanedPin !== cleanedConfirm) {
-            setStatus('PIN confirmation does not match.')
-            return
-        }
-
-        setStatus('Resetting PIN...')
-
-        const { error } = await resetUserPin({
-            userId: user.id,
-            pin: cleanedPin,
-        })
-
+        setPinResetDialog(d => ({ ...d, saving: true, error: '' }))
+        const { error } = await resetUserPin({ userId: user.id, pin })
         if (error) {
-            setStatus(`Error resetting PIN: ${error.message}`)
+            setPinResetDialog(d => ({ ...d, saving: false, error: `Error: ${error.message}` }))
             return
         }
-
-        setStatus(`PIN reset successfully for ${user.name}.`)
+        setPinResetDialog({ open: false, user: null, pin: '', confirm: '', error: '', saving: false })
+        setStatus(`PIN actualizado para ${user.name}.`)
     }
 
     if (!currentUser) {
@@ -402,6 +383,66 @@ function UsersAdminPage() {
                     </div>
                 </div>
             </div>
+
+            {/* ── PIN Reset Dialog ── */}
+            {pinResetDialog.open && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+                    <div style={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: '12px', padding: '24px', width: '100%', maxWidth: '360px', boxShadow: '0 20px 60px rgba(0,0,0,0.6)' }}>
+                        <h3 style={{ margin: '0 0 4px 0', fontSize: '17px', fontWeight: 700, color: '#e8e8e8' }}>Resetear PIN</h3>
+                        <p style={{ margin: '0 0 20px 0', fontSize: '13px', color: '#666' }}>{pinResetDialog.user?.name}</p>
+
+                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#666', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>
+                            Nuevo PIN (6 dígitos)
+                        </label>
+                        <input
+                            autoFocus
+                            type="password"
+                            inputMode="numeric"
+                            autoComplete="off"
+                            value={pinResetDialog.pin}
+                            onChange={e => setPinResetDialog(d => ({ ...d, pin: e.target.value.replace(/\D/g, '').slice(0, 6), error: '' }))}
+                            placeholder="••••••"
+                            style={{ width: '100%', padding: '10px 12px', borderRadius: '7px', border: '1px solid #2a2a2a', background: '#0e0e0e', color: '#e2e2e2', fontSize: '20px', letterSpacing: '0.3em', boxSizing: 'border-box', outline: 'none', marginBottom: '12px' }}
+                        />
+
+                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#666', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>
+                            Confirmar PIN
+                        </label>
+                        <input
+                            type="password"
+                            inputMode="numeric"
+                            autoComplete="off"
+                            value={pinResetDialog.confirm}
+                            onChange={e => setPinResetDialog(d => ({ ...d, confirm: e.target.value.replace(/\D/g, '').slice(0, 6), error: '' }))}
+                            onKeyDown={e => e.key === 'Enter' && handlePinResetSubmit()}
+                            placeholder="••••••"
+                            style={{ width: '100%', padding: '10px 12px', borderRadius: '7px', border: '1px solid #2a2a2a', background: '#0e0e0e', color: '#e2e2e2', fontSize: '20px', letterSpacing: '0.3em', boxSizing: 'border-box', outline: 'none', marginBottom: '4px' }}
+                        />
+
+                        {pinResetDialog.error && (
+                            <p style={{ margin: '8px 0 0 0', fontSize: '13px', color: '#f87171' }}>{pinResetDialog.error}</p>
+                        )}
+
+                        <div style={{ display: 'flex', gap: '8px', marginTop: '20px' }}>
+                            <button
+                                type="button"
+                                onClick={() => setPinResetDialog({ open: false, user: null, pin: '', confirm: '', error: '', saving: false })}
+                                style={{ flex: 1, padding: '10px', borderRadius: '7px', border: '1px solid #222', background: 'transparent', color: '#666', fontSize: '13px', cursor: 'pointer' }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handlePinResetSubmit}
+                                disabled={pinResetDialog.pin.length !== 6 || pinResetDialog.saving}
+                                style={{ flex: 2, padding: '10px', borderRadius: '7px', border: '1px solid #1e3a5a', background: '#1a2e47', color: '#93c5fd', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}
+                            >
+                                {pinResetDialog.saving ? 'Guardando...' : 'Guardar PIN'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

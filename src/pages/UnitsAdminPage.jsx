@@ -17,6 +17,7 @@ function UnitsAdminPage() {
     const [newType, setNewType] = useState('mesa')
     const [editingId, setEditingId] = useState(null)
     const [editForm, setEditForm] = useState({ name: '', type: '' })
+    const [confirmingDeleteId, setConfirmingDeleteId] = useState(null)
 
     const currentUser = useAuthStore(state => state.user)
     const isAdmin = currentUser?.role === 'admin'
@@ -60,10 +61,12 @@ function UnitsAdminPage() {
 
     async function handleDelete(unit) {
         if (!isAdmin) return
-        const confirmed = window.confirm(
-            `Archive "${unit.name}"? It will no longer appear in the POS but history is preserved.`
-        )
-        if (!confirmed) return
+        if (confirmingDeleteId !== unit.id) {
+            setConfirmingDeleteId(unit.id)
+            setTimeout(() => setConfirmingDeleteId(null), 3000)
+            return
+        }
+        setConfirmingDeleteId(null)
         const { error } = await deactivateUnit({ id: unit.id })
         if (error) { setStatus(`Error: ${error.message} — Make sure no comandas use this unit.`); return }
         setStatus('Unit archived.')
@@ -171,9 +174,9 @@ function UnitsAdminPage() {
                                                     </button>
                                                     <button
                                                         onClick={() => handleDelete(unit)}
-                                                        style={{ padding: '7px 12px', borderRadius: '8px', border: 'none', background: '#b71c1c', color: 'white', cursor: 'pointer', fontSize: '13px' }}
+                                                        style={{ padding: '7px 12px', borderRadius: '8px', border: confirmingDeleteId === unit.id ? '1px solid #ef4444' : 'none', background: confirmingDeleteId === unit.id ? '#3d1a1a' : '#b71c1c', color: confirmingDeleteId === unit.id ? '#ef4444' : 'white', cursor: 'pointer', fontSize: '13px', transition: 'all 0.15s' }}
                                                     >
-                                                        Delete
+                                                        {confirmingDeleteId === unit.id ? '¿Archivar?' : 'Delete'}
                                                     </button>
                                                 </div>
                                             </div>

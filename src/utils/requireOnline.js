@@ -5,6 +5,5 @@ export function requireOnline(isOnline, setStatus) {
         setStatus('Sin conexión. Usa comandas manuales y captura después cuando regrese internet.')
     }
 
-    window.alert('Sin conexión. Usa comandas manuales y captura después cuando regrese internet.')
     return false
 }
