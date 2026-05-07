@@ -57,6 +57,15 @@ export async function updateEmployee({ id, name, position }) {
         .single()
 }
 
+export async function getEmployeeTimeLogs({ employeeId, limit = 30 }) {
+    return await supabase
+        .from('employee_time_logs')
+        .select('id, checked_in_at, checked_out_at')
+        .eq('employee_id', employeeId)
+        .order('checked_in_at', { ascending: false })
+        .limit(limit)
+}
+
 export async function deactivateEmployee({ id }) {
     return await supabase
         .from('employees')
