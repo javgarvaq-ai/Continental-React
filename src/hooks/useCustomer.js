@@ -168,7 +168,7 @@ export function useCustomer({ currentComanda, cartTotal, setStatus, onUpdateComa
         const { data, error } = await getAllActiveMembershipPlans()
 
         if (error || !data || data.length === 0) {
-            alert('No hay planes de membresía activos configurados.')
+            setStatus('No hay planes de membresía activos configurados.')
             setIsProcessingMembership(false)
             return
         }
@@ -192,7 +192,7 @@ export function useCustomer({ currentComanda, cartTotal, setStatus, onUpdateComa
         })
 
         if (membershipError || !newMembership) {
-            alert(`Error activando membresía: ${membershipError?.message}`)
+            setStatus(`Error activando membresía: ${membershipError?.message}`)
             setIsProcessingMembership(false)
             return
         }

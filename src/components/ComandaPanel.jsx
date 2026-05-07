@@ -97,22 +97,23 @@ function ComandaPanel({
                                         type="button"
                                         onClick={() => onDecreaseCartItem(item)}
                                         disabled={isChangingCart || isAddingProduct || shotSelectorState.open}
+                                        title={item.quantity <= 1 ? 'Eliminar producto' : 'Disminuir'}
                                         style={{
                                             width: '28px',
                                             height: '28px',
                                             borderRadius: '5px',
-                                            border: '1px solid #2a2a2a',
-                                            background: '#111',
-                                            color: '#777',
+                                            border: item.quantity <= 1 ? '1px solid #4a1a1a' : '1px solid #2a2a2a',
+                                            background: item.quantity <= 1 ? '#2a1010' : '#111',
+                                            color: item.quantity <= 1 ? '#f87171' : '#777',
                                             cursor: 'pointer',
-                                            fontSize: '16px',
+                                            fontSize: item.quantity <= 1 ? '13px' : '16px',
                                             lineHeight: 1,
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
                                         }}
                                     >
-                                        −
+                                        {item.quantity <= 1 ? '✕' : '−'}
                                     </button>
                                     <span style={{ minWidth: '20px', textAlign: 'center', fontSize: '13px', fontWeight: 700, color: '#ccc' }}>
                                         {item.quantity}

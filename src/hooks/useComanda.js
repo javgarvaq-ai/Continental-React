@@ -130,7 +130,7 @@ export function useComanda({
         if (!currentComanda?.id || !shotSelectorState.shotProduct) return
 
         if (shotSelectorState.selectedMixers.length > requiredShotMixers) {
-            alert(`Puedes seleccionar hasta ${requiredShotMixers} mixer(s).`)
+            setStatus(`Puedes seleccionar hasta ${requiredShotMixers} mixer(s).`)
             return
         }
 
@@ -164,12 +164,12 @@ export function useComanda({
         if (!currentComanda?.id) return
 
         if (currentComanda.status !== 'open') {
-            alert('Esta comanda no se puede editar.')
+            setStatus('Esta comanda no se puede editar.')
             return
         }
 
         if (currentMembership?.membership_plans?.product_id === product.id) {
-            alert('La membresía ya está activada en esta comanda.')
+            setStatus('La membresía ya está activada en esta comanda.')
             return
         }
 
@@ -210,7 +210,7 @@ export function useComanda({
 
         const membershipProductId = currentMembership?.membership_plans?.product_id
         if (membershipProductId && item.product_id === membershipProductId) {
-            alert('No puedes agregar más unidades del producto de membresía.')
+            setStatus('No puedes agregar más unidades del producto de membresía.')
             return
         }
 
@@ -267,7 +267,7 @@ export function useComanda({
         if (!currentComanda?.id) return
 
         if (!canEditPersonas) {
-            alert('Las personas solo se pueden editar con la comanda abierta o en cobro.')
+            setStatus('Las personas solo se pueden editar con la comanda abierta o en cobro.')
             return
         }
 

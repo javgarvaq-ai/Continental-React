@@ -378,7 +378,7 @@ export function printTicket({ tipo = 'pagado', comanda, items, unit, payment = n
   const printWindow = window.open('', '_blank', 'width=420,height=800');
 
   if (!printWindow) {
-    alert('El navegador bloqueó la ventana de impresión.');
+    console.warn('El navegador bloqueó la ventana de impresión. Permite pop-ups para este sitio.');
     return;
   }
 

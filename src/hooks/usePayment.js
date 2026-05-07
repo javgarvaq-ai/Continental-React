@@ -29,22 +29,6 @@ function getPaymentSummary(totalCuenta, paymentData) {
 
 /**
  * Manages the full payment lifecycle for a comanda.
- *
- * @param {object} params
- * @param {object|null} params.currentUser
- * @param {string|null} params.currentShiftId
- * @param {object|null} params.currentComanda - Owned by PosPage
- * @param {function} params.setCurrentComanda - PosPage setter
- * @param {object|null} params.currentCustomer
- * @param {object|null} params.currentMembership
- * @param {number} params.membershipDiscountPct
- * @param {number} params.discountAmount
- * @param {number} params.cartTotal
- * @param {Array}  params.visibleCartItems
- * @param {object|null} params.selectedUnit
- * @param {function} params.setStatus
- * @param {function} params.onBackToUnits - handleBackToUnits(customStatus?) from PosPage
- * @param {function} params.onLoadUnits - loadUnits from useComanda
  */
 export function usePayment({
     currentUser,
@@ -131,12 +115,12 @@ export function usePayment({
         if (!currentComanda?.id || !currentUser?.id) return
 
         if (currentComanda.status !== 'open') {
-            alert('Solo se puede presentar cuenta en una comanda abierta.')
+            setStatus('Solo se puede presentar cuenta en una comanda abierta.')
             return
         }
 
         if (displayedTotal <= 0) {
-            alert('La comanda no tiene productos.')
+            setStatus('La comanda no tiene productos.')
             return
         }
 
@@ -169,9 +153,7 @@ export function usePayment({
                 unit: selectedUnit,
             })
 
-            alert(`Cuenta cerrada, favor de tomar ticket. Total ${money(displayedTotal)}`)
-
-            await onBackToUnits('Cuenta presentada correctamente.')
+            await onBackToUnits(`Cuenta presentada. Total ${money(displayedTotal)}`)
         } finally {
             setIsUpdatingComandaStatus(false)
         }
@@ -184,7 +166,7 @@ export function usePayment({
             currentComanda.status === 'processing_payment' &&
             currentUser.role === 'waiter'
         ) {
-            alert('No autorizado.')
+            setStatus('No autorizado.')
             return
         }
 
@@ -192,7 +174,7 @@ export function usePayment({
             currentComanda.status !== 'pending_payment' &&
             currentComanda.status !== 'processing_payment'
         ) {
-            alert('Esta comanda no está en estado reabrible.')
+            setStatus('Esta comanda no está en estado reabrible.')
             return
         }
 
@@ -225,7 +207,7 @@ export function usePayment({
         if (!currentComanda?.id || !currentUser?.id) return
 
         if (currentComanda.status !== 'pending_payment') {
-            alert('Solo se puede iniciar cobro desde cuenta.')
+            setStatus('Solo se puede iniciar cobro desde cuenta.')
             return
         }
 
@@ -257,12 +239,12 @@ export function usePayment({
         if (!currentComanda?.id || !currentUser?.id || !currentShiftId) return
 
         if (currentComanda.status !== 'processing_payment') {
-            alert('La comanda no está en proceso de cobro.')
+            setStatus('La comanda no está en proceso de cobro.')
             return
         }
 
         if (paymentSummary.pendiente > 0) {
-            alert('El monto pagado es insuficiente.')
+            setStatus(`Faltan ${money(paymentSummary.pendiente)} por cubrir.`)
             return
         }
 
@@ -303,7 +285,7 @@ export function usePayment({
                 })
 
                 if (membershipResult?.membershipWarning) {
-                    alert(`Cobro registrado, pero hubo un problema con la membresía:\n${membershipResult.membershipWarning}\n\nAvisa al administrador.`)
+                    setStatus(`Cobro registrado. Advertencia de membresía: ${membershipResult.membershipWarning}`)
                 }
             }
 
@@ -339,21 +321,14 @@ export function usePayment({
                 } : null,
             })
 
+            let successMsg = 'Cobro registrado correctamente.'
             if (data?.inventoryWarning) {
-                alert(`Cobro registrado, pero inventario avisó: ${data.inventoryWarning}`)
-            } else {
-                let msg = 'Cobro registrado correctamente.'
-                if (membershipResult?.earnedBottleCredit) {
-                    msg += ` 🍾 ¡${currentCustomer.name} ganó un crédito de botella!`
-                }
-                alert(msg)
+                successMsg = `Cobro registrado con advertencia de inventario: ${data.inventoryWarning}`
+            } else if (membershipResult?.earnedBottleCredit) {
+                successMsg += ` 🍾 ¡${currentCustomer.name} ganó un crédito de botella!`
             }
 
-            await onBackToUnits(
-                data?.inventoryWarning
-                    ? 'Cobro registrado con advertencia de inventario.'
-                    : 'Cobro registrado correctamente.'
-            )
+            await onBackToUnits(successMsg)
         } finally {
             setIsConfirmingPayment(false)
         }
