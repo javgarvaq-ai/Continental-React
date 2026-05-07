@@ -469,23 +469,42 @@ function PosPage() {
                 style={{
                     display: 'flex',
                     justifyContent: 'space-between',
-                    alignItems: 'center',
+                    alignItems: 'flex-start',
                     marginBottom: '16px',
                     paddingBottom: '12px',
-                    borderBottom: '1px solid #444',
+                    borderBottom: '1px solid #222',
                 }}
             >
                 <div>
-                    <h1 style={{ margin: 0 }}>Continental POS</h1>
-                    <p style={{ margin: '8px 0 0 0' }}>
-                        Usuario: {currentUser ? `${currentUser.name} (${currentUser.role})` : 'Cargando...'}
+                    <h1 style={{ margin: '0 0 4px 0', fontSize: '22px', fontWeight: 700, color: '#e8e8e8', letterSpacing: '-0.3px' }}>
+                        Continental POS
+                    </h1>
+                    <p style={{ margin: 0, fontSize: '13px', color: '#777' }}>
+                        {currentUser ? `${currentUser.name} · ${currentUser.role}` : 'Cargando...'}
+                        {currentShiftId ? (
+                            <span style={{ marginLeft: '10px', color: '#444', fontSize: '12px' }}>
+                                #{currentShiftId.slice(-8)}
+                            </span>
+                        ) : null}
                     </p>
-                    <p style={{ margin: '4px 0 0 0' }}>
-                        Turno: {currentShiftId || 'Cargando...'}
-                    </p>
-                    <p style={{ margin: '8px 0 0 0' }}>{status}</p>
+                    {status && (
+                        <p style={{ margin: '6px 0 0 0', fontSize: '12px', color: '#555' }}>{status}</p>
+                    )}
                 </div>
-                <button onClick={handleLogout}>Logout</button>
+                <button
+                    onClick={handleLogout}
+                    style={{
+                        padding: '7px 14px',
+                        borderRadius: '6px',
+                        border: '1px solid #2e2e2e',
+                        background: '#1a1a1a',
+                        color: '#888',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                    }}
+                >
+                    Salir
+                </button>
             </header>
 
             <TopBar

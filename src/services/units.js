@@ -24,7 +24,7 @@ export async function getUnitsWithStatus() {
 
         let visualStatus = 'free'
         let statusLabel = 'Libre'
-        let bgColor = '#2e7d32'
+        let statusColor = '#4ade80'
         let customerName = ''
 
         if (activeComanda) {
@@ -34,24 +34,24 @@ export async function getUnitsWithStatus() {
 
         if (visualStatus === 'open') {
             statusLabel = 'Abierta'
-            bgColor = '#1565c0'
+            statusColor = '#60a5fa'
         }
 
         if (visualStatus === 'pending_payment') {
             statusLabel = 'Cuenta'
-            bgColor = '#ef6c00'
+            statusColor = '#fb923c'
         }
 
         if (visualStatus === 'processing_payment') {
             statusLabel = 'Cobrando'
-            bgColor = '#6a1b9a'
+            statusColor = '#a78bfa'
         }
 
         return {
             ...unit,
             visualStatus,
             statusLabel,
-            bgColor,
+            statusColor,
             customerName,
         }
     })

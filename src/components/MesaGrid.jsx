@@ -1,13 +1,21 @@
 function MesaGrid({ units, onUnitClick }) {
     return (
         <main>
-            <h2>Mesas</h2>
+            <p style={{
+                margin: '0 0 14px 0',
+                fontSize: '11px',
+                fontWeight: 600,
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+                color: '#555',
+            }}>
+                Mesas
+            </p>
             <div
                 style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-                    gap: '12px',
-                    marginTop: '16px',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+                    gap: '10px',
                 }}
             >
                 {units.map((unit) => (
@@ -16,30 +24,47 @@ function MesaGrid({ units, onUnitClick }) {
                         type="button"
                         onClick={() => onUnitClick(unit)}
                         style={{
-                            backgroundColor: unit.bgColor,
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '10px',
-                            padding: '16px',
+                            backgroundColor: '#161616',
+                            color: '#e2e2e2',
+                            border: '1px solid #2a2a2a',
+                            borderLeft: `3px solid ${unit.statusColor}`,
+                            borderRadius: '8px',
+                            padding: '14px 14px 14px 12px',
                             textAlign: 'left',
                             cursor: 'pointer',
-                            minHeight: '110px',
+                            minHeight: '100px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'space-between',
                         }}
                     >
-                        <div style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '8px' }}>
+                        <div style={{ fontSize: '17px', fontWeight: '600', marginBottom: '10px' }}>
                             {unit.name}
                         </div>
-                        <div style={{ marginBottom: '6px' }}>{unit.statusLabel}</div>
-                        {unit.customerName ? (
-                            <div style={{ fontSize: '14px', opacity: 0.95 }}>
-                                Cliente: {unit.customerName}
-                            </div>
-                        ) : null}
+                        <div>
+                            <span style={{
+                                display: 'inline-block',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                background: `${unit.statusColor}1a`,
+                                color: unit.statusColor,
+                                fontSize: '12px',
+                                fontWeight: '600',
+                                letterSpacing: '0.04em',
+                            }}>
+                                {unit.statusLabel}
+                            </span>
+                            {unit.customerName ? (
+                                <div style={{ fontSize: '12px', color: '#666', marginTop: '6px' }}>
+                                    {unit.customerName}
+                                </div>
+                            ) : null}
+                        </div>
                     </button>
                 ))}
             </div>
         </main>
-    );
+    )
 }
 
-export default MesaGrid;
+export default MesaGrid

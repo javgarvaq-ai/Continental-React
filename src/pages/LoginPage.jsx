@@ -138,16 +138,25 @@ function LoginPage() {
             <div
                 style={{
                     width: '100%',
-                    maxWidth: '520px',
-                    padding: '24px',
-                    background: '#181818',
-                    border: '1px solid #2f2f2f',
-                    borderRadius: '16px',
-                    boxShadow: '0 10px 30px rgba(0,0,0,0.4)',
+                    maxWidth: '480px',
+                    padding: '28px 28px 32px',
+                    background: '#141414',
+                    border: '1px solid #242424',
+                    borderRadius: '14px',
+                    boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
                 }}
             >
-                <h1 style={{ marginTop: 0, marginBottom: '12px' }}>Continental Login</h1>
-                <p style={{ marginTop: 0, marginBottom: '20px', opacity: 0.85 }}>{status}</p>
+                <div style={{ marginBottom: '28px', textAlign: 'center' }}>
+                    <h1 style={{ margin: '0 0 4px 0', fontSize: '26px', fontWeight: 700, color: '#e8e8e8', letterSpacing: '-0.4px' }}>
+                        Continental
+                    </h1>
+                    <p style={{ margin: 0, fontSize: '13px', color: '#555', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                        Sistema de punto de venta
+                    </p>
+                </div>
+                {status && status !== 'Users loaded successfully.' && (
+                    <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: '#f87171', textAlign: 'center' }}>{status}</p>
+                )}
 
                 {users.length === 0 ? (
                     <div
@@ -181,7 +190,7 @@ function LoginPage() {
                 ) : (
                     <form onSubmit={handleSubmit}>
                         <div>
-                            <h2 style={{ marginTop: 0, marginBottom: '12px' }}>Select user</h2>
+                            <h2 style={{ marginTop: 0, marginBottom: '12px', fontSize: '14px', fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Seleccionar usuario</h2>
 
                             <div
                                 style={{
@@ -197,20 +206,22 @@ function LoginPage() {
                                         type="button"
                                         onClick={() => setSelectedUserId(user.id)}
                                         style={{
-                                            padding: '10px 12px',
-                                            borderRadius: '10px',
-                                            border:
-                                                user.id === selectedUserId
-                                                    ? '1px solid #4da3ff'
-                                                    : '1px solid #444',
-                                            background:
-                                                user.id === selectedUserId ? '#1d3557' : '#2a2a2a',
-                                            color: 'white',
-                                            fontWeight: user.id === selectedUserId ? 'bold' : 'normal',
+                                            padding: '9px 14px',
+                                            borderRadius: '7px',
+                                            border: user.id === selectedUserId
+                                                ? '1px solid #3a5a8a'
+                                                : '1px solid #2a2a2a',
+                                            background: user.id === selectedUserId ? '#1a2e47' : '#1e1e1e',
+                                            color: user.id === selectedUserId ? '#93c5fd' : '#aaa',
+                                            fontWeight: user.id === selectedUserId ? '600' : '400',
                                             cursor: 'pointer',
+                                            fontSize: '13px',
                                         }}
                                     >
-                                        {user.name} - {user.role}
+                                        {user.name}
+                                        <span style={{ opacity: 0.5, marginLeft: '6px', fontSize: '12px' }}>
+                                            {user.role}
+                                        </span>
                                     </button>
                                 ))}
                             </div>
@@ -222,7 +233,11 @@ function LoginPage() {
                                 style={{
                                     display: 'block',
                                     marginBottom: '8px',
-                                    fontWeight: 'bold',
+                                    fontSize: '12px',
+                                    fontWeight: 600,
+                                    color: '#888',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.08em',
                                 }}
                             >
                                 PIN
@@ -235,48 +250,56 @@ function LoginPage() {
                                 autoComplete="off"
                                 value={pin}
                                 onChange={handlePinChange}
-                                placeholder="Enter 6-digit PIN"
+                                placeholder="••••••"
                                 style={{
                                     width: '100%',
-                                    padding: '12px',
-                                    borderRadius: '10px',
-                                    border: '1px solid #444',
-                                    background: '#111',
-                                    color: 'white',
+                                    padding: '11px 14px',
+                                    borderRadius: '7px',
+                                    border: '1px solid #2a2a2a',
+                                    background: '#0e0e0e',
+                                    color: '#e2e2e2',
                                     boxSizing: 'border-box',
+                                    fontSize: '18px',
+                                    letterSpacing: '0.3em',
+                                    outline: 'none',
                                 }}
                             />
                         </div>
 
-                        <div style={{ marginTop: '16px', opacity: 0.9 }}>
-                            <p style={{ margin: 0 }}>
-                                Selected user:{' '}
-                                {selectedUser ? `${selectedUser.name} (${selectedUser.role})` : 'None'}
+                        {selectedUser && (
+                            <p style={{ margin: '12px 0 0 0', fontSize: '12px', color: '#555', textAlign: 'center' }}>
+                                {selectedUser.name}
+                                <span style={{ marginLeft: '6px', color: '#3d3d3d' }}>({selectedUser.role})</span>
                             </p>
-                        </div>
+                        )}
 
                         <button
                             type="submit"
                             disabled={!selectedUserId || pin.length !== 6 || isSubmitting}
                             style={{
                                 width: '100%',
-                                marginTop: '18px',
+                                marginTop: '20px',
                                 padding: '12px',
-                                borderRadius: '10px',
+                                borderRadius: '7px',
                                 border: 'none',
-                                background:
-                                    !selectedUserId || pin.length !== 6 || isSubmitting
-                                        ? '#555'
-                                        : '#2e7d32',
-                                color: 'white',
-                                fontWeight: 'bold',
-                                cursor:
-                                    !selectedUserId || pin.length !== 6 || isSubmitting
-                                        ? 'default'
-                                        : 'pointer',
+                                background: !selectedUserId || pin.length !== 6 || isSubmitting
+                                    ? '#1e1e1e'
+                                    : '#1a3a2a',
+                                color: !selectedUserId || pin.length !== 6 || isSubmitting
+                                    ? '#444'
+                                    : '#4ade80',
+                                fontWeight: '600',
+                                fontSize: '14px',
+                                cursor: !selectedUserId || pin.length !== 6 || isSubmitting
+                                    ? 'default'
+                                    : 'pointer',
+                                border: '1px solid',
+                                borderColor: !selectedUserId || pin.length !== 6 || isSubmitting
+                                    ? '#222'
+                                    : '#2a5a3a',
                             }}
                         >
-                            {isSubmitting ? 'Logging in...' : 'Login'}
+                            {isSubmitting ? 'Verificando...' : 'Ingresar'}
                         </button>
                     </form>
                 )}
