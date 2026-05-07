@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getAllUnits, createUnit, updateUnit, deleteUnit } from '../services/unitsAdmin'
+import { getAllUnits, createUnit, updateUnit, deactivateUnit } from '../services/unitsAdmin'
 import AdminNav from '../components/AdminNav'
 import { useAuthStore } from '../store/authStore'
 
@@ -61,12 +61,12 @@ function UnitsAdminPage() {
     async function handleDelete(unit) {
         if (!isAdmin) return
         const confirmed = window.confirm(
-            `Delete "${unit.name}"? This will fail if it has open or past comandas.`
+            `Archive "${unit.name}"? It will no longer appear in the POS but history is preserved.`
         )
         if (!confirmed) return
-        const { error } = await deleteUnit({ id: unit.id })
+        const { error } = await deactivateUnit({ id: unit.id })
         if (error) { setStatus(`Error: ${error.message} — Make sure no comandas use this unit.`); return }
-        setStatus('Unit deleted.')
+        setStatus('Unit archived.')
         await loadUnits()
     }
 

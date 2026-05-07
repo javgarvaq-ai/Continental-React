@@ -4,7 +4,7 @@ import {
     getAllCategories,
     createCategory,
     updateCategory,
-    deleteCategory,
+    deactivateCategory,
 } from '../services/categoriesAdmin'
 import AdminNav from '../components/AdminNav'
 import { useAuthStore } from '../store/authStore'
@@ -81,16 +81,16 @@ function CategoriesAdminPage() {
     async function handleDelete(category) {
         if (!isAdmin) { setStatus('Admin only.'); return }
         const confirmed = window.confirm(
-            `Delete category "${category.name}"? This will fail if products are using it.`
+            `Archive category "${category.name}"? Reassign its products first. History is preserved.`
         )
         if (!confirmed) return
         setStatus('Deleting category...')
-        const { error } = await deleteCategory({ id: category.id })
+        const { error } = await deactivateCategory({ id: category.id })
         if (error) {
             setStatus(`Error: ${error.message} — Make sure no products use this category first.`)
             return
         }
-        setStatus('Category deleted.')
+        setStatus('Category archived.')
         await loadCategories()
     }
 

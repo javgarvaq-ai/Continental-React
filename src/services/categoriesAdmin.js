@@ -4,13 +4,14 @@ export async function getAllCategories() {
     return await supabase
         .from('categories')
         .select('*')
+        .eq('active', true)
         .order('name', { ascending: true })
 }
 
 export async function createCategory({ name }) {
     return await supabase
         .from('categories')
-        .insert([{ name: name.trim() }])
+        .insert([{ name: name.trim(), active: true }])
         .select()
         .single()
 }
@@ -24,9 +25,9 @@ export async function updateCategory({ id, name }) {
         .single()
 }
 
-export async function deleteCategory({ id }) {
+export async function deactivateCategory({ id }) {
     return await supabase
         .from('categories')
-        .delete()
+        .update({ active: false })
         .eq('id', id)
 }

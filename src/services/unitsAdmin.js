@@ -4,13 +4,14 @@ export async function getAllUnits() {
     return await supabase
         .from('units')
         .select('*')
+        .eq('active', true)
         .order('name', { ascending: true })
 }
 
 export async function createUnit({ name, type }) {
     return await supabase
         .from('units')
-        .insert([{ name: name.trim(), type: type.trim() }])
+        .insert([{ name: name.trim(), type: type.trim(), active: true }])
         .select()
         .single()
 }
@@ -24,9 +25,9 @@ export async function updateUnit({ id, name, type }) {
         .single()
 }
 
-export async function deleteUnit({ id }) {
+export async function deactivateUnit({ id }) {
     return await supabase
         .from('units')
-        .delete()
+        .update({ active: false })
         .eq('id', id)
 }
