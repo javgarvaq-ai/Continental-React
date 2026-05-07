@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../services/supabase';
+import { getWeeklyReportData } from '../services/reports';
 import { useNavigate } from 'react-router-dom';
 import { money } from '../utils/money';
 
@@ -49,58 +49,30 @@ function WeeklyReportPage() {
         const startIso = `${startDate}T00:00:00-06:00`;
         const endIso = `${endDate}T23:59:59-06:00`;
 
-        const [paymentsResult, cashMovementsResult, comandasResult] = await Promise.all([
-            supabase
-                .from('payments')
-                .select(`
-                    *,
-                    comandas (
-                        id,
-                        folio,
-                        final_total,
-                        tip_total,
-                        status,
-                        cobrado_at
-                    )
-                `)
-                .gte('created_at', startIso)
-                .lte('created_at', endIso),
+        const { payments, cashMovements, comandas, paymentsError, cashMovementsError, comandasError } =
+            await getWeeklyReportData({ startDate, endDate });
 
-            supabase
-                .from('cash_movements')
-                .select('*')
-                .gte('created_at', startIso)
-                .lte('created_at', endIso),
-
-            supabase
-                .from('comandas')
-                .select('*')
-                .eq('status', 'paid')
-                .gte('cobrado_at', startIso)
-                .lte('cobrado_at', endIso),
-        ]);
-
-        if (paymentsResult.error) {
-            setStatus(`Error cargando pagos: ${paymentsResult.error.message}`);
+        if (paymentsError) {
+            setStatus(`Error cargando pagos: ${paymentsError.message}`);
             setLoading(false);
             return;
         }
 
-        if (cashMovementsResult.error) {
-            setStatus(`Error cargando movimientos: ${cashMovementsResult.error.message}`);
+        if (cashMovementsError) {
+            setStatus(`Error cargando movimientos: ${cashMovementsError.message}`);
             setLoading(false);
             return;
         }
 
-        if (comandasResult.error) {
-            setStatus(`Error cargando comandas: ${comandasResult.error.message}`);
+        if (comandasError) {
+            setStatus(`Error cargando comandas: ${comandasError.message}`);
             setLoading(false);
             return;
         }
 
-        setPayments(paymentsResult.data || []);
-        setCashMovements(cashMovementsResult.data || []);
-        setComandas(comandasResult.data || []);
+        setPayments(payments || []);
+        setCashMovements(cashMovements || []);
+        setComandas(comandas || []);
         setStatus('Reporte semanal cargado.');
         setLoading(false);
     }

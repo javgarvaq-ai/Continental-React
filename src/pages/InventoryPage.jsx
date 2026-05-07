@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { supabase } from '../services/supabase';
 import { useNavigate } from 'react-router-dom';
+import { getAllInventoryItems } from '../services/inventoryAdmin';
 
 function InventoryPage() {
     const navigate = useNavigate();
@@ -17,10 +17,7 @@ function InventoryPage() {
     async function loadInventory() {
         setLoading(true);
 
-        const { data, error } = await supabase
-            .from('inventory_items')
-            .select('*')
-            .order('name', { ascending: true });
+        const { data, error } = await getAllInventoryItems();
 
         if (!error) {
             setItems(data || []);
