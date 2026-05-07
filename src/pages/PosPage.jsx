@@ -5,7 +5,7 @@ import { useCustomer } from '../hooks/useCustomer';
 import { useComanda } from '../hooks/useComanda';
 import { usePayment } from '../hooks/usePayment';
 import { useShift } from '../hooks/useShift';
-import { getOrCreateActiveComanda, cancelComanda } from '../services/comandas';
+import { getOrCreateActiveComanda, cancelComanda, getActiveComandaByUnit, assignCustomerToComanda } from '../services/comandas';
 import MesaGrid from '../components/MesaGrid';
 import ShotMixerSelector from '../components/ShotMixerSelector';
 import ComandaPanel from '../components/ComandaPanel';
@@ -20,7 +20,6 @@ import {
     getActiveCartItems,
 } from '../services/products';
 import { printTicket } from '../components/Ticket';
-import { supabase } from '../services/supabase';
 import {
     getCustomerWithMembership,
     getCustomerByIdWithMembership,
@@ -323,12 +322,7 @@ function PosPage() {
 
         setStatus(`Abriendo ${unit.name}...`)
 
-        const { data: existing, error: existingError } = await supabase
-            .from('comandas')
-            .select('*')
-            .eq('unit_id', unit.id)
-            .in('status', ['open', 'pending_payment', 'processing_payment'])
-            .limit(1)
+        const { data: existing, error: existingError } = await getActiveComandaByUnit({ unitId: unit.id })
 
         if (existingError) {
             setStatus(`Error abriendo comanda: ${existingError.message}`)
@@ -380,10 +374,11 @@ function PosPage() {
 
         // Link customer to comanda if found
         if (isNew && pendingCustomerData) {
-            const { error: linkError } = await supabase
-                .from('comandas')
-                .update({ customer_id: pendingCustomerData.customer.id })
-                .eq('id', data.id)
+            const { error: linkError } = await assignCustomerToComanda({
+                comandaId: data.id,
+                customerId: pendingCustomerData.customer.id,
+                customerName: pendingCustomerData.customer.name,
+            })
             if (linkError) {
                 setStatus(`Comanda abierta, pero no se pudo vincular el cliente: ${linkError.message}`)
             }

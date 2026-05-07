@@ -87,3 +87,14 @@ export async function assignCustomerToComanda({ comandaId, customerId, customerN
 
     return { error }
 }
+
+export async function getActiveComandaByUnit({ unitId }) {
+    const { data, error } = await supabase
+        .from('comandas')
+        .select('*')
+        .eq('unit_id', unitId)
+        .in('status', ['open', 'pending_payment', 'processing_payment'])
+        .limit(1)
+
+    return { data: data || [], error }
+}
