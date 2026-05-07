@@ -286,11 +286,6 @@ function PosPage() {
         setCartItems(data || []);
     }
 
-    function handleLogout() {
-        clearAuth();
-        navigate('/login');
-    }
-
     async function handleUnitClick(unit) {
         if (!requireOnline(isOnline, setStatus)) return
 
@@ -460,11 +455,6 @@ function PosPage() {
                 }}
             >
                 <div>
-                    <img
-                        src={logo}
-                        alt="Continental Cantina Bar"
-                        style={{ height: '24px', display: 'block', marginBottom: '4px', opacity: 0.7 }}
-                    />
                     <p style={{ margin: 0, fontSize: '13px', color: '#777' }}>
                         {currentUser ? `${currentUser.name} · ${currentUser.role}` : 'Cargando...'}
                         {currentShiftId ? (
@@ -477,20 +467,11 @@ function PosPage() {
                         <p style={{ margin: '6px 0 0 0', fontSize: '12px', color: '#555' }}>{status}</p>
                     )}
                 </div>
-                <button
-                    onClick={handleLogout}
-                    style={{
-                        padding: '7px 14px',
-                        borderRadius: '6px',
-                        border: '1px solid #2e2e2e',
-                        background: '#1a1a1a',
-                        color: '#888',
-                        cursor: 'pointer',
-                        fontSize: '13px',
-                    }}
-                >
-                    Salir
-                </button>
+                <img
+                    src={logo}
+                    alt="Continental Cantina Bar"
+                    style={{ height: '40px', opacity: 0.85 }}
+                />
             </header>
 
             <TopBar
@@ -520,16 +501,7 @@ function PosPage() {
             />
 
             {!selectedUnit ? (
-                <>
-                    <div style={{ textAlign: 'center', padding: '32px 0 24px' }}>
-                        <img
-                            src={logo}
-                            alt="Continental Cantina Bar"
-                            style={{ width: '300px', opacity: 0.85 }}
-                        />
-                    </div>
-                    <MesaGrid units={units} onUnitClick={handleUnitClick} />
-                </>
+                <MesaGrid units={units} onUnitClick={handleUnitClick} />
             ) : (
                 <main>
                     <div style={{ marginBottom: '14px' }}>
