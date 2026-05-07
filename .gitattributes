@@ -1,0 +1,10 @@
+# Normalize all code files to LF in the repo and on checkout
+* text=auto eol=lf
+
+# Binary files — no line ending conversion
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.woff binary
+*.woff2 binary
