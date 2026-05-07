@@ -233,6 +233,7 @@ export function useComanda({
 
         if (isChangingCart || isAddingProduct) return
 
+        const currentQty = Number(item.quantity || 0)
         setIsChangingCart(true)
 
         try {
