@@ -108,7 +108,9 @@ function SetupAdminPage() {
         navigate('/login', { replace: true })
     }
 
-    if (!loading && usersExist) {
+    if (loading) return null
+
+    if (usersExist) {
         return <Navigate to="/login" replace />
     }
 
