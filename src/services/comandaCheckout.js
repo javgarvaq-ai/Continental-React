@@ -216,7 +216,7 @@ async function validateComandaInventoryBeforePayment({ comandaId }) {
 async function descontarInventarioComanda({ comandaId, userId }) {
     const { data: comandaItems, error: itemsError } = await supabase
         .from('comanda_items')
-        .select('id, product_id, quantity, is_free_benefit')
+        .select('id, product_id, quantity')
         .eq('comanda_id', comandaId)
         .eq('status', 'active');
 
@@ -225,7 +225,6 @@ async function descontarInventarioComanda({ comandaId, userId }) {
     }
 
     for (const item of comandaItems || []) {
-
         const { data: recipeRows, error: recipeError } = await supabase
             .from('product_recipes')
             .select('inventory_item_id, deduct_amount')
@@ -244,57 +243,21 @@ async function descontarInventarioComanda({ comandaId, userId }) {
             const totalDeduction =
                 Number(item.quantity || 0) * Number(recipe.deduct_amount || 0);
 
-            const { data: inventoryItem, error: inventoryError } = await supabase
-                .from('inventory_items')
-                .select('id, name, current_stock')
-                .eq('id', recipe.inventory_item_id)
-                .single();
+            const { data, error } = await supabase.rpc('deduct_inventory_item', {
+                p_inventory_item_id: recipe.inventory_item_id,
+                p_deduct_amount:     totalDeduction,
+                p_product_id:        item.product_id,
+                p_comanda_item_id:   item.id,
+                p_user_id:           userId,
+                p_note:              `Deducción por cobro de comanda ${comandaId}`,
+            });
 
-            if (inventoryError || !inventoryItem) {
-                return {
-                    ok: false,
-                    error: inventoryError || new Error('Inventory item not found'),
-                };
+            if (error) {
+                return { ok: false, error };
             }
 
-            const currentStock = Number(inventoryItem.current_stock || 0);
-            const newStock = currentStock - totalDeduction;
-
-            if (newStock < 0) {
-                return {
-                    ok: false,
-                    error: new Error(
-                        `Inventario insuficiente para ${inventoryItem.name || 'producto'}.`
-                    ),
-                };
-            }
-
-            const { error: updateStockError } = await supabase
-                .from('inventory_items')
-                .update({ current_stock: newStock })
-                .eq('id', inventoryItem.id);
-
-            if (updateStockError) {
-                return { ok: false, error: updateStockError };
-            }
-
-            const { error: movementError } = await supabase
-                .from('inventory_movements')
-                .insert([
-                    {
-                        inventory_item_id: inventoryItem.id,
-                        product_id: item.product_id,
-                        comanda_item_id: item.id,
-                        movement_type: 'sale_deduction',
-                        quantity_change: -totalDeduction,
-                        quantity: newStock,
-                        user_id: userId,
-                        note: `Deducción por cobro de comanda ${comandaId}`,
-                    },
-                ]);
-
-            if (movementError) {
-                return { ok: false, error: movementError };
+            if (data && !data.ok) {
+                return { ok: false, error: new Error(data.error) };
             }
         }
     }
