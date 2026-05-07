@@ -68,6 +68,13 @@ export async function cancelComanda({ comandaId, userId }) {
         return { error: updateError }
     }
 
+    // Cancel any membership that was activated on this comanda but never paid
+    await supabase
+        .from('customer_memberships')
+        .update({ status: 'cancelled' })
+        .eq('paid_via_comanda_id', comandaId)
+        .eq('status', 'active')
+
     await supabase.from('comanda_events').insert([
         {
             comanda_id: comandaId,

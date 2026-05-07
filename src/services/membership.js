@@ -386,30 +386,31 @@ export async function searchCustomerByQuery(query) {
     return { data: results, error: null }
 }
 export async function cancelMembershipOnComanda({ membershipId, comandaId, productId }) {
-    // 1. Delete the membership record
-    const { error: deleteError } = await supabase
+    // 1. Soft-delete the membership record (preserve audit trail)
+    const { error: updateError } = await supabase
         .from('customer_memberships')
-        .delete()
+        .update({ status: 'cancelled' })
         .eq('id', membershipId)
 
-    if (deleteError) return { error: deleteError }
+    if (updateError) return { error: updateError }
 
-    // 2. Remove the membership product from the comanda if it exists
+    // 2. Void the membership product line on the comanda if it exists
     if (productId) {
         await supabase
             .from('comanda_items')
-            .delete()
+            .update({ status: 'cancelled' })
             .eq('comanda_id', comandaId)
             .eq('product_id', productId)
             .eq('status', 'active')
     }
 
-    // 3. Remove any free benefit items that were added as part of this membership
+    // 3. Void any free benefit items that were added as part of this membership
     await supabase
         .from('comanda_items')
-        .delete()
+        .update({ status: 'cancelled' })
         .eq('comanda_id', comandaId)
         .eq('is_free_benefit', true)
+        .eq('status', 'active')
 
     return { error: null }
 }
