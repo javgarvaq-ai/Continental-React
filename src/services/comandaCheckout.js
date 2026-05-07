@@ -213,57 +213,6 @@ async function validateComandaInventoryBeforePayment({ comandaId }) {
     return { ok: true, error: null };
 }
 
-async function descontarInventarioComanda({ comandaId, userId }) {
-    const { data: comandaItems, error: itemsError } = await supabase
-        .from('comanda_items')
-        .select('id, product_id, quantity')
-        .eq('comanda_id', comandaId)
-        .eq('status', 'active');
-
-    if (itemsError) {
-        return { ok: false, error: itemsError };
-    }
-
-    for (const item of comandaItems || []) {
-        const { data: recipeRows, error: recipeError } = await supabase
-            .from('product_recipes')
-            .select('inventory_item_id, deduct_amount')
-            .eq('product_id', item.product_id)
-            .eq('active', true);
-
-        if (recipeError) {
-            return { ok: false, error: recipeError };
-        }
-
-        if (!recipeRows || recipeRows.length === 0) {
-            continue;
-        }
-
-        for (const recipe of recipeRows) {
-            const totalDeduction =
-                Number(item.quantity || 0) * Number(recipe.deduct_amount || 0);
-
-            const { data, error } = await supabase.rpc('deduct_inventory_item', {
-                p_inventory_item_id: recipe.inventory_item_id,
-                p_deduct_amount:     totalDeduction,
-                p_product_id:        item.product_id,
-                p_comanda_item_id:   item.id,
-                p_user_id:           userId,
-                p_note:              `Deducción por cobro de comanda ${comandaId}`,
-            });
-
-            if (error) {
-                return { ok: false, error };
-            }
-
-            if (data && !data.ok) {
-                return { ok: false, error: new Error(data.error) };
-            }
-        }
-    }
-
-    return { ok: true };
-}
 
 export async function confirmPayment({
     comandaId,
@@ -309,83 +258,33 @@ export async function confirmPayment({
         return { error: inventoryValidation.error };
     }
 
-    const { error: updateComandaError } = await supabase
-        .from('comandas')
-        .update({
-            status: 'paid',
-            paid_by_user_id: userId,
-            cobrado_by: userId,
-            cobrado_at: new Date().toISOString(),
-            tip_total: safePropina,
-        })
-        .eq('id', comandaId);
+    const { data: rpcResult, error: rpcError } = await supabase.rpc(
+        'finalize_comanda_payment',
+        {
+            p_comanda_id:     comandaId,
+            p_user_id:        userId,
+            p_shift_id:       shiftId,
+            p_cobrado_at:     new Date().toISOString(),
+            p_tip_total:      safePropina,
+            p_efectivo:       netCashApplied,
+            p_tarjeta:        safeTarjeta,
+            p_transferencia:  safeTransferencia,
+            p_total_paid:     totalPaid,
+            p_tip_amount:     safePropina,
+            p_change_given:   safeCambio,
+            p_total:          safeTotal,
+            p_cash_received:  cashReceived,
+            p_total_aplicado: totalPaid,
+        }
+    );
 
-    if (updateComandaError) {
-        return { error: updateComandaError };
+    if (rpcError) {
+        return { error: rpcError };
     }
 
-    const { error: paymentError } = await supabase
-        .from('payments')
-        .insert([
-            {
-                comanda_id: comandaId,
-                shift_id: shiftId,
-                paid_by_user: userId,
-                efectivo: netCashApplied,
-                tarjeta: safeTarjeta,
-                transferencia: safeTransferencia,
-                total_paid: totalPaid,
-                tip_amount: safePropina,
-                change_given: safeCambio,
-            },
-        ]);
-
-    if (paymentError) {
-        // Rollback: revert comanda to processing_payment so the cashier can retry
-        await supabase
-            .from('comandas')
-            .update({ status: 'processing_payment' })
-            .eq('id', comandaId);
-        return { error: paymentError };
+    if (rpcResult && !rpcResult.ok) {
+        return { error: new Error(rpcResult.error || 'Error al finalizar cobro.') };
     }
 
-    const inventoryResult = await descontarInventarioComanda({
-        comandaId,
-        userId,
-    });
-
-    const { error: eventError } = await supabase
-        .from('comanda_events')
-        .insert([
-            {
-                comanda_id: comandaId,
-                user_id: userId,
-                event_type: 'cobro_confirmed',
-                event_data: {
-                    total: safeTotal,
-                    efectivo: netCashApplied,
-                    tarjeta: safeTarjeta,
-                    transferencia: safeTransferencia,
-                    propina: safePropina,
-                    cambio: safeCambio,
-                    efectivo_recibido: cashReceived,
-                    total_aplicado: totalPaid,
-                },
-            },
-        ]);
-
-    if (eventError) {
-        return { error: eventError };
-    }
-
-    return {
-        error: null,
-        data: {
-            inventoryWarning:
-                inventoryResult.ok
-                    ? null
-                    : inventoryResult.error?.message ||
-                    'Hubo un error al descontar inventario.',
-        },
-    };
+    return { error: null, data: { inventoryWarning: null } };
 }
