@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { getActiveUsers } from '../services/users'
 import { loginWithPin, getOpenShift, createShift } from '../services/auth'
 import { useAuthStore } from '../store/authStore'
-import logo from '../assets/LogotipoContinental_FNEGRO-01.png'
+import logo from '../assets/logo.png'
 
 const inputStyle = {
     width: '100%',

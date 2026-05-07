@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import logo from '../assets/LogotipoContinental_FNEGRO-01.png';
+import logo from '../assets/logo.png';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useCustomer } from '../hooks/useCustomer';
