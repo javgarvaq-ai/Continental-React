@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import logo from '../assets/LogotipoContinental_FNEGRO-01.png';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useCustomer } from '../hooks/useCustomer';
@@ -459,9 +460,11 @@ function PosPage() {
                 }}
             >
                 <div>
-                    <h1 style={{ margin: '0 0 4px 0', fontSize: '22px', fontWeight: 700, color: '#e8e8e8', letterSpacing: '-0.3px' }}>
-                        Continental POS
-                    </h1>
+                    <img
+                        src={logo}
+                        alt="Continental Cantina Bar"
+                        style={{ height: '36px', display: 'block', marginBottom: '4px' }}
+                    />
                     <p style={{ margin: 0, fontSize: '13px', color: '#777' }}>
                         {currentUser ? `${currentUser.name} · ${currentUser.role}` : 'Cargando...'}
                         {currentShiftId ? (

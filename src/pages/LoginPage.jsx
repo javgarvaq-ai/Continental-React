@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { getActiveUsers } from '../services/users'
 import { loginWithPin, getOpenShift, createShift } from '../services/auth'
 import { useAuthStore } from '../store/authStore'
+import logo from '../assets/LogotipoContinental_FNEGRO-01.png'
 
 const inputStyle = {
     width: '100%',
@@ -168,10 +169,12 @@ function LoginPage() {
 
                 {/* Wordmark */}
                 <div style={{ marginBottom: '28px', textAlign: 'center' }}>
-                    <h1 style={{ margin: '0 0 4px 0', fontSize: '26px', fontWeight: 700, color: '#e8e8e8', letterSpacing: '-0.4px' }}>
-                        Continental
-                    </h1>
-                    <p style={{ margin: 0, fontSize: '13px', color: '#555', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                    <img
+                        src={logo}
+                        alt="Continental Cantina Bar"
+                        style={{ width: '220px', display: 'block', margin: '0 auto 10px' }}
+                    />
+                    <p style={{ margin: 0, fontSize: '11px', color: '#444', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
                         Sistema de punto de venta
                     </p>
                 </div>
