@@ -470,7 +470,7 @@ function PosPage() {
                 <img
                     src={logo}
                     alt="Continental Cantina Bar"
-                    style={{ height: '40px', opacity: 0.85 }}
+                    style={{ height: '56px', opacity: 0.85 }}
                 />
             </header>
 
