@@ -19,6 +19,7 @@ function ComandaPanel({
     onPresentBill,
     onReopenComanda,
     onCancelMesa,
+    cancelConfirming,
     onStartPayment,
     onPaymentFieldChange,
     onResetAutoTip,
@@ -162,14 +163,15 @@ function ComandaPanel({
                         style={{
                             padding: '12px 16px',
                             borderRadius: '8px',
-                            border: '1px solid #c62828',
-                            background: 'transparent',
-                            color: '#ef9a9a',
+                            border: cancelConfirming ? '1px solid #ef4444' : '1px solid #3d1a1a',
+                            background: cancelConfirming ? '#3d1a1a' : 'transparent',
+                            color: cancelConfirming ? '#ef4444' : '#7a3a3a',
                             cursor: 'pointer',
                             fontWeight: 'bold',
+                            transition: 'all 0.15s',
                         }}
                     >
-                        Cancelar Mesa
+                        {cancelConfirming ? '¿Confirmar cancelación?' : 'Cancelar Mesa'}
                     </button>
                 ) : null}
 

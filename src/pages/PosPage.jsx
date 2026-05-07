@@ -41,6 +41,9 @@ function PosPage() {
     const [groupedProducts, setGroupedProducts] = useState({});
     const [cartItems, setCartItems] = useState([]);
     const [isCancellingMesa, setIsCancellingMesa] = useState(false);
+    const [cancelConfirming, setCancelConfirming] = useState(false)
+    const [openTableDialog, setOpenTableDialog] = useState({ open: false, unit: null, existing: null, input: '', searching: false, notFound: false })
+    const [reprintDialog, setReprintDialog] = useState({ open: false, folioInput: '', phase: 'folio', comanda: null, loading: false, error: '' })
     const isOnline = useOnlineStatus()
 
     // Derived cart values — computed before hooks so they can be passed down
@@ -212,61 +215,37 @@ function PosPage() {
         navigate('/login');
     }
 
-    async function handleReprintTicket() {
-        const folioInput = window.prompt(
-            'Ingrese el folio del ticket (ejemplo: 68 o C-000068):'
-        );
+    function handleReprintTicket() {
+        setReprintDialog({ open: true, folioInput: '', phase: 'folio', comanda: null, loading: false, error: '' })
+    }
 
-        if (!folioInput) return;
-
-        let folioNumero = folioInput.trim();
-
-        if (folioNumero.toUpperCase().startsWith('C-')) {
-            folioNumero = folioNumero.substring(2);
-        }
-
-        folioNumero = parseInt(folioNumero, 10);
-
+    async function handleReprintFolioSubmit() {
+        let raw = reprintDialog.folioInput.trim()
+        if (!raw) return
+        if (raw.toUpperCase().startsWith('C-')) raw = raw.substring(2)
+        const folioNumero = parseInt(raw, 10)
         if (isNaN(folioNumero)) {
-            alert('Folio inválido.');
-            return;
+            setReprintDialog(d => ({ ...d, error: 'Folio inválido. Ejemplo: 68 o C-000068.' }))
+            return
         }
-
-        const { data: comanda, error } = await getComandaByFolio(folioNumero);
-
+        setReprintDialog(d => ({ ...d, loading: true, error: '' }))
+        const { data: comanda, error } = await getComandaByFolio(folioNumero)
         if (error || !comanda) {
-            alert('No se encontró una comanda con ese folio.');
-            return;
+            setReprintDialog(d => ({ ...d, loading: false, error: 'No se encontró una comanda con ese folio.' }))
+            return
         }
-
-        let tipo = 'cuenta';
-
         if (comanda.status === 'paid') {
-            const opcion = window.prompt(
-                `La comanda C-${String(comanda.folio).padStart(6, '0')} está pagada.\n\n` +
-                `1 = Ticket cliente\n` +
-                `2 = Ticket interno`
-            );
-
-            if (!opcion) return;
-
-            if (opcion === '2') {
-                tipo = 'pagado';
-            } else if (opcion === '1') {
-                tipo = 'cuenta';
-            } else {
-                alert('Opción inválida.');
-                return;
-            }
+            setReprintDialog(d => ({ ...d, loading: false, phase: 'type', comanda }))
+        } else {
+            setReprintDialog(d => ({ ...d, loading: false }))
+            await doPrintTicket({ tipo: 'cuenta', comanda })
+            setReprintDialog({ open: false, folioInput: '', phase: 'folio', comanda: null, loading: false, error: '' })
         }
+    }
 
-        const { items, unit, payment } = await getReprintData({
-            comanda,
-            tipo,
-            userId: currentUser?.id,
-        });
-
-        printTicket({ tipo, comanda, items, unit, payment });
+    async function doPrintTicket({ tipo, comanda }) {
+        const { items, unit, payment } = await getReprintData({ comanda, tipo, userId: currentUser?.id })
+        printTicket({ tipo, comanda, items, unit, payment })
     }
 
     function handleInventory() {
@@ -330,35 +309,39 @@ function PosPage() {
         }
 
         const isNew = !existing || existing.length === 0
-        let customerName = ''
-        let pendingCustomerData = null
 
         if (isNew) {
-            const input = window.prompt('Nombre de mesa o número de cliente (opcional):')
-            if (input === null) {
-                setStatus('Operación cancelada.')
-                return
-            }
-            const trimmed = input.trim()
-
-            if (trimmed && /^\d+$/.test(trimmed)) {
-                setStatus('Buscando cliente...')
-                const { data: customerData } = await getCustomerWithMembership(trimmed)
-                if (customerData) {
-                    customerName = customerData.customer.name
-                    pendingCustomerData = customerData
-                } else {
-                    const proceed = window.confirm(`No se encontró cliente #${trimmed}. ¿Continuar sin cliente?`)
-                    if (!proceed) {
-                        setStatus('Operación cancelada.')
-                        return
-                    }
-                    customerName = trimmed
-                }
-            } else {
-                customerName = trimmed
-            }
+            // Open the dialog — user picks customer name/number before creating the comanda
+            setOpenTableDialog({ open: true, unit, existing, input: '', searching: false, notFound: false })
+            setStatus('')
+            return
         }
+
+        // Existing comanda — load it directly
+        await doOpenTable({ unit, existing, customerName: '', pendingCustomerData: null, isNew: false })
+    }
+
+    async function handleOpenTableSubmit() {
+        const { unit, existing, input } = openTableDialog
+        const trimmed = (input || '').trim()
+
+        if (trimmed && /^\d+$/.test(trimmed)) {
+            setOpenTableDialog(d => ({ ...d, searching: true, notFound: false }))
+            const { data: customerData } = await getCustomerWithMembership(trimmed)
+            if (customerData) {
+                setOpenTableDialog(d => ({ ...d, searching: false }))
+                await doOpenTable({ unit, existing, customerName: customerData.customer.name, pendingCustomerData: customerData, isNew: true })
+            } else {
+                setOpenTableDialog(d => ({ ...d, searching: false, notFound: true }))
+            }
+            return
+        }
+
+        await doOpenTable({ unit, existing, customerName: trimmed, pendingCustomerData: null, isNew: true })
+    }
+
+    async function doOpenTable({ unit, existing, customerName, pendingCustomerData, isNew }) {
+        setOpenTableDialog({ open: false, unit: null, existing: null, input: '', searching: false, notFound: false })
 
         const { data, error } = await getOrCreateActiveComanda({
             unitId: unit.id,
@@ -372,7 +355,6 @@ function PosPage() {
             return
         }
 
-        // Link customer to comanda if found
         if (isNew && pendingCustomerData) {
             const { error: linkError } = await assignCustomerToComanda({
                 comandaId: data.id,
@@ -422,15 +404,17 @@ function PosPage() {
         const hasItems = visibleCartItems && visibleCartItems.length > 0;
 
         if (hasItems && currentUser?.role === 'waiter') {
-            alert('No autorizado. Solo un manager o admin puede cancelar una mesa con productos.');
+            setStatus('No autorizado. Solo un manager o admin puede cancelar una mesa con productos.');
             return;
         }
 
-        const msg = hasItems
-            ? `Esta mesa tiene ${visibleCartItems.length} producto(s). ¿Cancelar la mesa de todas formas? Los productos NO serán cobrados.`
-            : '¿Cancelar y liberar esta mesa?';
-
-        if (!window.confirm(msg)) return;
+        // Double-confirm pattern: first click arms, second click fires
+        if (!cancelConfirming) {
+            setCancelConfirming(true);
+            setTimeout(() => setCancelConfirming(false), 3000);
+            return;
+        }
+        setCancelConfirming(false);
         if (isCancellingMesa) return;
 
         setIsCancellingMesa(true);
@@ -952,6 +936,7 @@ function PosPage() {
                             onPresentBill={handlePresentBill}
                             onReopenComanda={handleReopenComanda}
                             onCancelMesa={handleCancelMesa}
+                            cancelConfirming={cancelConfirming}
                             onStartPayment={handleStartPayment}
                             onPaymentFieldChange={handlePaymentFieldChange}
                             onResetAutoTip={handleResetAutoTip}
@@ -959,6 +944,143 @@ function PosPage() {
                         />
                     </div>
                 </main>
+            )}
+
+            {/* ── Open Table Dialog ── */}
+            {openTableDialog.open && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+                    <div style={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: '12px', padding: '24px', width: '100%', maxWidth: '380px', boxShadow: '0 20px 60px rgba(0,0,0,0.6)' }}>
+                        <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', fontWeight: 700, color: '#e8e8e8' }}>
+                            {openTableDialog.unit?.name}
+                        </h3>
+                        <p style={{ margin: '0 0 20px 0', fontSize: '13px', color: '#555' }}>Mesa nueva</p>
+
+                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#666', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>
+                            Cliente (opcional)
+                        </label>
+                        <input
+                            autoFocus
+                            type="text"
+                            value={openTableDialog.input}
+                            onChange={e => setOpenTableDialog(d => ({ ...d, input: e.target.value, notFound: false }))}
+                            onKeyDown={e => e.key === 'Enter' && handleOpenTableSubmit()}
+                            placeholder="Nombre o número de membresía"
+                            style={{ width: '100%', padding: '10px 12px', borderRadius: '7px', border: '1px solid #2a2a2a', background: '#0e0e0e', color: '#e2e2e2', fontSize: '14px', boxSizing: 'border-box', outline: 'none' }}
+                        />
+
+                        {openTableDialog.notFound && (
+                            <div style={{ marginTop: '10px' }}>
+                                <p style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#fb923c' }}>
+                                    Cliente no encontrado.
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={() => doOpenTable({ unit: openTableDialog.unit, existing: openTableDialog.existing, customerName: openTableDialog.input.trim(), pendingCustomerData: null, isNew: true })}
+                                    style={{ padding: '7px 14px', borderRadius: '6px', border: '1px solid #3d2a1a', background: '#2a1a0e', color: '#fb923c', fontSize: '13px', cursor: 'pointer', fontWeight: '600' }}
+                                >
+                                    Continuar sin cliente
+                                </button>
+                            </div>
+                        )}
+
+                        <div style={{ display: 'flex', gap: '8px', marginTop: '20px' }}>
+                            <button
+                                type="button"
+                                onClick={() => setOpenTableDialog({ open: false, unit: null, existing: null, input: '', searching: false, notFound: false })}
+                                style={{ flex: 1, padding: '10px', borderRadius: '7px', border: '1px solid #222', background: 'transparent', color: '#666', fontSize: '13px', cursor: 'pointer' }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleOpenTableSubmit}
+                                disabled={openTableDialog.searching}
+                                style={{ flex: 2, padding: '10px', borderRadius: '7px', border: '1px solid #2a5a3a', background: '#1a3a2a', color: '#4ade80', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}
+                            >
+                                {openTableDialog.searching ? 'Buscando...' : 'Abrir mesa'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Reprint Ticket Dialog ── */}
+            {reprintDialog.open && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+                    <div style={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: '12px', padding: '24px', width: '100%', maxWidth: '360px', boxShadow: '0 20px 60px rgba(0,0,0,0.6)' }}>
+                        <h3 style={{ margin: '0 0 20px 0', fontSize: '17px', fontWeight: 700, color: '#e8e8e8' }}>
+                            Reimprimir ticket
+                        </h3>
+
+                        {reprintDialog.phase === 'folio' && (
+                            <>
+                                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#666', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>
+                                    Folio
+                                </label>
+                                <input
+                                    autoFocus
+                                    type="text"
+                                    value={reprintDialog.folioInput}
+                                    onChange={e => setReprintDialog(d => ({ ...d, folioInput: e.target.value, error: '' }))}
+                                    onKeyDown={e => e.key === 'Enter' && handleReprintFolioSubmit()}
+                                    placeholder="68 o C-000068"
+                                    style={{ width: '100%', padding: '10px 12px', borderRadius: '7px', border: '1px solid #2a2a2a', background: '#0e0e0e', color: '#e2e2e2', fontSize: '16px', boxSizing: 'border-box', outline: 'none' }}
+                                />
+                                {reprintDialog.error && (
+                                    <p style={{ margin: '8px 0 0 0', fontSize: '13px', color: '#f87171' }}>{reprintDialog.error}</p>
+                                )}
+                                <div style={{ display: 'flex', gap: '8px', marginTop: '20px' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setReprintDialog({ open: false, folioInput: '', phase: 'folio', comanda: null, loading: false, error: '' })}
+                                        style={{ flex: 1, padding: '10px', borderRadius: '7px', border: '1px solid #222', background: 'transparent', color: '#666', fontSize: '13px', cursor: 'pointer' }}
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleReprintFolioSubmit}
+                                        disabled={!reprintDialog.folioInput.trim() || reprintDialog.loading}
+                                        style={{ flex: 2, padding: '10px', borderRadius: '7px', border: '1px solid #2a5a3a', background: '#1a3a2a', color: '#4ade80', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}
+                                    >
+                                        {reprintDialog.loading ? 'Buscando...' : 'Buscar'}
+                                    </button>
+                                </div>
+                            </>
+                        )}
+
+                        {reprintDialog.phase === 'type' && reprintDialog.comanda && (
+                            <>
+                                <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: '#888' }}>
+                                    Comanda C-{String(reprintDialog.comanda.folio).padStart(6, '0')} · pagada
+                                </p>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    <button
+                                        type="button"
+                                        onClick={async () => { await doPrintTicket({ tipo: 'cuenta', comanda: reprintDialog.comanda }); setReprintDialog({ open: false, folioInput: '', phase: 'folio', comanda: null, loading: false, error: '' }) }}
+                                        style={{ padding: '12px', borderRadius: '7px', border: '1px solid #2a2a2a', background: '#1e1e1e', color: '#e2e2e2', fontSize: '14px', cursor: 'pointer', fontWeight: '500' }}
+                                    >
+                                        Ticket cliente
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={async () => { await doPrintTicket({ tipo: 'pagado', comanda: reprintDialog.comanda }); setReprintDialog({ open: false, folioInput: '', phase: 'folio', comanda: null, loading: false, error: '' }) }}
+                                        style={{ padding: '12px', borderRadius: '7px', border: '1px solid #2a2a2a', background: '#1e1e1e', color: '#e2e2e2', fontSize: '14px', cursor: 'pointer', fontWeight: '500' }}
+                                    >
+                                        Ticket interno
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setReprintDialog(d => ({ ...d, phase: 'folio', comanda: null }))}
+                                        style={{ padding: '10px', borderRadius: '7px', border: '1px solid #1a1a1a', background: 'transparent', color: '#555', fontSize: '13px', cursor: 'pointer' }}
+                                    >
+                                        ← Volver
+                                    </button>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </div>
             )}
         </div>
     );
