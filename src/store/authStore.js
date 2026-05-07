@@ -74,13 +74,6 @@ export const useAuthStore = create((set) => ({
                 set({ user: null, shiftId: null })
                 return
             }
-
-            // Role is confirmed fresh — update stored user if role somehow drifted
-            if (freshUser.role !== user.role) {
-                const updatedUser = { ...user, role: freshUser.role }
-                localStorage.setItem('continentalCurrentUser', JSON.stringify(updatedUser))
-                set({ user: updatedUser })
-            }
         }
     },
 }))
