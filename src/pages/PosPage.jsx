@@ -463,7 +463,7 @@ function PosPage() {
                     <img
                         src={logo}
                         alt="Continental Cantina Bar"
-                        style={{ height: '36px', display: 'block', marginBottom: '4px' }}
+                        style={{ height: '24px', display: 'block', marginBottom: '4px', opacity: 0.7 }}
                     />
                     <p style={{ margin: 0, fontSize: '13px', color: '#777' }}>
                         {currentUser ? `${currentUser.name} · ${currentUser.role}` : 'Cargando...'}
@@ -520,7 +520,16 @@ function PosPage() {
             />
 
             {!selectedUnit ? (
-                <MesaGrid units={units} onUnitClick={handleUnitClick} />
+                <>
+                    <div style={{ textAlign: 'center', padding: '32px 0 24px' }}>
+                        <img
+                            src={logo}
+                            alt="Continental Cantina Bar"
+                            style={{ width: '300px', opacity: 0.85 }}
+                        />
+                    </div>
+                    <MesaGrid units={units} onUnitClick={handleUnitClick} />
+                </>
             ) : (
                 <main>
                     <div style={{ marginBottom: '14px' }}>
