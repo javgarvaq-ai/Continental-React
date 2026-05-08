@@ -68,11 +68,12 @@ function EmployeesAdminPage() {
     const [showAddForm, setShowAddForm] = useState(false)
     const [newName, setNewName] = useState('')
     const [newPosition, setNewPosition] = useState('')
+    const [newHourlyRate, setNewHourlyRate] = useState('')
     const [isSubmitting, setIsSubmitting] = useState(false)
 
     // Inline edit
     const [editingId, setEditingId] = useState(null)
-    const [editForm, setEditForm] = useState({ name: '', position: '' })
+    const [editForm, setEditForm] = useState({ name: '', position: '', hourlyRate: '' })
     const [isSavingEdit, setIsSavingEdit] = useState(false)
 
     // Deactivate confirm
@@ -107,10 +108,11 @@ function EmployeesAdminPage() {
         e.preventDefault()
         if (!newName.trim() || isSubmitting) return
         setIsSubmitting(true)
-        const { error } = await createEmployee({ name: newName, position: newPosition })
+        const { error } = await createEmployee({ name: newName, position: newPosition, hourlyRate: newHourlyRate })
         if (error) { setStatus(`Error: ${error.message}`); setIsSubmitting(false); return }
         setNewName('')
         setNewPosition('')
+        setNewHourlyRate('')
         setShowAddForm(false)
         setIsSubmitting(false)
         setStatus('Empleado agregado.')
@@ -119,18 +121,18 @@ function EmployeesAdminPage() {
 
     function startEdit(emp) {
         setEditingId(emp.id)
-        setEditForm({ name: emp.name, position: emp.position || '' })
+        setEditForm({ name: emp.name, position: emp.position || '', hourlyRate: emp.hourly_rate ? String(emp.hourly_rate) : '' })
     }
 
     function cancelEdit() {
         setEditingId(null)
-        setEditForm({ name: '', position: '' })
+        setEditForm({ name: '', position: '', hourlyRate: '' })
     }
 
     async function handleSaveEdit(empId) {
         if (!editForm.name.trim() || isSavingEdit) return
         setIsSavingEdit(true)
-        const { error } = await updateEmployee({ id: empId, name: editForm.name, position: editForm.position })
+        const { error } = await updateEmployee({ id: empId, name: editForm.name, position: editForm.position, hourlyRate: editForm.hourlyRate })
         if (error) { setStatus(`Error actualizando: ${error.message}`); setIsSavingEdit(false); return }
         setIsSavingEdit(false)
         cancelEdit()
@@ -235,6 +237,18 @@ function EmployeesAdminPage() {
                             style={inputStyle}
                         />
                     </div>
+                    <div style={{ flex: '1 1 100px' }}>
+                        <label style={labelStyle}>$/Hora</label>
+                        <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={newHourlyRate}
+                            onChange={e => setNewHourlyRate(e.target.value)}
+                            placeholder="0.00"
+                            style={inputStyle}
+                        />
+                    </div>
                     <button
                         type="submit"
                         disabled={!newName.trim() || isSubmitting}
@@ -303,6 +317,19 @@ function EmployeesAdminPage() {
                                             style={inputStyle}
                                         />
                                     </div>
+                                    <div>
+                                        <label style={labelStyle}>$/Hora</label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={editForm.hourlyRate}
+                                            onChange={e => setEditForm(f => ({ ...f, hourlyRate: e.target.value }))}
+                                            onKeyDown={e => e.key === 'Enter' && handleSaveEdit(emp.id)}
+                                            placeholder="0.00"
+                                            style={inputStyle}
+                                        />
+                                    </div>
                                     <div style={{ display: 'flex', gap: '6px' }}>
                                         <button
                                             type="button"
@@ -347,6 +374,11 @@ function EmployeesAdminPage() {
                                         </div>
                                         {emp.position && (
                                             <div style={{ fontSize: '12px', color: '#555' }}>{emp.position}</div>
+                                        )}
+                                        {emp.hourly_rate > 0 && (
+                                            <div style={{ fontSize: '11px', color: '#3a3a3a', marginTop: '2px' }}>
+                                                ${Number(emp.hourly_rate).toFixed(2)}/hr
+                                            </div>
                                         )}
                                     </div>
                                     <button

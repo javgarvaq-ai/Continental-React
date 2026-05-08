@@ -3,7 +3,7 @@ import { supabase } from './supabase'
 export async function getAllEmployeesWithStatus() {
     const { data: employees, error } = await supabase
         .from('employees')
-        .select('id, name, position')
+        .select('id, name, position, hourly_rate')
         .eq('active', true)
         .order('name', { ascending: true })
 
@@ -40,18 +40,27 @@ export async function checkOutEmployee({ logId }) {
         .eq('id', logId)
 }
 
-export async function createEmployee({ name, position }) {
+export async function createEmployee({ name, position, hourlyRate }) {
     return await supabase
         .from('employees')
-        .insert([{ name: name.trim(), position: position?.trim() || null, active: true }])
+        .insert([{
+            name: name.trim(),
+            position: position?.trim() || null,
+            hourly_rate: Number(hourlyRate || 0),
+            active: true,
+        }])
         .select()
         .single()
 }
 
-export async function updateEmployee({ id, name, position }) {
+export async function updateEmployee({ id, name, position, hourlyRate }) {
     return await supabase
         .from('employees')
-        .update({ name: name.trim(), position: position?.trim() || null })
+        .update({
+            name: name.trim(),
+            position: position?.trim() || null,
+            hourly_rate: Number(hourlyRate || 0),
+        })
         .eq('id', id)
         .select()
         .single()

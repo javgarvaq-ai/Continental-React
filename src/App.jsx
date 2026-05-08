@@ -18,6 +18,7 @@ import MembershipPlansAdminPage from './pages/MembershipPlansAdminPage'
 import CustomersAdminPage from './pages/CustomersAdminPage'
 import UnitsAdminPage from './pages/UnitsAdminPage'
 import EmployeesAdminPage from './pages/EmployeesAdminPage'
+import ScheduleAdminPage from './pages/ScheduleAdminPage'
 
 function App() {
   const verifySession = useAuthStore(state => state.verifySession)
@@ -110,6 +111,14 @@ function App() {
           element={
             <AuthRoute>
               <EmployeesAdminPage />
+            </AuthRoute>
+          }
+        />
+        <Route
+          path="/admin/schedule"
+          element={
+            <AuthRoute>
+              <ScheduleAdminPage />
             </AuthRoute>
           }
         />

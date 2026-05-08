@@ -22,6 +22,7 @@ const NAV_ITEMS = [
     { label: 'Clientes', path: '/admin/customers' },
     { label: 'Mesas/Unidades', path: '/admin/units' },
     { label: 'Empleados', path: '/admin/employees' },
+    { label: 'Horarios', path: '/admin/schedule' },
 ]
 
 function AdminNav({ currentPath }) {
