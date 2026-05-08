@@ -14,6 +14,7 @@ import ProductCatalog from '../components/ProductCatalog';
 import TopBar from '../components/TopBar'
 import CashMovementPanel from '../components/CashMovementPanel'
 import ShiftPanel from '../components/ShiftPanel';
+import ScheduleViewPanel from '../components/ScheduleViewPanel';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { requireOnline } from '../utils/requireOnline';
 import {
@@ -166,6 +167,8 @@ function PosPage() {
         onBackToUnits: handleBackToUnits,
         onLoadUnits: loadUnits,
     });
+
+    const [scheduleOpen, setScheduleOpen] = useState(false);
 
     // useShift — shift lifecycle, cash movements, panel state
     const {
@@ -482,6 +485,12 @@ function PosPage() {
                 onShiftPanel={() => setShiftPanelOpen(true)}
                 onInventory={handleInventory}
                 onWeeklyReport={handleWeeklyReport}
+                onSchedule={() => setScheduleOpen(true)}
+            />
+
+            <ScheduleViewPanel
+                open={scheduleOpen}
+                onClose={() => setScheduleOpen(false)}
             />
 
             <CashMovementPanel

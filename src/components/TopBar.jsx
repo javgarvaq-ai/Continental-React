@@ -9,6 +9,7 @@ function TopBar({
     onShiftPanel,
     onInventory,
     onWeeklyReport,
+    onSchedule,
 }) {
     const navigate = useNavigate()
     const isManagerOrAdmin =
@@ -85,6 +86,10 @@ function TopBar({
 
                 <button type="button" onClick={onReprintTicket} style={btn}>
                     Reimprimir ticket
+                </button>
+
+                <button type="button" onClick={onSchedule} style={btn}>
+                    Horario
                 </button>
 
                 {isManagerOrAdmin && (
