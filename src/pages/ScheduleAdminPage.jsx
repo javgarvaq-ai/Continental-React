@@ -581,7 +581,7 @@ function ScheduleAdminPage() {
                                                                         </span>
                                                                     </label>
                                                                     {day.enabled && (
-                                                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                                                             <div>
                                                                                 <label style={labelStyle}>Entrada</label>
                                                                                 <input
