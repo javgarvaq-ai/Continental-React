@@ -96,6 +96,10 @@ Never `DELETE` from `comanda_items`. Always `UPDATE { status: 'cancelled' }`. Th
 
 `auth.js` no longer uses `bcryptjs` at all — login calls `supabase.rpc('verify_pin', { p_user_id, p_pin })`. The RPC uses pgcrypto's `crypt()` after normalizing `$2b$` → `$2a$` (bcryptjs vs pgcrypto prefix difference). `bcryptjs` is still used only in `usersAdmin.js` and `SetupAdminPage.jsx` to **create** hashes when setting/resetting PINs.
 
+## Supabase SECURITY DEFINER functions — search_path must include 'extensions'
+
+In Supabase, pgcrypto (and other extensions) live in the `extensions` schema, not `public`. Any SECURITY DEFINER function that calls `crypt()`, `gen_salt()`, or other pgcrypto functions **must** use `SET search_path = public, extensions`. Using only `SET search_path = public` causes a "function not found" error at runtime even though the extension is installed. This applies to all future RPCs that use pgcrypto.
+
 ## Patterns to Avoid
 
 - Never introduce `window.alert / confirm / prompt` — all feedback goes through React state (`setStatus`).

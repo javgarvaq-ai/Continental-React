@@ -1,29 +1,21 @@
 import { supabase } from './supabase'
-import bcrypt from 'bcryptjs'
 
 export async function loginWithPin({ userId, pin }) {
-    // Fetch only the fields needed — pin_hash used for bcrypt.compare only,
-    // stripped before returning so it never reaches localStorage.
-    const { data: user, error } = await supabase
-        .from('users')
-        .select('id, name, role, active, pin_hash')
-        .eq('id', userId)
-        .eq('active', true)
-        .single()
+    // PIN verified entirely server-side — pin_hash never leaves the DB.
+    const { data: result, error } = await supabase.rpc('verify_pin', {
+        p_user_id: userId,
+        p_pin:     pin,
+    })
 
-    if (error || !user) {
-        return { data: null, error: new Error('Usuario no encontrado') }
+    if (error) {
+        return { data: null, error: new Error('Error al verificar PIN.') }
     }
 
-    const isValid = await bcrypt.compare(pin, user.pin_hash)
-
-    if (!isValid) {
-        return { data: null, error: new Error('PIN incorrecto') }
+    if (!result?.success) {
+        return { data: null, error: new Error(result?.error || 'PIN incorrecto') }
     }
 
-    // Strip pin_hash — caller and localStorage never see it
-    const { pin_hash: _discard, ...safeUser } = user
-    return { data: safeUser, error: null }
+    return { data: result.user, error: null }
 }
 
 export async function getOpenShift() {
