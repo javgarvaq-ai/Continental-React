@@ -251,7 +251,7 @@ function PosPage() {
 
     async function doPrintTicket({ tipo, comanda }) {
         const { items, unit, payment } = await getReprintData({ comanda, tipo, userId: currentUser?.id })
-        printTicket({ tipo, comanda, items, unit, payment })
+        printTicket({ tipo, comanda, items, unit, payment, onBlocked: (msg) => setStatus(msg) })
     }
 
     function handleInventory() {

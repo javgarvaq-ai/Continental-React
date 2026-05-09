@@ -134,7 +134,13 @@ function LoginPage() {
         })
 
         if (createShiftError || !newShift) {
-            setStatus('Error abriendo turno. Intenta de nuevo.')
+            // Code 23505 = unique constraint violation → another device already opened a shift
+            const isAlreadyOpen = createShiftError?.code === '23505'
+            setStatus(
+                isAlreadyOpen
+                    ? 'Ya hay un turno abierto en otra terminal. Recarga la página para cargarlo.'
+                    : 'Error abriendo turno. Intenta de nuevo.'
+            )
             setIsSubmitting(false)
             return
         }

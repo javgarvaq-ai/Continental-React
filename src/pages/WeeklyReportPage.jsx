@@ -10,12 +10,16 @@ function WeeklyReportPage() {
     const startOfWeek = new Date(today);
     startOfWeek.setDate(today.getDate() - today.getDay());
 
-    const [startDate, setStartDate] = useState(
-        startOfWeek.toISOString().slice(0, 10)
-    );
-    const [endDate, setEndDate] = useState(
-        today.toISOString().slice(0, 10)
-    );
+    // Use local date (not UTC) so the default range is correct in Mexico timezone
+    function toLocalDateString(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+
+    const [startDate, setStartDate] = useState(toLocalDateString(startOfWeek));
+    const [endDate, setEndDate] = useState(toLocalDateString(today));
 
     const [loading, setLoading] = useState(false);
     const [status, setStatus] = useState('');

@@ -34,6 +34,11 @@ Ver historial — 5 fixes aplicados y commiteados (2026-05-08).
 
 ---
 
+## Quick fixes pre-apertura ✅
+- [x] MP-5: Timezone fix en WeeklyReportPage — usa fecha local en lugar de UTC
+- [x] MP-10: Mensaje claro cuando el turno ya está abierto (error 23505 → texto útil para el cajero)
+- [x] Print popup bloqueado: `printTicket` acepta `onBlocked` callback; cuenta, pagado y reprint muestran aviso visible en UI
+
 ## Diferido (Fase 3)
 - CRIT-3 paso 2: tightening RLS en users/shifts/comandas — requiere convertir create_user, close_shift y otros a RPCs SECURITY DEFINER primero
 - HP-5: membership processing dentro de finalize_comanda_payment — muy invasivo, requiere reescritura del RPC core

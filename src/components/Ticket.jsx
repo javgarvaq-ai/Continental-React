@@ -365,7 +365,7 @@ function buildTicketHtml({
     `;
 }
 
-export function printTicket({ tipo = 'pagado', comanda, items, unit, payment = null, membershipInfo = null }) {
+export function printTicket({ tipo = 'pagado', comanda, items, unit, payment = null, membershipInfo = null, onBlocked = null }) {
   const html = buildTicketHtml({
     tipo,
     comanda,
@@ -378,7 +378,12 @@ export function printTicket({ tipo = 'pagado', comanda, items, unit, payment = n
   const printWindow = window.open('', '_blank', 'width=420,height=800');
 
   if (!printWindow) {
-    console.warn('El navegador bloqueó la ventana de impresión. Permite pop-ups para este sitio.');
+    const msg = '⚠️ El navegador bloqueó la impresión. Permite pop-ups para este sitio y vuelve a imprimir.';
+    if (typeof onBlocked === 'function') {
+      onBlocked(msg);
+    } else {
+      console.warn(msg);
+    }
     return;
   }
 

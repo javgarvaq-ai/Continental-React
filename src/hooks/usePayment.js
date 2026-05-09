@@ -154,6 +154,7 @@ export function usePayment({
                 },
                 items: visibleCartItems,
                 unit: selectedUnit,
+                onBlocked: (msg) => setStatus(msg),
             })
 
             await onBackToUnits(`Cuenta presentada. Total ${money(displayedTotal)}`)
@@ -305,6 +306,7 @@ export function usePayment({
                 },
                 items: visibleCartItems,
                 unit: selectedUnit,
+                onBlocked: (msg) => setStatus(msg),
                 payment: {
                     efectivo: Math.max(paymentSummary.efectivo - paymentSummary.cambio, 0),
                     tarjeta: paymentSummary.tarjeta,
