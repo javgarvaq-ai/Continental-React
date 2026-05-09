@@ -73,16 +73,22 @@ export async function getOrCreateActiveComanda({ unitId, userId, customerName, p
     return { data: newComanda, error: null }
 }
 export async function cancelComanda({ comandaId, userId }) {
-    const { error: updateError } = await supabase
+    const { data: updated, error: updateError } = await supabase
         .from('comandas')
         .update({
             status: 'cancelled',
             closed_at: new Date().toISOString(),
         })
         .eq('id', comandaId)
+        .eq('status', 'open')
+        .select('id')
 
     if (updateError) {
         return { error: updateError }
+    }
+
+    if (!updated || updated.length === 0) {
+        return { error: new Error('La comanda ya no está abierta.') }
     }
 
     // Cancel any membership that was activated on this comanda but never paid

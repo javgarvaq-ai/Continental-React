@@ -3,35 +3,16 @@ import { supabase } from './supabase';
 export async function presentBill({ comandaId, userId, total }) {
     const safeTotal = Number(total || 0);
 
-    const { error: updateError } = await supabase
-        .from('comandas')
-        .update({
-            status: 'pending_payment',
-            final_total: safeTotal,
-            cuenta_by: userId,
-            cuenta_at: new Date().toISOString(),
-        })
-        .eq('id', comandaId);
+    const { data: result, error } = await supabase.rpc('present_bill_atomic', {
+        p_comanda_id: comandaId,
+        p_user_id:    userId,
+        p_total:      safeTotal,
+    });
 
-    if (updateError) {
-        return { error: updateError };
-    }
+    if (error) return { error };
 
-    const { error: eventError } = await supabase
-        .from('comanda_events')
-        .insert([
-            {
-                comanda_id: comandaId,
-                user_id: userId,
-                event_type: 'cuenta_clicked',
-                event_data: {
-                    total: safeTotal,
-                },
-            },
-        ]);
-
-    if (eventError) {
-        return { error: eventError };
+    if (!result?.ok) {
+        return { error: new Error(result?.error || 'Error al presentar cuenta.') };
     }
 
     return { error: null };
@@ -40,17 +21,23 @@ export async function presentBill({ comandaId, userId, total }) {
 export async function reopenComanda({ comandaId, userId, previousStatus }) {
     const safePreviousStatus = previousStatus || 'pending_payment';
 
-    const { error: updateError } = await supabase
+    const { data: updated, error: updateError } = await supabase
         .from('comandas')
         .update({
             status: 'open',
             reopened_by: userId,
             reopened_at: new Date().toISOString(),
         })
-        .eq('id', comandaId);
+        .eq('id', comandaId)
+        .eq('status', safePreviousStatus)
+        .select('id');
 
     if (updateError) {
         return { error: updateError };
+    }
+
+    if (!updated || updated.length === 0) {
+        return { error: new Error('La comanda ya no está en el estado esperado. Recarga la página.') };
     }
 
     const { error: eventError } = await supabase
@@ -77,15 +64,21 @@ export async function reopenComanda({ comandaId, userId, previousStatus }) {
 }
 
 export async function startPayment({ comandaId, userId }) {
-    const { error: updateError } = await supabase
+    const { data: updated, error: updateError } = await supabase
         .from('comandas')
         .update({
             status: 'processing_payment',
         })
-        .eq('id', comandaId);
+        .eq('id', comandaId)
+        .eq('status', 'pending_payment')
+        .select('id');
 
     if (updateError) {
         return { error: updateError };
+    }
+
+    if (!updated || updated.length === 0) {
+        return { error: new Error('La comanda ya no está en cuenta. Recarga la página.') };
     }
 
     const { error: eventError } = await supabase

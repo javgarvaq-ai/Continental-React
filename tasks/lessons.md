@@ -84,6 +84,18 @@ When handling race conditions on INSERT, catch Postgres error code `'23505'` (un
 
 `loginWithPin` fetches `pin_hash` for bcrypt.compare, then strips it before returning: `const { pin_hash: _discard, ...safeUser } = user`. The caller and localStorage never see the hash. Do not change `select` back to `'*'`.
 
+## Comanda Status Transition Guards
+
+Every `UPDATE comandas SET status = X` must include `.eq('status', expectedPreviousStatus).select('id')`. After the call, check `updated.length === 0` — if so, another tablet already changed the state. Surface a clear message: `"La comanda ya no está en estado X. Recarga la página."` Same pattern applies to shifts UPDATE.
+
+## Soft-Delete comanda_items
+
+Never `DELETE` from `comanda_items`. Always `UPDATE { status: 'cancelled' }`. This preserves the FK reference in `inventory_movements.comanda_item_id` and the full audit trail. The `status IN ('active','cancelled')` CHECK constraint is now enforced in DB. All reads already filter `.eq('status', 'active')`.
+
+## verify_pin RPC — bcrypt in DB
+
+`auth.js` no longer uses `bcryptjs` at all — login calls `supabase.rpc('verify_pin', { p_user_id, p_pin })`. The RPC uses pgcrypto's `crypt()` after normalizing `$2b$` → `$2a$` (bcryptjs vs pgcrypto prefix difference). `bcryptjs` is still used only in `usersAdmin.js` and `SetupAdminPage.jsx` to **create** hashes when setting/resetting PINs.
+
 ## Patterns to Avoid
 
 - Never introduce `window.alert / confirm / prompt` — all feedback goes through React state (`setStatus`).

@@ -311,9 +311,10 @@ export async function decreaseCartItem({
     let dbError = null;
 
     if (newQty <= 0) {
+        // Soft-delete: preserve the row for audit trail (inventory_movements FK stays intact)
         const { error } = await supabase
             .from('comanda_items')
-            .delete()
+            .update({ status: 'cancelled' })
             .eq('id', itemId);
 
         dbError = error;
@@ -351,13 +352,14 @@ export async function decreaseCartItem({
             if (linkedMixers && linkedMixers.length > 0) {
                 const mixerIds = linkedMixers.map((item) => item.id);
 
-                const { error: deleteMixersError } = await supabase
+                // Soft-delete mixers too
+                const { error: cancelMixersError } = await supabase
                     .from('comanda_items')
-                    .delete()
+                    .update({ status: 'cancelled' })
                     .in('id', mixerIds);
 
-                if (deleteMixersError) {
-                    return { error: deleteMixersError };
+                if (cancelMixersError) {
+                    return { error: cancelMixersError };
                 }
             }
         }

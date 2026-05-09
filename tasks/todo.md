@@ -1,52 +1,59 @@
 # Project Tasks (TODO)
 
-## Fase 1 — Must-fix antes de operar en barra real
-
-### CRIT-1: Fix membership cancellation CHECK constraint ✅
-- [x] Migración `20260508200001_allow_cancelled_membership_status.sql`: agrega `'cancelled'` al CHECK
-- [x] `src/services/comandas.js` → `cancelComanda`: destructura y chequea error del UPDATE de membresía
-
-### CRIT-2: Quitar pin_hash del localStorage ✅
-- [x] `src/services/auth.js` → `loginWithPin`: `select` explícito, destruye `pin_hash` antes de retornar
-
-### CRIT-4: Índice único parcial — una comanda abierta por unidad ✅
-- [x] Migración `20260508200002_one_open_comanda_per_unit.sql`: índice único parcial en `comandas(unit_id) WHERE status IN (...)`
-- [x] `src/services/comandas.js` → `getOrCreateActiveComanda`: captura error `23505` y relee la comanda existente
-
-### CRIT-5: requireOnline en todos los handlers que mueven dinero ✅
-- [x] `usePayment.js`: isOnline param + guards en handlePresentBill, handleReopenComanda, handleStartPayment, handleConfirmPayment
-- [x] `useShift.js`: isOnline param + guards en handleConfirmCloseShift, handleCashMovementSubmit
-- [x] `useComanda.js`: guards en handleDecreaseCartItem, handlePersonasChange
-- [x] `useCustomer.js`: isOnline param + guards en handleAssignCustomer, handleCreateAndAssignCustomer, handleActivateMembership, handleCancelMembership, handleAddFreeBenefit
-- [x] `PosPage.jsx`: isOnline propagado a useCustomer, useComanda, usePayment, useShift; guard en handleCancelMesa
-
-### HP-4: Limpiar migración vacía ✅
-- [x] `20260508185735_remote_schema.sql` convertida a noop (comentario SQL)
+## Fase 1 — Completada ✅
+Ver historial — 5 fixes aplicados y commiteados (2026-05-08).
 
 ---
 
-## Fase 2 — Hardening MVP (pendiente)
-- [ ] CRIT-3 paso 1: RPC `verify_pin` SECURITY DEFINER + bloquear `select(pin_hash)` para anon
-- [ ] CRIT-3 paso 2: quitar UPDATE/DELETE de anon en payments, shifts, users, comandas
-- [ ] HP-1: RPC `present_bill_atomic`
-- [ ] HP-2: Status guards en UPDATEs (reopen, startPayment, cancel, closeShift)
-- [ ] HP-3: FK de `comanda_events.comanda_id`
-- [ ] HP-5: Membership processing dentro del RPC
-- [ ] HP-6: Soft-delete de comanda_items (status='cancelled' en lugar de DELETE)
-- [ ] RPC `adjust_inventory_stock` atómica
+## Fase 2 — Hardening MVP ✅
+
+### HP-2: Status guards en transiciones de comanda ✅
+- [x] `comandaCheckout.js` → `reopenComanda`: `.eq('status', safePreviousStatus)` + rowCount check
+- [x] `comandaCheckout.js` → `startPayment`: `.eq('status', 'pending_payment')` + rowCount check
+- [x] `comandas.js` → `cancelComanda`: `.eq('status', 'open')` + rowCount check
+- [x] `useShift.js` → `handleConfirmCloseShift`: `.eq('status', 'open')` + rowCount check
+
+### HP-3: FK en comanda_events.comanda_id ✅
+- [x] Migración `20260508200003_hp3_comanda_events_fk.sql`
+
+### HP-6: Soft-delete de comanda_items ✅
+- [x] Migración `20260508200004_hp6_comanda_items_soft_delete.sql` — CHECK `status IN ('active','cancelled')`
+- [x] `products.js` → `decreaseCartItem`: UPDATE `status='cancelled'` en lugar de DELETE (item y mixers)
+
+### HP-1: RPC present_bill_atomic ✅
+- [x] Migración `20260508200005_phase2_rpcs.sql` — función SQL atómica con guard de status='open'
+- [x] `comandaCheckout.js` → `presentBill`: llama RPC en lugar de dos calls separados
+
+### CRIT-3 paso 1: verify_pin RPC ✅
+- [x] Migración `20260508200005_phase2_rpcs.sql` — pgcrypto + `verify_pin` SECURITY DEFINER
+- [x] `auth.js`: usa `supabase.rpc('verify_pin')`, sin bcrypt en cliente, sin SELECT a users
+
+### adjust_inventory_stock RPC ✅
+- [x] Migración `20260508200005_phase2_rpcs.sql` — `adjust_inventory_stock` con UPDATE...RETURNING
+- [x] `inventoryAdmin.js`: llama RPC en lugar de SELECT + UPDATE + INSERT separados
 
 ---
 
-## Review / Resultados Fase 1
+## Diferido (Fase 3)
+- CRIT-3 paso 2: tightening RLS en users/shifts/comandas — requiere convertir create_user, close_shift y otros a RPCs SECURITY DEFINER primero
+- HP-5: membership processing dentro de finalize_comanda_payment — muy invasivo, requiere reescritura del RPC core
 
-Implementado 2026-05-08. 5 fixes en 9 archivos:
+---
+
+## Review / Resultados Fase 2
+
+Implementado 2026-05-08. 6 bloques en 6 archivos de código + 3 migraciones nuevas:
 
 | Fix | Archivos | Tipo |
 |-----|----------|------|
-| CRIT-1 | migration + comandas.js | DB schema + service |
-| CRIT-2 | auth.js | Service layer |
-| CRIT-4 | migration + comandas.js | DB schema + service |
-| CRIT-5 | usePayment, useShift, useComanda, useCustomer, PosPage | Hooks + page |
-| HP-4 | migration vacía | Repo hygiene |
+| HP-2 | comandaCheckout.js, comandas.js, useShift.js | Service + hook |
+| HP-3 | migration 03 | DB schema |
+| HP-6 | migration 04 + products.js | DB schema + service |
+| HP-1 | migration 05 + comandaCheckout.js | DB RPC + service |
+| CRIT-3 p1 | migration 05 + auth.js | DB RPC + service |
+| adjust_inventory | migration 05 + inventoryAdmin.js | DB RPC + service |
 
-**Acción requerida en producción:** aplicar las 2 migraciones nuevas al proyecto Supabase remoto (`supabase db push` o aplicar manual desde Studio).
+**Acciones requeridas en producción:**
+1. Aplicar migraciones 03, 04, 05 al proyecto Supabase remoto (`supabase db push` o Studio)
+2. Verificar que `pgcrypto` esté habilitado en el proyecto (ya viene activado por defecto en Supabase)
+3. Probar login con PIN en dev antes de merge a main

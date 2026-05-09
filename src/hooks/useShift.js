@@ -145,7 +145,7 @@ export function useShift({ currentUser, currentShiftId, isOnline, setStatus, onS
         const { summary } = panelData
         const difference = cashCounted - Number(summary.expectedCash || 0)
 
-        const { error: updateError } = await supabase
+        const { data: updatedShift, error: updateError } = await supabase
             .from('shifts')
             .update({
                 status: 'closed',
@@ -161,9 +161,15 @@ export function useShift({ currentUser, currentShiftId, isOnline, setStatus, onS
                 expected_cash: summary.expectedCash,
             })
             .eq('id', currentShiftId)
+            .eq('status', 'open')
+            .select('id')
 
         if (updateError) {
             return { error: updateError }
+        }
+
+        if (!updatedShift || updatedShift.length === 0) {
+            return { error: new Error('El turno ya fue cerrado por otro usuario.') }
         }
 
         onShiftClosed()

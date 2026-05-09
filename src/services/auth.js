@@ -2,8 +2,8 @@ import { supabase } from './supabase'
 import bcrypt from 'bcryptjs'
 
 export async function loginWithPin({ userId, pin }) {
-    // Fetch only the fields needed for auth — pin_hash is used for comparison only
-    // and must never be stored in localStorage or returned to the caller.
+    // Fetch only the fields needed — pin_hash used for bcrypt.compare only,
+    // stripped before returning so it never reaches localStorage.
     const { data: user, error } = await supabase
         .from('users')
         .select('id, name, role, active, pin_hash')
@@ -21,7 +21,7 @@ export async function loginWithPin({ userId, pin }) {
         return { data: null, error: new Error('PIN incorrecto') }
     }
 
-    // Return only the safe subset — pin_hash stays on this side of the wire
+    // Strip pin_hash — caller and localStorage never see it
     const { pin_hash: _discard, ...safeUser } = user
     return { data: safeUser, error: null }
 }
