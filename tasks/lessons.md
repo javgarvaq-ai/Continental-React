@@ -66,6 +66,24 @@ CREATE POLICY "allow_all_your_new_table"
 
 ---
 
+## requireOnline Pattern
+
+`requireOnline(isOnline, setStatus)` must be the **first line** of every async handler that mutates data in Supabase (payments, shifts, comandas, memberships, cart items, cash movements). It's already imported in all hooks. If you add a new mutating handler, add the guard immediately — before any early returns.
+
+The `isOnline` prop must be threaded from PosPage (via `useOnlineStatus()`) into every hook that owns mutating handlers: `usePayment`, `useShift`, `useComanda`, `useCustomer`.
+
+## Membership Status Values
+
+`customer_memberships.status` allows: `'active'`, `'expired'`, `'cancelled'`. All three are valid in the DB CHECK constraint. Use `'cancelled'` for manual cancellation by staff, `'expired'` for month-end expiry.
+
+## Supabase Duplicate Key Error Code
+
+When handling race conditions on INSERT, catch Postgres error code `'23505'` (unique violation). Supabase surfaces this as `error.code === '23505'`. On that case, re-read the existing row rather than surfacing the raw DB error to the user.
+
+## auth.js — Pin Hash Handling
+
+`loginWithPin` fetches `pin_hash` for bcrypt.compare, then strips it before returning: `const { pin_hash: _discard, ...safeUser } = user`. The caller and localStorage never see the hash. Do not change `select` back to `'*'`.
+
 ## Patterns to Avoid
 
 - Never introduce `window.alert / confirm / prompt` — all feedback goes through React state (`setStatus`).

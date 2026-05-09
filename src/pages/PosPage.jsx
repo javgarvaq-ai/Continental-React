@@ -99,6 +99,7 @@ function PosPage() {
     } = useCustomer({
         currentComanda,
         cartTotal,
+        isOnline,
         setStatus,
         onUpdateComanda: (fields) => setCurrentComanda(prev => ({ ...prev, ...fields })),
         onReloadComanda: reloadCart,
@@ -163,6 +164,7 @@ function PosPage() {
         cartTotal,
         visibleCartItems,
         selectedUnit,
+        isOnline,
         setStatus,
         onBackToUnits: handleBackToUnits,
         onLoadUnits: loadUnits,
@@ -183,6 +185,7 @@ function PosPage() {
     } = useShift({
         currentUser,
         currentShiftId,
+        isOnline,
         setStatus,
         onShiftClosed: () => { clearAuth(); navigate('/'); },
     });
@@ -396,6 +399,7 @@ function PosPage() {
     }
 
     async function handleCancelMesa() {
+        if (!requireOnline(isOnline, setStatus)) return;
         if (!currentComanda?.id || !currentUser?.id) return;
         if (currentComanda.status !== 'open') return;
 

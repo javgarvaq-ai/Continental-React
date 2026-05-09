@@ -39,6 +39,23 @@ export async function getOrCreateActiveComanda({ unitId, userId, customerName, p
         .single()
 
     if (newComandaError) {
+        // Postgres unique-constraint violation (23505): another tablet created the
+        // comanda between our SELECT and this INSERT. Re-read and return it.
+        if (newComandaError.code === '23505') {
+            const { data: raceData, error: raceError } = await supabase
+                .from('comandas')
+                .select('*')
+                .eq('unit_id', unitId)
+                .in('status', ['open', 'pending_payment', 'processing_payment'])
+                .limit(1)
+
+            if (raceError || !raceData || raceData.length === 0) {
+                return { data: null, error: raceError || new Error('No se pudo abrir la mesa. Intenta de nuevo.') }
+            }
+
+            return { data: raceData[0], error: null }
+        }
+
         return { data: null, error: newComandaError }
     }
 
@@ -69,11 +86,15 @@ export async function cancelComanda({ comandaId, userId }) {
     }
 
     // Cancel any membership that was activated on this comanda but never paid
-    await supabase
+    const { error: membershipCancelError } = await supabase
         .from('customer_memberships')
         .update({ status: 'cancelled' })
         .eq('paid_via_comanda_id', comandaId)
         .eq('status', 'active')
+
+    if (membershipCancelError) {
+        return { error: membershipCancelError }
+    }
 
     await supabase.from('comanda_events').insert([
         {

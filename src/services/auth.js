@@ -2,9 +2,11 @@ import { supabase } from './supabase'
 import bcrypt from 'bcryptjs'
 
 export async function loginWithPin({ userId, pin }) {
+    // Fetch only the fields needed for auth — pin_hash is used for comparison only
+    // and must never be stored in localStorage or returned to the caller.
     const { data: user, error } = await supabase
         .from('users')
-        .select('*')
+        .select('id, name, role, active, pin_hash')
         .eq('id', userId)
         .eq('active', true)
         .single()
@@ -19,7 +21,9 @@ export async function loginWithPin({ userId, pin }) {
         return { data: null, error: new Error('PIN incorrecto') }
     }
 
-    return { data: user, error: null }
+    // Return only the safe subset — pin_hash stays on this side of the wire
+    const { pin_hash: _discard, ...safeUser } = user
+    return { data: safeUser, error: null }
 }
 
 export async function getOpenShift() {

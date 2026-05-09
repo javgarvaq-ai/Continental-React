@@ -218,6 +218,7 @@ export function useComanda({
     }
 
     async function handleDecreaseCartItem(item) {
+        if (!requireOnline(isOnline, setStatus)) return
         if (!currentComanda?.id || !currentUser?.id) return
 
         if (currentComanda.status !== 'open') {
@@ -264,6 +265,7 @@ export function useComanda({
     // --- Personas ---
 
     async function handlePersonasChange(delta) {
+        if (!requireOnline(isOnline, setStatus)) return
         if (!currentComanda?.id) return
 
         if (!canEditPersonas) {

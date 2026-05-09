@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../services/supabase'
 import { getCashMovementConfig } from '../config/cashMovements'
+import { requireOnline } from '../utils/requireOnline'
 
 /**
  * Manages shift lifecycle, cash movements, and shift panel state.
@@ -11,7 +12,7 @@ import { getCashMovementConfig } from '../config/cashMovements'
  * @param {function} params.setStatus
  * @param {function} params.onShiftClosed - Called after shift is successfully closed (clearAuth + navigate)
  */
-export function useShift({ currentUser, currentShiftId, setStatus, onShiftClosed }) {
+export function useShift({ currentUser, currentShiftId, isOnline, setStatus, onShiftClosed }) {
     const [cashPanelOpen, setCashPanelOpen] = useState(false)
     const [isSubmittingCash, setIsSubmittingCash] = useState(false)
     const [shiftPanelOpen, setShiftPanelOpen] = useState(false)
@@ -126,6 +127,7 @@ export function useShift({ currentUser, currentShiftId, setStatus, onShiftClosed
     }
 
     async function handleConfirmCloseShift(cashCounted) {
+        if (!requireOnline(isOnline, setStatus)) return { error: new Error('Sin conexión.') }
         if (!currentShiftId || !currentUser?.id) {
             return { error: new Error('No hay turno activo.') }
         }
@@ -169,6 +171,7 @@ export function useShift({ currentUser, currentShiftId, setStatus, onShiftClosed
     }
 
     async function handleCashMovementSubmit({ category, amount, note }) {
+        if (!requireOnline(isOnline, setStatus)) return
         if (!currentUser?.id || !currentShiftId) return
 
         const config = getCashMovementConfig(category)

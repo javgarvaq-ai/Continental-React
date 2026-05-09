@@ -1,0 +1,2 @@
+-- noop: this file was an empty artifact from a failed `supabase db diff` run.
+-- It is intentionally left as a comment so migration order is not broken.

@@ -10,6 +10,7 @@ import { addNormalProductToComanda, getProductById } from '../services/products'
 import { getNextCustomerNumber } from '../services/customersAdmin'
 import { createCustomer } from '../services/customers'
 import { assignCustomerToComanda } from '../services/comandas'
+import { requireOnline } from '../utils/requireOnline'
 
 /**
  * Manages all customer and membership state for a comanda session.
@@ -21,7 +22,7 @@ import { assignCustomerToComanda } from '../services/comandas'
  * @param {function} params.onUpdateComanda - Callback to patch comanda fields in parent state
  * @param {function} params.onReloadComanda - Callback to reload comanda view after item changes
  */
-export function useCustomer({ currentComanda, cartTotal, setStatus, onUpdateComanda, onReloadComanda }) {
+export function useCustomer({ currentComanda, cartTotal, isOnline, setStatus, onUpdateComanda, onReloadComanda }) {
     const [currentCustomer, setCurrentCustomer] = useState(null)
     const [currentMembership, setCurrentMembership] = useState(null)
     const [membershipRenewalState, setMembershipRenewalState] = useState({
@@ -93,6 +94,7 @@ export function useCustomer({ currentComanda, cartTotal, setStatus, onUpdateComa
     }
 
     async function handleAssignCustomer(customerData) {
+        if (!requireOnline(isOnline, setStatus)) return
         if (!currentComanda?.id) return
         setIsProcessingMembership(true)
 
@@ -123,6 +125,7 @@ export function useCustomer({ currentComanda, cartTotal, setStatus, onUpdateComa
     }
 
     async function handleCreateAndAssignCustomer() {
+        if (!requireOnline(isOnline, setStatus)) return
         if (!customerSearchState.newName.trim() || !currentComanda?.id) return
         setIsProcessingMembership(true)
 
@@ -178,6 +181,7 @@ export function useCustomer({ currentComanda, cartTotal, setStatus, onUpdateComa
     }
 
     async function handleActivateMembership() {
+        if (!requireOnline(isOnline, setStatus)) return
         if (!currentCustomer || !currentComanda?.id || !membershipRenewalState.selectedPlanId) return
         setIsProcessingMembership(true)
 
@@ -213,6 +217,7 @@ export function useCustomer({ currentComanda, cartTotal, setStatus, onUpdateComa
     }
 
     async function handleCancelMembership() {
+        if (!requireOnline(isOnline, setStatus)) return
         if (!currentMembership || !currentComanda?.id) return
 
         if (!cancelMembershipConfirming) {
@@ -252,6 +257,7 @@ export function useCustomer({ currentComanda, cartTotal, setStatus, onUpdateComa
     }
 
     async function handleAddFreeBenefit(productId) {
+        if (!requireOnline(isOnline, setStatus)) return
         if (!currentComanda?.id || !productId) return
         setIsProcessingMembership(true)
 

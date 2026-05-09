@@ -8,6 +8,7 @@ import {
 import { processMembershipOnPayment } from '../services/membership'
 import { printTicket } from '../components/Ticket'
 import { money } from '../utils/money'
+import { requireOnline } from '../utils/requireOnline'
 
 function getPaymentSummary(totalCuenta, paymentData) {
     const efectivo = Number(paymentData.efectivo || 0)
@@ -42,6 +43,7 @@ export function usePayment({
     cartTotal,
     visibleCartItems,
     selectedUnit,
+    isOnline,
     setStatus,
     onBackToUnits,
     onLoadUnits,
@@ -112,6 +114,7 @@ export function usePayment({
     // --- Comanda status transitions ---
 
     async function handlePresentBill() {
+        if (!requireOnline(isOnline, setStatus)) return
         if (!currentComanda?.id || !currentUser?.id) return
 
         if (currentComanda.status !== 'open') {
@@ -160,6 +163,7 @@ export function usePayment({
     }
 
     async function handleReopenComanda() {
+        if (!requireOnline(isOnline, setStatus)) return
         if (!currentComanda?.id || !currentUser?.id) return
 
         if (
@@ -204,6 +208,7 @@ export function usePayment({
     }
 
     async function handleStartPayment() {
+        if (!requireOnline(isOnline, setStatus)) return
         if (!currentComanda?.id || !currentUser?.id) return
 
         if (currentComanda.status !== 'pending_payment') {
@@ -236,6 +241,7 @@ export function usePayment({
     }
 
     async function handleConfirmPayment() {
+        if (!requireOnline(isOnline, setStatus)) return
         if (!currentComanda?.id || !currentUser?.id || !currentShiftId) return
 
         if (currentComanda.status !== 'processing_payment') {
