@@ -70,10 +70,10 @@ The architectural skeleton is sound. Service layer separation is real and discip
 - [x] Parallelize `getProductsCatalog` with `Promise.all`
 
 ### Step 2 — Next Sprint (atomic operations, DB migration required)
-- [ ] Move `processMembershipOnPayment` into `finalize_comanda_payment` RPC as SQL block
-- [ ] Replace SELECT→INSERT/UPDATE in `addNormalProductToComanda` with atomic upsert
-- [ ] Replace SELECT→INSERT/UPDATE in `addShotWithFreeMixers` with atomic upsert or RPC
-- [ ] Add stock guard inside `finalize_comanda_payment` (RAISE EXCEPTION if deduction goes negative)
+- [x] Move `processMembershipOnPayment` to standalone `process_membership_on_payment` RPC — migration `20260511000001`. SELECT FOR UPDATE on customer row eliminates TOCTOU race. JS wrapper in `membership.js` reduced from 160 → 35 lines.
+- [x] Add stock guard inside payment path (RAISE EXCEPTION if deduction goes negative) — already present in `deduct_inventory_item` via `WHERE current_stock >= p_deduct_amount`; confirmed complete.
+- [ ] Replace SELECT→INSERT/UPDATE in `addNormalProductToComanda` with atomic upsert — **pending schema decision: needs UNIQUE constraint on comanda_items (comanda_id, product_id, is_free_mixer, is_free_benefit) WHERE status='active'**
+- [ ] Replace SELECT→INSERT/UPDATE in `addShotWithFreeMixers` with atomic upsert or RPC — **same schema decision required**
 
 ### Step 3 — Medium Term (architecture, no functional risk)
 - [ ] Split `PosPage.jsx` — extract `PaymentPage.jsx` and `ComandaDetailPanel.jsx`
@@ -86,5 +86,5 @@ The architectural skeleton is sound. Service layer separation is real and discip
 ## Status
 
 - **Step 1:** ✅ Complete (2026-05-10)
-- **Step 2:** Not started
+- **Step 2:** 🔄 Partial — membership RPC done, cart upserts pending schema decision
 - **Step 3:** Not started

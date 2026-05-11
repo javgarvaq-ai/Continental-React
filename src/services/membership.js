@@ -176,155 +176,35 @@ export async function processMembershipOnPayment({
     comandaId,
     discountPct,
     discountAmount,
-    membershipPlanBenefits,
+    milestoneVisits,
 }) {
-    const { data: alreadyProcessed } = await supabase
-        .from('membership_benefit_usage')
-        .select('id')
-        .eq('comanda_id', comandaId)
-        .eq('customer_id', customerId)
-        .limit(1)
-        .maybeSingle()
+    const { data: result, error } = await supabase.rpc('process_membership_on_payment', {
+        p_customer_id:      customerId,
+        p_membership_id:    membershipId,
+        p_comanda_id:       comandaId,
+        p_discount_pct:     discountPct    || 0,
+        p_discount_amount:  discountAmount || 0,
+        p_milestone_visits: milestoneVisits || 0,
+    })
 
-    if (alreadyProcessed) {
+    if (error) {
+        return {
+            newVisitCount:             null,
+            earnedBottleCredit:        false,
+            newBottleCreditsAvailable: null,
+            membershipWarning: `No se pudo procesar la membresía: ${error.message}`,
+        }
+    }
+
+    if (result?.already_processed) {
         return { newVisitCount: null, earnedBottleCredit: false, newBottleCreditsAvailable: null }
     }
 
-    const { data: customer } = await supabase
-        .from('customers')
-        .select('visit_count, bottle_credits_available')
-        .eq('id', customerId)
-        .single()
-
-
-    const prevVisitCount = Number(customer?.visit_count || 0)
-    const newVisitCount = prevVisitCount + 1
-
-    const milestoneBenefit = (membershipPlanBenefits || []).find(
-        b => b.benefit_type === 'free_bottle_milestone'
-    )
-    // milestone_visits must be explicitly configured — no silent default.
-    // If the benefit exists but milestone_visits is missing or 0, skip
-    // bottle credit logic entirely and surface a warning to the caller.
-    const milestoneVisits = milestoneBenefit ? Number(milestoneBenefit.milestone_visits) : 0
-    const milestoneConfigMissing = milestoneBenefit && milestoneVisits <= 0
-    const prevCycles = (milestoneBenefit && milestoneVisits > 0) ? Math.floor(prevVisitCount / milestoneVisits) : 0
-    const newCycles = (milestoneBenefit && milestoneVisits > 0) ? Math.floor(newVisitCount / milestoneVisits) : 0
-    const earnedBottleCredit = milestoneBenefit && milestoneVisits > 0 && newCycles > prevCycles
-
-    const { data: freeBenefitItems } = await supabase
-        .from('comanda_items')
-        .select('id, product_id')
-        .eq('comanda_id', comandaId)
-        .eq('is_free_benefit', true)
-        .eq('status', 'active')
-
-    const bottleBenefit = (membershipPlanBenefits || []).find(
-        b => b.benefit_type === 'free_bottle_milestone'
-    )
-    const productBenefit = (membershipPlanBenefits || []).find(
-        b => b.benefit_type === 'free_product'
-    )
-
-    const freeBottleItem = (freeBenefitItems || []).find(item =>
-        (bottleBenefit?.membership_benefit_products || []).some(
-            bp => bp.product_id === item.product_id
-        )
-    )
-
-    const freeProductItem = (freeBenefitItems || []).find(item =>
-        (productBenefit?.membership_benefit_products || []).some(
-            bp => bp.product_id === item.product_id
-        )
-    )
-
-    const currentBottleCredits = Number(customer?.bottle_credits_available || 0)
-    const creditsAfterEarning = currentBottleCredits + (earnedBottleCredit ? 1 : 0)
-    const creditsAfterRedemption = freeBottleItem
-        ? Math.max(creditsAfterEarning - 1, 0)
-        : creditsAfterEarning
-
-    const { error: updateCustomerError } = await supabase
-        .from('customers')
-        .update({
-            visit_count: newVisitCount,
-            bottle_credits_available: creditsAfterRedemption,
-        })
-        .eq('id', customerId)
-
-    if (updateCustomerError) {
-        return {
-            newVisitCount: null,
-            earnedBottleCredit: false,
-            newBottleCreditsAvailable: null,
-            membershipWarning: 'No se pudo actualizar el contador de visitas del cliente.',
-        }
-    }
-
-    const usageEntries = []
-
-    if (discountAmount > 0 && membershipId) {
-        usageEntries.push({
-            customer_id: customerId,
-            customer_membership_id: membershipId,
-            comanda_id: comandaId,
-            benefit_type: 'discount',
-            discount_percentage: discountPct,
-            discount_amount_saved: discountAmount,
-        })
-    }
-
-    if (freeProductItem && membershipId) {
-        usageEntries.push({
-            customer_id: customerId,
-            customer_membership_id: membershipId,
-            comanda_id: comandaId,
-            benefit_type: 'free_product',
-            free_product_id: freeProductItem.product_id,
-            discount_amount_saved: 0,
-        })
-    }
-
-    if (freeBottleItem && membershipId) {
-        usageEntries.push({
-            customer_id: customerId,
-            customer_membership_id: membershipId,
-            comanda_id: comandaId,
-            benefit_type: 'free_bottle_milestone',
-            free_bottle_product_id: freeBottleItem.product_id,
-            discount_amount_saved: 0,
-        })
-    }
-
-    if (usageEntries.length > 0) {
-        const { error: usageError } = await supabase
-            .from('membership_benefit_usage')
-            .insert(usageEntries)
-
-        if (usageError) {
-            // Rollback: revert customer counters so the idempotency check passes on retry
-            await supabase
-                .from('customers')
-                .update({
-                    visit_count: prevVisitCount,
-                    bottle_credits_available: currentBottleCredits,
-                })
-                .eq('id', customerId)
-
-            return {
-                newVisitCount: null,
-                earnedBottleCredit: false,
-                newBottleCreditsAvailable: null,
-                membershipWarning: 'No se pudo registrar el uso de beneficios. La visita no fue contabilizada — intenta de nuevo.',
-            }
-        }
-    }
-
     return {
-        newVisitCount,
-        earnedBottleCredit,
-        newBottleCreditsAvailable: creditsAfterRedemption,
-        membershipWarning: milestoneConfigMissing
+        newVisitCount:             result?.new_visit_count      ?? null,
+        earnedBottleCredit:        result?.earned_bottle_credit ?? false,
+        newBottleCreditsAvailable: result?.new_bottle_credits   ?? null,
+        membershipWarning: result?.milestone_config_missing
             ? 'El plan tiene beneficio "botella gratis" pero no tiene milestone_visits configurado — no se otorgó crédito. Revisa la configuración del plan.'
             : null,
     }

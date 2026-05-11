@@ -282,13 +282,17 @@ export function usePayment({
             // Process membership if customer is assigned
             let membershipResult = null
             if (currentCustomer && currentMembership) {
+                const benefits = currentMembership.membership_plans?.membership_plan_benefits || []
+                const milestoneBenefit = benefits.find(b => b.benefit_type === 'free_bottle_milestone')
+                const milestoneVisits = milestoneBenefit ? Number(milestoneBenefit.milestone_visits || 0) : 0
+
                 membershipResult = await processMembershipOnPayment({
-                    customerId: currentCustomer.id,
-                    membershipId: currentMembership.id,
-                    comandaId: currentComanda.id,
-                    discountPct: membershipDiscountPct,
+                    customerId:     currentCustomer.id,
+                    membershipId:   currentMembership.id,
+                    comandaId:      currentComanda.id,
+                    discountPct:    membershipDiscountPct,
                     discountAmount,
-                    membershipPlanBenefits: currentMembership.membership_plans?.membership_plan_benefits || [],
+                    milestoneVisits,
                 })
 
                 if (membershipResult?.membershipWarning) {
