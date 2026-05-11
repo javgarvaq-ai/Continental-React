@@ -102,3 +102,15 @@ Implementado 2026-05-08. 6 bloques en 6 archivos de código + 3 migraciones nuev
 1. Aplicar migraciones 03, 04, 05 al proyecto Supabase remoto (`supabase db push` o Studio)
 2. Verificar que `pgcrypto` esté habilitado en el proyecto (ya viene activado por defecto en Supabase)
 3. Probar login con PIN en dev antes de merge a main
+
+---
+
+## POS Action Plan — May 11th Review
+
+### T2: Fix membership reactivation — drop total unique index ✅ (2026-05-11)
+- [x] Migración `20260511000002_fix_membership_unique_index.sql`
+  - DROP CONSTRAINT `customer_memberships_customer_month_unique` (total, bloqueaba reactivación mismo mes)
+  - El índice parcial `one_active_membership_per_customer_month` (WHERE status='active') queda intacto
+
+**Acción requerida en producción:**
+1. `supabase db push` para aplicar migración `20260511000002`
