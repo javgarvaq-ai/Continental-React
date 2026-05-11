@@ -203,10 +203,14 @@ export async function processMembershipOnPayment({
     const milestoneBenefit = (membershipPlanBenefits || []).find(
         b => b.benefit_type === 'free_bottle_milestone'
     )
-    const milestoneVisits = Number(milestoneBenefit?.milestone_visits || 4)
-    const prevCycles = milestoneBenefit ? Math.floor(prevVisitCount / milestoneVisits) : 0
-    const newCycles = milestoneBenefit ? Math.floor(newVisitCount / milestoneVisits) : 0
-    const earnedBottleCredit = milestoneBenefit && newCycles > prevCycles
+    // milestone_visits must be explicitly configured — no silent default.
+    // If the benefit exists but milestone_visits is missing or 0, skip
+    // bottle credit logic entirely and surface a warning to the caller.
+    const milestoneVisits = milestoneBenefit ? Number(milestoneBenefit.milestone_visits) : 0
+    const milestoneConfigMissing = milestoneBenefit && milestoneVisits <= 0
+    const prevCycles = (milestoneBenefit && milestoneVisits > 0) ? Math.floor(prevVisitCount / milestoneVisits) : 0
+    const newCycles = (milestoneBenefit && milestoneVisits > 0) ? Math.floor(newVisitCount / milestoneVisits) : 0
+    const earnedBottleCredit = milestoneBenefit && milestoneVisits > 0 && newCycles > prevCycles
 
     const { data: freeBenefitItems } = await supabase
         .from('comanda_items')
@@ -316,7 +320,14 @@ export async function processMembershipOnPayment({
         }
     }
 
-    return { newVisitCount, earnedBottleCredit, newBottleCreditsAvailable: creditsAfterRedemption, membershipWarning: null }
+    return {
+        newVisitCount,
+        earnedBottleCredit,
+        newBottleCreditsAvailable: creditsAfterRedemption,
+        membershipWarning: milestoneConfigMissing
+            ? 'El plan tiene beneficio "botella gratis" pero no tiene milestone_visits configurado — no se otorgó crédito. Revisa la configuración del plan.'
+            : null,
+    }
 }
 export async function searchCustomerByQuery(query) {
     const trimmed = query.trim()

@@ -111,6 +111,15 @@ function UsersAdminPage() {
             return
         }
 
+        // Block deactivating the last active admin
+        if (user.role === 'admin' && user.active === true) {
+            const activeAdmins = users.filter(u => u.role === 'admin' && u.active)
+            if (activeAdmins.length <= 1) {
+                setStatus('No se puede desactivar al único administrador activo. Crea otro admin primero.')
+                return
+            }
+        }
+
         const nextActive = !user.active
 
         setStatus(`${nextActive ? 'Activating' : 'Deactivating'} user...`)

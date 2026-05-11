@@ -110,11 +110,12 @@ export function useShift({ currentUser, currentShiftId, isOnline, setStatus, onS
             return { data: null, error: error || new Error('No se pudo calcular el corte.') }
         }
 
+        // Filter by status only — no date filter so ghost comandas
+        // from before the shift can't slip past and block close.
         const { data: openComandas } = await supabase
             .from('comandas')
             .select('id')
             .in('status', ['open', 'pending_payment', 'processing_payment'])
-            .gte('opened_at', summary.shift.opened_at)
             .limit(1)
 
         return {

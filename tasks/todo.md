@@ -63,7 +63,23 @@ Ver historial — 5 fixes aplicados y commiteados (2026-05-08).
 
 ---
 
-## Diferido (Fase 3)
+## Fase 3 — Polish pre-apertura ✅ (2026-05-10)
+
+- [x] Admin safety guard: `UsersAdminPage` bloquea desactivar al último admin activo
+- [x] HP-7 + HP-8: Migración `20260510000002_schema_cleanup.sql`:
+  - DROP trigger `trg_assign_comanda_folio` + función `assign_comanda_folio` (secuencia avanzaba 2x por INSERT)
+  - DROP índices duplicados: `customer_memberships_unique`, `product_recipes_product_inventory_uidx`, `ux_product_recipes_product_inventory`, `ux_product_allowed_mixers_unique`, `shifts_one_open_at_a_time`
+  - DROP CHECK duplicado: `inventory_movements_type_check`
+  - DROP RLS policies redundantes `allow_public_*` en 6 tablas
+- [x] MP-7: `useShift.fetchShiftPanelData` filtra comandas abiertas solo por status (sin filtro `opened_at` que podía dejar escapar comandas fantasma)
+- [x] MP-12: `membership.js` ya no usa fallback silencioso `milestoneVisits = 4` — si el beneficio existe pero `milestone_visits` no está configurado, devuelve `membershipWarning` descriptivo
+
+**Acciones requeridas en producción:**
+1. `supabase db push` para aplicar migraciones `20260510000001` y `20260510000002`
+
+---
+
+## Diferido (Fase 4)
 - CRIT-3 paso 2: tightening RLS en shifts/comandas (users ya protegido con RPCs)
 - HP-5: membership processing dentro de finalize_comanda_payment — muy invasivo, requiere reescritura del RPC core
 
