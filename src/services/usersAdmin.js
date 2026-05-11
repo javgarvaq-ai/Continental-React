@@ -1,4 +1,3 @@
-import bcrypt from 'bcryptjs'
 import { supabase } from './supabase'
 
 export async function getAllUsers() {
@@ -9,30 +8,35 @@ export async function getAllUsers() {
 }
 
 export async function createUser({ name, role, pin }) {
-    const pinHash = await bcrypt.hash(pin, 10)
+    const { data: result, error } = await supabase.rpc('create_user', {
+        p_name: name.trim(),
+        p_role: role,
+        p_pin:  pin,
+    })
 
-    return await supabase.from('users').insert([
-        {
-            name: name.trim(),
-            role,
-            pin_hash: pinHash,
-            active: true,
-        },
-    ])
+    if (error) return { data: null, error }
+    if (!result?.success) return { data: null, error: new Error(result?.error || 'Error creando usuario') }
+    return { data: { id: result.id }, error: null }
 }
 
 export async function updateUserActive({ userId, active }) {
-    return await supabase
-        .from('users')
-        .update({ active })
-        .eq('id', userId)
+    const { data: result, error } = await supabase.rpc('update_user_active', {
+        p_user_id: userId,
+        p_active:  active,
+    })
+
+    if (error) return { data: null, error }
+    if (!result?.success) return { data: null, error: new Error(result?.error || 'Error actualizando usuario') }
+    return { data: null, error: null }
 }
 
 export async function resetUserPin({ userId, pin }) {
-    const pinHash = await bcrypt.hash(pin, 10)
+    const { data: result, error } = await supabase.rpc('reset_user_pin', {
+        p_user_id: userId,
+        p_pin:     pin,
+    })
 
-    return await supabase
-        .from('users')
-        .update({ pin_hash: pinHash })
-        .eq('id', userId)
+    if (error) return { data: null, error }
+    if (!result?.success) return { data: null, error: new Error(result?.error || 'Error reseteando PIN') }
+    return { data: null, error: null }
 }

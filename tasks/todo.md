@@ -39,8 +39,32 @@ Ver historial — 5 fixes aplicados y commiteados (2026-05-08).
 - [x] MP-10: Mensaje claro cuando el turno ya está abierto (error 23505 → texto útil para el cajero)
 - [x] Print popup bloqueado: `printTicket` acepta `onBlocked` callback; cuenta, pagado y reprint muestran aviso visible en UI
 
+## RLS Review + User Management RPCs ✅ (2026-05-10)
+
+### Problemas encontrados y resueltos:
+- [x] `users_insert` / `users_update` policies eran completamente abiertas — cualquier cliente anon podía mutar usuarios directamente
+- [x] `pin_hash` era mutable vía REST desde el cliente (crítico)
+- [x] `usersAdmin.js`: `createUser` y `resetUserPin` hasheaban el PIN en cliente con bcryptjs y enviaban el hash por la red
+- [x] `SetupAdminPage.jsx`: mismo patrón de bcrypt en cliente
+
+### Solución:
+- [x] Migración `20260510000001_user_management_rpcs.sql`:
+  - RPC `create_user(p_name, p_role, p_pin)` — SECURITY DEFINER, hashea PIN con pgcrypto server-side
+  - RPC `reset_user_pin(p_user_id, p_pin)` — SECURITY DEFINER, mismo patrón
+  - RPC `update_user_active(p_user_id, p_active)` — SECURITY DEFINER para consistencia
+  - DROP POLICY `users_insert` y `users_update` — ya no se necesitan
+- [x] `usersAdmin.js` reescrito para llamar RPCs, sin bcryptjs
+- [x] `SetupAdminPage.jsx` actualizado para llamar `create_user` RPC
+- [x] `bcryptjs` eliminado del proyecto (`npm uninstall bcryptjs`) — ya no se usa en ningún archivo
+
+### Acciones requeridas en producción:
+1. `supabase db push` para aplicar migración `20260510000001`
+2. Verificar creación/reset de usuarios en la UI de administración
+
+---
+
 ## Diferido (Fase 3)
-- CRIT-3 paso 2: tightening RLS en users/shifts/comandas — requiere convertir create_user, close_shift y otros a RPCs SECURITY DEFINER primero
+- CRIT-3 paso 2: tightening RLS en shifts/comandas (users ya protegido con RPCs)
 - HP-5: membership processing dentro de finalize_comanda_payment — muy invasivo, requiere reescritura del RPC core
 
 ---

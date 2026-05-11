@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import bcrypt from 'bcryptjs'
 import { supabase } from '../services/supabase'
 
 function SetupAdminPage() {
@@ -86,19 +85,14 @@ function SetupAdminPage() {
             return
         }
 
-        const pinHash = await bcrypt.hash(pin, 10)
+        const { data: result, error: insertError } = await supabase.rpc('create_user', {
+            p_name: trimmedName,
+            p_role: 'admin',
+            p_pin:  pin,
+        })
 
-        const { error: insertError } = await supabase.from('users').insert([
-            {
-                name: trimmedName,
-                role: 'admin',
-                pin_hash: pinHash,
-                active: true,
-            },
-        ])
-
-        if (insertError) {
-            setStatus(`Error creating admin user: ${insertError.message}`)
+        if (insertError || !result?.success) {
+            setStatus(`Error creating admin user: ${insertError?.message || result?.error || 'Error desconocido'}`)
             setIsSubmitting(false)
             return
         }

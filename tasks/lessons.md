@@ -94,7 +94,9 @@ Never `DELETE` from `comanda_items`. Always `UPDATE { status: 'cancelled' }`. Th
 
 ## verify_pin RPC — bcrypt in DB
 
-`auth.js` no longer uses `bcryptjs` at all — login calls `supabase.rpc('verify_pin', { p_user_id, p_pin })`. The RPC uses pgcrypto's `crypt()` after normalizing `$2b$` → `$2a$` (bcryptjs vs pgcrypto prefix difference). `bcryptjs` is still used only in `usersAdmin.js` and `SetupAdminPage.jsx` to **create** hashes when setting/resetting PINs.
+`auth.js` no longer uses `bcryptjs` at all — login calls `supabase.rpc('verify_pin', { p_user_id, p_pin })`. The RPC uses pgcrypto's `crypt()` after normalizing `$2b$` → `$2a$` (bcryptjs vs pgcrypto prefix difference).
+
+`usersAdmin.js` and `SetupAdminPage.jsx` also no longer use `bcryptjs` — they call `create_user` / `reset_user_pin` / `update_user_active` SECURITY DEFINER RPCs that hash the PIN server-side. `bcryptjs` has been fully removed from the project (`npm uninstall bcryptjs`). Never re-add it for PIN hashing — always use the RPCs.
 
 ## Supabase SECURITY DEFINER functions — search_path must include 'extensions'
 
