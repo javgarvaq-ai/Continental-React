@@ -100,19 +100,20 @@ export async function startPayment({ comandaId, userId }) {
 }
 
 async function validateComandaInventoryBeforePayment({ comandaId }) {
+    // Single query for all active items + their product info
     const { data: comandaItems, error: itemsError } = await supabase
         .from('comanda_items')
         .select(`
-        id,
-        product_id,
-        quantity,
-        products:products!comanda_items_product_id_fkey (
             id,
-            name,
-            requires_inventory,
-            active
-        )
-    `)
+            product_id,
+            quantity,
+            products:products!comanda_items_product_id_fkey (
+                id,
+                name,
+                requires_inventory,
+                active
+            )
+        `)
         .eq('comanda_id', comandaId)
         .eq('status', 'active');
 
@@ -120,41 +121,64 @@ async function validateComandaInventoryBeforePayment({ comandaId }) {
         return { ok: false, error: itemsError };
     }
 
-    const stockNeedByInventoryItem = new Map();
-
+    // Verify all items have a product and build the list that needs inventory
+    const inventoryItems = [];
     for (const item of comandaItems || []) {
-        const qty = Number(item.quantity || 0);
-        const product = item.products;
-
-        if (!product) {
+        if (!item.products) {
             return {
                 ok: false,
                 error: new Error('Hay items de comanda con producto faltante.'),
             };
         }
-
-        if (!product.requires_inventory) {
-            continue;
+        if (item.products.requires_inventory) {
+            inventoryItems.push(item);
         }
+    }
 
-        const { data: recipeRows, error: recipeError } = await supabase
-            .from('product_recipes')
-            .select(`
-                inventory_item_id,
-                deduct_amount,
-                inventory_items (
-                    id,
-                    name,
-                    current_stock,
-                    active
-                )
-            `)
-            .eq('product_id', item.product_id)
-            .eq('active', true);
+    // Nothing requires inventory — skip straight to ok
+    if (inventoryItems.length === 0) {
+        return { ok: true, error: null };
+    }
 
-        if (recipeError) {
-            return { ok: false, error: recipeError };
+    // Single batched query for all recipes (replaces the per-item loop)
+    const inventoryProductIds = [...new Set(inventoryItems.map((i) => i.product_id))];
+
+    const { data: allRecipeRows, error: recipeError } = await supabase
+        .from('product_recipes')
+        .select(`
+            product_id,
+            inventory_item_id,
+            deduct_amount,
+            inventory_items (
+                id,
+                name,
+                current_stock,
+                active
+            )
+        `)
+        .in('product_id', inventoryProductIds)
+        .eq('active', true);
+
+    if (recipeError) {
+        return { ok: false, error: recipeError };
+    }
+
+    // Group recipes by product_id for O(1) lookup
+    const recipesByProduct = new Map();
+    for (const recipe of allRecipeRows || []) {
+        if (!recipesByProduct.has(recipe.product_id)) {
+            recipesByProduct.set(recipe.product_id, []);
         }
+        recipesByProduct.get(recipe.product_id).push(recipe);
+    }
+
+    // Accumulate stock needs across all items
+    const stockNeedByInventoryItem = new Map();
+
+    for (const item of inventoryItems) {
+        const qty = Number(item.quantity || 0);
+        const product = item.products;
+        const recipeRows = recipesByProduct.get(item.product_id);
 
         if (!recipeRows || recipeRows.length === 0) {
             return {
@@ -181,14 +205,14 @@ async function validateComandaInventoryBeforePayment({ comandaId }) {
             }
 
             const needed = qty * Number(recipe.deduct_amount || 0);
-            const currentAccumulated = stockNeedByInventoryItem.get(recipe.inventory_item_id) || {
+            const accumulated = stockNeedByInventoryItem.get(recipe.inventory_item_id) || {
                 name: inventoryItem.name,
                 current_stock: Number(inventoryItem.current_stock || 0),
                 needed: 0,
             };
 
-            currentAccumulated.needed += needed;
-            stockNeedByInventoryItem.set(recipe.inventory_item_id, currentAccumulated);
+            accumulated.needed += needed;
+            stockNeedByInventoryItem.set(recipe.inventory_item_id, accumulated);
         }
     }
 

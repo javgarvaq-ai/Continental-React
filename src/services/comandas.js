@@ -114,12 +114,20 @@ export async function cancelComanda({ comandaId, userId }) {
     return { error: null }
 }
 export async function assignCustomerToComanda({ comandaId, customerId, customerName }) {
-    const { error } = await supabase
+    const { data: updated, error } = await supabase
         .from('comandas')
         .update({ customer_id: customerId, customer_name: customerName })
         .eq('id', comandaId)
+        .eq('status', 'open')
+        .select('id')
 
-    return { error }
+    if (error) return { error }
+
+    if (!updated || updated.length === 0) {
+        return { error: new Error('La comanda ya no está abierta.') }
+    }
+
+    return { error: null }
 }
 
 export async function getActiveComandaByUnit({ unitId }) {

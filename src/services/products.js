@@ -1,31 +1,35 @@
 import { supabase } from './supabase';
 
 export async function getProductsCatalog() {
-    const { data: products, error: productsError } = await supabase
-        .from('products')
-        .select(`
-            id,
-            name,
-            price,
-            category_id,
-            is_shot,
-            is_mixer,
-            free_mixers_qty,
-            requires_inventory,
-            active
-        `)
-        .eq('active', true)
-        .order('category_id', { ascending: true })
-        .order('name', { ascending: true });
+    const [
+        { data: products, error: productsError },
+        { data: categories, error: categoriesError },
+    ] = await Promise.all([
+        supabase
+            .from('products')
+            .select(`
+                id,
+                name,
+                price,
+                category_id,
+                is_shot,
+                is_mixer,
+                free_mixers_qty,
+                requires_inventory,
+                active
+            `)
+            .eq('active', true)
+            .order('category_id', { ascending: true })
+            .order('name', { ascending: true }),
+        supabase
+            .from('categories')
+            .select('id, name')
+            .order('name', { ascending: true }),
+    ]);
 
     if (productsError) {
         return { data: null, error: productsError };
     }
-
-    const { data: categories, error: categoriesError } = await supabase
-        .from('categories')
-        .select('id, name')
-        .order('name', { ascending: true });
 
     if (categoriesError) {
         return { data: null, error: categoriesError };
@@ -393,14 +397,22 @@ export async function decreaseCartItem({
 export async function updateComandaPersonas({ comandaId, personas }) {
     const safePersonas = Math.max(0, Number(personas || 0));
 
-    const { error } = await supabase
+    const { data: updated, error } = await supabase
         .from('comandas')
         .update({ personas: safePersonas })
-        .eq('id', comandaId);
+        .eq('id', comandaId)
+        .eq('status', 'open')
+        .select('id');
+
+    if (error) return { data: null, error };
+
+    if (!updated || updated.length === 0) {
+        return { data: null, error: new Error('La comanda ya no está abierta.') };
+    }
 
     return {
         data: safePersonas,
-        error,
+        error: null,
     };
 }
 export async function getProductById(productId) {
