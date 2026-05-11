@@ -9,7 +9,10 @@
 
 -- customer_memberships: keep customer_memberships_customer_month_unique,
 -- drop the identically-defined customer_memberships_unique.
-DROP INDEX IF EXISTS public.customer_memberships_unique;
+-- Must use DROP CONSTRAINT (not DROP INDEX) because the index backs
+-- a named UNIQUE constraint — Postgres won't allow DROP INDEX on it directly.
+ALTER TABLE public.customer_memberships
+    DROP CONSTRAINT IF EXISTS customer_memberships_unique;
 
 -- product_recipes: keep one_active_recipe_per_product_inventory_item
 -- (partial, WHERE active=true). Drop the non-partial duplicate
