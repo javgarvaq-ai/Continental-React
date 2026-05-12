@@ -45,13 +45,13 @@ These are the highest-impact findings. Everything else can wait until these are 
 - `[ ]` **1.6 (info)** DB `comandas.cuenta_by` — Written only by `present_bill_atomic`, never read from client. No action needed — document it.
   > _Notes:_
 
-- `[ ]` **1.7** DB `comanda_events.mesa_id` + `details` — Never written or read from code; orphaned index `idx_comanda_events_mesa_id`. **Fix:** Migration — drop both columns and the index.
+- `[x]` **1.7** DB `comanda_events.mesa_id` + `details` — Never written or read from code; orphaned index `idx_comanda_events_mesa_id`. **Fix:** Migration `20260511000008_schema_cleanup.sql` — both columns dropped (index drops automatically with mesa_id).
   > _Notes:_
 
 - `[ ]` **1.8** DB `products` legacy columns — `inventory_type`, `base_unit`, `current_stock`, `parent_product_id`, `deduct_amount` all unused since `product_recipes` migration. **Fix:** Migration to drop them (verify no rows with non-default values first).
   > _Notes:_
 
-- `[ ]` **1.9** DB `products.category_id` has `DEFAULT gen_random_uuid()` — creates a FK to a non-existent category if not supplied. Inert today but misleading. **Fix:** `ALTER TABLE products ALTER COLUMN category_id DROP DEFAULT;`
+- `[x]` **1.9** DB `products.category_id` has `DEFAULT gen_random_uuid()` — creates a FK to a non-existent category if not supplied. Inert today but misleading. **Fix:** Migration `20260511000008_schema_cleanup.sql`.
   > _Notes:_
 
 - `[ ]` **1.10 (info)** DB `comandas.opened_at` duplicates `comanda_events.event_type='created'`. Useful for future reports. No action needed.
@@ -154,10 +154,10 @@ These are the highest-impact findings. Everything else can wait until these are 
 - `[x]` **5.2 🔴** `customer_memberships` — Two conflicting unique indexes: total `customer_memberships_customer_month_unique` + partial `one_active_membership_per_customer_month`. The total one blocks reactivation. **Fix:** `DROP` the total index/constraint. The partial is correct.
   > _Done 2026-05-11 — resolved via migration in 3.8._
 
-- `[ ]` **5.3** `comanda_events` — Orphaned index `idx_comanda_events_mesa_id` on unused column. **Fix:** Drop index.
+- `[x]` **5.3** `comanda_events` — Orphaned index `idx_comanda_events_mesa_id` on unused column. **Fix:** Dropped automatically when `mesa_id` column was dropped in migration `20260511000008_schema_cleanup.sql`.
   > _Notes:_
 
-- `[ ]` **5.4** `payments` columns — `efectivo`, `tarjeta`, `transferencia`, `total_paid` are `numeric nullable` without default. **Fix:** `NOT NULL DEFAULT 0`.
+- `[x]` **5.4** `payments` columns — `efectivo`, `tarjeta`, `transferencia`, `total_paid` are `numeric nullable` without default. **Fix:** Migration `20260511000008_schema_cleanup.sql` — existing NULLs zeroed, then `NOT NULL DEFAULT 0` applied.
   > _Notes:_
 
 - `[x]` **5.5** `tickets.getReprintData` — Uses `.single()` on payments; fails if comanda was cancelled before payment. **Fix:** Use `.maybeSingle()`.
@@ -166,7 +166,7 @@ These are the highest-impact findings. Everything else can wait until these are 
 - `[ ]` **5.6** `inventory_movements` — `quantity` (resulting stock) vs `quantity_change` (delta) naming is ambiguous. Future devs will invert them. **Fix:** Rename `quantity` → `resulting_stock`.
   > _Notes:_
 
-- `[ ]` **5.7** `users` — No `updated_at` column. PIN changes and deactivations have no audit timestamp. **Fix:** Add `updated_at` with trigger.
+- `[x]` **5.7** `users` — No `updated_at` column. PIN changes and deactivations have no audit timestamp. **Fix:** Migration `20260511000008_schema_cleanup.sql` — column added, back-filled from `created_at`, trigger `users_set_updated_at` fires on every UPDATE.
   > _Notes:_
 
 - `[x]` **5.8** `shifts` — No index on `comandas.cobrado_at` even though `getWeeklyReportData` filters on it. **Fix:** Migration `20260511000007_add_missing_indexes.sql`.
