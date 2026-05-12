@@ -215,8 +215,8 @@ These are the highest-impact findings. Everything else can wait until these are 
 
 ## 7. Security Concerns
 
-- `[ ]` **7.1** `src/services/membership.js:256` — User input fed directly to `ilike('%${trimmed}%')`. Supabase escapes injection but unescaped `%`/`_` let users match everything. **Fix:** `trimmed.replace(/[%_]/g, '\\$&')` before `ilike`.
-  > _Notes:_
+- `[x]` **7.1** `src/services/membership.js:256` — User input fed directly to `ilike('%${trimmed}%')`. Supabase escapes injection but unescaped `%`/`_` let users match everything. **Fix:** `trimmed.replace(/[%_]/g, '\\$&')` before `ilike`.
+  > _Done 2026-05-11 — `src/services/membership.js` line 213. One-liner on the trimmed variable._
 
 - `[ ]` **7.2** `src/services/comandaCheckout.js:14` — RPC error string inserted directly into `new Error(result.error)` → rendered in toast. Long payloads could crash the toast. **Fix:** Truncate error messages to N chars before render.
   > _Notes:_
@@ -243,6 +243,7 @@ These are the highest-impact findings. Everything else can wait until these are 
 | T5 — canEditPersonas / updateComandaPersonas status mismatch (3.1) | 2026-05-11 | `src/services/products.js` — `.in('status', ['open', 'processing_payment'])` + improved error message. No migration needed. |
 | R1 — Membership status label missing 'cancelled' (6.5) | 2026-05-11 | `src/pages/CustomersAdminPage.jsx` line 179 — mapped all 3 statuses with distinct colors. |
 | R2 — `.single()` on payments crashes on cancelled comanda (5.5) | 2026-05-11 | `src/services/tickets.js` line 39 — changed to `.maybeSingle()`. |
+| R5 — ilike wildcard not escaped in customer search (7.1) | 2026-05-11 | `src/services/membership.js` line 213 — escape `%` and `_` before ilike. |
 
 ---
 

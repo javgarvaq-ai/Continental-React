@@ -210,7 +210,7 @@ export async function processMembershipOnPayment({
     }
 }
 export async function searchCustomerByQuery(query) {
-    const trimmed = query.trim()
+    const trimmed = query.trim().replace(/[%_]/g, '\\$&')
     const isNumber = /^\d+$/.test(trimmed)
     const currentMonth = getCurrentMonthDate()
 
