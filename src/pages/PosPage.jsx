@@ -187,7 +187,7 @@ function PosPage() {
         currentShiftId,
         isOnline,
         setStatus,
-        onShiftClosed: () => { clearAuth(); navigate('/'); },
+        onShiftClosed: async () => { await clearAuth(); navigate('/'); },
     });
 
     useEffect(() => {
@@ -209,9 +209,9 @@ function PosPage() {
         setChangeUserDialog(true)
     }
 
-    function doChangeUser() {
+    async function doChangeUser() {
         setChangeUserDialog(false)
-        clearUser()
+        await clearUser()
         setSelectedUnit(null)
         setCurrentComanda(null)
         setGroupedProducts({})

@@ -8,35 +8,31 @@ export async function getAllUsers() {
 }
 
 export async function createUser({ name, role, pin }) {
-    const { data: result, error } = await supabase.rpc('create_user', {
-        p_name: name.trim(),
-        p_role: role,
-        p_pin:  pin,
+    const { data, error } = await supabase.functions.invoke('create-user', {
+        body: { name, role, pin },
     })
 
     if (error) return { data: null, error }
-    if (!result?.success) return { data: null, error: new Error(result?.error || 'Error creando usuario') }
-    return { data: { id: result.id }, error: null }
+    if (!data?.success) return { data: null, error: new Error(data?.error || 'Error creando usuario') }
+    return { data: data.user, error: null }
 }
 
 export async function updateUserActive({ userId, active }) {
-    const { data: result, error } = await supabase.rpc('update_user_active', {
-        p_user_id: userId,
-        p_active:  active,
+    const { data, error } = await supabase.functions.invoke('deactivate-user', {
+        body: { userId, active },
     })
 
     if (error) return { data: null, error }
-    if (!result?.success) return { data: null, error: new Error(result?.error || 'Error actualizando usuario') }
+    if (!data?.success) return { data: null, error: new Error(data?.error || 'Error actualizando usuario') }
     return { data: null, error: null }
 }
 
 export async function resetUserPin({ userId, pin }) {
-    const { data: result, error } = await supabase.rpc('reset_user_pin', {
-        p_user_id: userId,
-        p_pin:     pin,
+    const { data, error } = await supabase.functions.invoke('reset-pin', {
+        body: { userId, pin },
     })
 
     if (error) return { data: null, error }
-    if (!result?.success) return { data: null, error: new Error(result?.error || 'Error reseteando PIN') }
+    if (!data?.success) return { data: null, error: new Error(data?.error || 'Error reseteando PIN') }
     return { data: null, error: null }
 }

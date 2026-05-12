@@ -1,49 +1,39 @@
 import { create } from 'zustand'
 import { supabase } from '../services/supabase'
 
-function loadFromStorage() {
-    try {
-        const user = localStorage.getItem('continentalCurrentUser')
-        const shiftId = localStorage.getItem('continentalCurrentShiftId')
-        return {
-            user: user ? JSON.parse(user) : null,
-            shiftId: shiftId || null,
-        }
-    } catch {
-        return { user: null, shiftId: null }
-    }
-}
+export const useAuthStore = create((set, get) => ({
+    user:    null,
+    shiftId: localStorage.getItem('continentalCurrentShiftId') || null,
 
-export const useAuthStore = create((set) => ({
-    ...loadFromStorage(),
-
-    // Called on successful login
+    // Called on successful login + shift open
     setAuth: (user, shiftId) => {
-        localStorage.setItem('continentalCurrentUser', JSON.stringify(user))
         localStorage.setItem('continentalCurrentShiftId', shiftId)
         set({ user, shiftId })
     },
 
-    // Called on logout or shift close
-    clearAuth: () => {
-        localStorage.removeItem('continentalCurrentUser')
+    // Called on shift close — signs out of Supabase Auth and clears everything
+    clearAuth: async () => {
         localStorage.removeItem('continentalCurrentShiftId')
         set({ user: null, shiftId: null })
+        await supabase.auth.signOut()
     },
 
-    // Called on user change without closing the shift
-    clearUser: () => {
-        localStorage.removeItem('continentalCurrentUser')
+    // Called when an employee finishes their turn but the shift stays open.
+    // Signs out of Supabase Auth so the next employee can sign in with their own PIN.
+    clearUser: async () => {
         set({ user: null })
+        await supabase.auth.signOut()
     },
 
-    // Called on app load to validate:
-    // 1. The stored shiftId is still open in the DB
-    // 2. The stored user still exists, is active, and has the same role
-    // If either check fails, clears auth and redirects to login.
+    // Called on app load to restore session state.
+    // Checks:
+    //   1. A shiftId exists in localStorage
+    //   2. That shift is still open in the DB
+    //   3. A valid Supabase Auth session exists
+    //   4. The session's user is still active in our users table
+    // Clears auth and signs out if any check fails.
     verifySession: async () => {
-        const { shiftId, user } = useAuthStore.getState()
-
+        const { shiftId } = get()
         if (!shiftId) return
 
         // Check shift is still open
@@ -54,26 +44,35 @@ export const useAuthStore = create((set) => ({
             .single()
 
         if (shiftError || !shift || shift.status !== 'open') {
-            localStorage.removeItem('continentalCurrentUser')
+            localStorage.removeItem('continentalCurrentShiftId')
+            set({ user: null, shiftId: null })
+            await supabase.auth.signOut()
+            return
+        }
+
+        // Check Supabase Auth session is still valid
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) {
             localStorage.removeItem('continentalCurrentShiftId')
             set({ user: null, shiftId: null })
             return
         }
 
-        // Check user is still active and role hasn't changed
-        if (user?.id) {
-            const { data: freshUser, error: userError } = await supabase
-                .from('users')
-                .select('id, active, role')
-                .eq('id', user.id)
-                .single()
+        // Get fresh user data — confirm still active and role unchanged
+        const { data: freshUser, error: userError } = await supabase
+            .from('users')
+            .select('id, name, role, active')
+            .eq('id', session.user.id)
+            .eq('active', true)
+            .single()
 
-            if (userError || !freshUser || !freshUser.active || freshUser.role !== user.role) {
-                localStorage.removeItem('continentalCurrentUser')
-                localStorage.removeItem('continentalCurrentShiftId')
-                set({ user: null, shiftId: null })
-                return
-            }
+        if (userError || !freshUser) {
+            localStorage.removeItem('continentalCurrentShiftId')
+            set({ user: null, shiftId: null })
+            await supabase.auth.signOut()
+            return
         }
+
+        set({ user: freshUser })
     },
 }))
