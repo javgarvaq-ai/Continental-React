@@ -401,13 +401,13 @@ export async function updateComandaPersonas({ comandaId, personas }) {
         .from('comandas')
         .update({ personas: safePersonas })
         .eq('id', comandaId)
-        .eq('status', 'open')
+        .in('status', ['open', 'processing_payment'])
         .select('id');
 
     if (error) return { data: null, error };
 
     if (!updated || updated.length === 0) {
-        return { data: null, error: new Error('La comanda ya no está abierta.') };
+        return { data: null, error: new Error('No se pueden editar las personas en el estado actual de la comanda.') };
     }
 
     return {

@@ -21,7 +21,7 @@ These are the highest-impact findings. Everything else can wait until these are 
 | T2 | Duplicate index blocks membership reactivation same month (see 3.8 + 5.2) | 🔴 High | `[x]` |
 | T3 | useShift + authStore + SetupAdminPage bypass service layer — refactor to services/shifts.js + RPC close_shift (see 6.1) | 🔴 High | `[ ]` |
 | T4 | verify_pin has no rate limiting — PIN brute-force trivial with anon key (see 7.4) | 🔴 High | `[ ]` |
-| T5 | canEditPersonas allows processing_payment but service only accepts open — UX bug in hot path (see 3.1) | 🟡 Medium | `[ ]` |
+| T5 | canEditPersonas allows processing_payment but service only accepts open — UX bug in hot path (see 3.1) | 🟡 Medium | `[x]` |
 
 ---
 
@@ -86,8 +86,8 @@ These are the highest-impact findings. Everything else can wait until these are 
 
 ## 3. Potential Runtime Bugs
 
-- `[ ]` **3.1** `src/hooks/useComanda.js:53–54` — `canEditPersonas` allows `processing_payment` but `updateComandaPersonas` has a DB guard for `status='open'` only. UI shows buttons active but the update will fail with a misleading error. **Fix:** Either include `processing_payment` in the DB guard (matching sprint-review intent) or restrict `canEditPersonas` to `open`.
-  > _Notes:_
+- `[x]` **3.1** `src/hooks/useComanda.js:53–54` — `canEditPersonas` allows `processing_payment` but `updateComandaPersonas` had a DB guard for `status='open'` only. UI showed buttons active but the update would fail with a misleading error. **Fix:** Updated `updateComandaPersonas` in `products.js` to `.in('status', ['open', 'processing_payment'])` + improved error message.
+  > _Done 2026-05-11 — `src/services/products.js`. One-line service fix, no migration needed._
 
 - `[ ]` **3.2** `src/hooks/useCustomer.js:127–167` — `createCustomer` succeeds but `assignCustomerToComanda` can fail → orphaned customer with a consumed `customer_number`, no rollback. **Fix:** RPC `create_and_assign_customer`, or document and allow manual re-assignment.
   > _Notes:_
@@ -240,6 +240,7 @@ These are the highest-impact findings. Everything else can wait until these are 
 | Item | Date | Notes |
 |------|------|-------|
 | T2 — Drop total membership unique constraint (3.8 + 5.2) | 2026-05-11 | Migration `20260511000002_fix_membership_unique_index.sql`. Partial index `one_active_membership_per_customer_month` remains. Requires `supabase db push` in prod. |
+| T5 — canEditPersonas / updateComandaPersonas status mismatch (3.1) | 2026-05-11 | `src/services/products.js` — `.in('status', ['open', 'processing_payment'])` + improved error message. No migration needed. |
 
 ---
 
