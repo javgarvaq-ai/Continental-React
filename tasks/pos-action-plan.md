@@ -20,7 +20,7 @@ These are the highest-impact findings. Everything else can wait until these are 
 | T1 | Server-side role enforcement in admin RPCs (see 7.3 + 7.6) | 🔴 High | `[ ]` |
 | T2 | Duplicate index blocks membership reactivation same month (see 3.8 + 5.2) | 🔴 High | `[x]` |
 | T3 | useShift + authStore + SetupAdminPage bypass service layer — refactor to services/shifts.js + RPC close_shift (see 6.1) | 🔴 High | `[ ]` |
-| T4 | verify_pin has no rate limiting — PIN brute-force trivial with anon key (see 7.4) | 🔴 High | `[ ]` |
+| T4 | verify_pin has no rate limiting — PIN brute-force trivial with anon key (see 7.4) | 🔴 High | `[x]` |
 | T5 | canEditPersonas allows processing_payment but service only accepts open — UX bug in hot path (see 3.1) | 🟡 Medium | `[x]` |
 
 ---
@@ -116,8 +116,8 @@ These are the highest-impact findings. Everything else can wait until these are 
 - `[ ]` **3.10** `supabase/migrations/…phase2_rpcs.sql:135–145` — `adjust_inventory_stock` silently caps at 0 with `GREATEST(current_stock - p_amount, 0)`, making `inventory_movements.quantity_change` inaccurate. **Fix:** Return an error if stock would go negative (same pattern as `deduct_inventory_item`).
   > _Notes:_
 
-- `[ ]` **3.11** `src/store/authStore.js:4–15` — `loadFromStorage()` runs once at `create`. If another tab logs out, this tab doesn't know until refresh. **Fix:** `addEventListener('storage', ...)` to sync across tabs.
-  > _Notes:_
+- `[x]` **3.11** `src/store/authStore.js:4–15` — `loadFromStorage()` runs once at `create`. If another tab logs out, this tab doesn't know until refresh. **Fix:** Resolved by Supabase Auth migration — `loadFromStorage()` removed entirely. `verifySession` now uses `supabase.auth.getSession()`. Supabase client handles cross-tab session sync via `onAuthStateChange`.
+  > _Done 2026-05-11 — resolved as part of authStore rewrite for Supabase Auth migration._
 
 ---
 
@@ -221,14 +221,14 @@ These are the highest-impact findings. Everything else can wait until these are 
 - `[ ]` **7.2** `src/services/comandaCheckout.js:14` — RPC error string inserted directly into `new Error(result.error)` → rendered in toast. Long payloads could crash the toast. **Fix:** Truncate error messages to N chars before render.
   > _Notes:_
 
-- `[ ]` **7.3 🔴** `src/store/authStore.js:17–25` — Full user object (including `role`) stored in `localStorage`. Attacker with local access edits JSON → elevates to admin until `verifySession` runs. Admin RPCs (`create_user`, `reset_user_pin`, `update_user_active`) accept any anon call with no server-side role check. **Fix:** Add `p_caller_id` param to admin RPCs + role check inside `SECURITY DEFINER` function.
-  > _Notes:_
+- `[x]` **7.3 🔴** `src/store/authStore.js:17–25` — Full user object (including `role`) stored in `localStorage`. Attacker with local access edits JSON → elevates to admin until `verifySession` runs. Admin RPCs (`create_user`, `reset_user_pin`, `update_user_active`) accept any anon call with no server-side role check. **Fix:** Supabase Auth migration removed localStorage user storage entirely. Admin operations moved to Edge Functions that verify JWT + admin role server-side.
+  > _Done 2026-05-11 — Resolved via Supabase Auth migration. User object no longer in localStorage. RPCs replaced by Edge Functions with JWT verification._
 
-- `[x]` **7.4 🔴** `verify_pin` RPC — No rate limiting. 6-digit PIN = 1M combinations, brute-forceable with anon key at network speed. **Fix:** Add `failed_pin_attempts` counter + `locked_until` on `users`; lock for 15 min after 5 failed attempts. Correct PIN resets both.
-  > _Done 2026-05-11 — migration `20260511000003_verify_pin_rate_limit.sql`. No frontend changes needed. Requires `supabase db push` in prod._
+- `[x]` **7.4 🔴** `verify_pin` RPC — No rate limiting. 6-digit PIN = 1M combinations, brute-forceable with anon key at network speed. **Fix:** Rate limiting migration done; then `verify_pin` was dropped entirely in the Supabase Auth migration. Brute-force now handled by Supabase Auth (built-in lockout).
+  > _Done 2026-05-11 — rate limit via `20260511000003`, then `verify_pin` RPC dropped in `20260511000005_supabase_auth_rls.sql`. Supabase Auth now handles login security._
 
-- `[ ]` **7.5 (medium)** RLS open to anon — `comandas`, `comanda_items`, `payments`, etc. use `USING(true) WITH CHECK(true)`. Intentional for PIN-auth model on LAN. **Risk:** If tablet ever hits the internet, it's a full bypass. **Fix (long-term):** Supabase Auth sessions. **Fix (short-term):** Private LAN + reverse proxy. Document assumption in `lessons.md`.
-  > _Notes:_
+- `[x]` **7.5 (medium)** RLS open to anon — `comandas`, `comanda_items`, `payments`, etc. use `USING(true) WITH CHECK(true)`. Intentional for PIN-auth model on LAN. **Risk:** Tablet is now on Vercel (internet). **Fix:** Supabase Auth migration — all policies except `users` SELECT rewritten to `TO authenticated USING(true)`. Unauthenticated requests are now rejected by RLS.
+  > _Done 2026-05-11 — migration `20260511000005_supabase_auth_rls.sql`. All ~40 policies rewritten to `TO authenticated`. Deployment on Vercel is now safe._
 
 - `[ ]` **7.6 🔴** Admin service files — `recipeMappingsAdmin.js`, `categoriesAdmin.js`, `unitsAdmin.js`, `productsAdmin.js`, `customersAdmin.js`, `membershipAdmin.js`, `scheduleAdmin.js`, `employeesAdmin.js` — none gate writes with server-side role check. Client-side `isAdmin` can be bypassed. **Fix:** Move writes to `SECURITY DEFINER` RPCs with caller-role check (same pattern as 7.3).
   > _Notes:_
@@ -246,6 +246,8 @@ These are the highest-impact findings. Everything else can wait until these are 
 | R5 — ilike wildcard not escaped in customer search (7.1) | 2026-05-11 | `src/services/membership.js` line 213 — escape `%` and `_` before ilike. |
 | R4 — verify_pin brute-force (7.4) | 2026-05-11 | Migration `20260511000003_verify_pin_rate_limit.sql` — 5-attempt lockout for 15 min. No frontend changes. Requires `supabase db push`. |
 | R3 — activateMembership $0 charge bug (3.3) | 2026-05-11 | Migration `20260511000004_activate_membership_rpc.sql` + `membership.js` + `useCustomer.js`. Atomic RPC replaces two-step JS calls. Requires `supabase db push`. |
+| Supabase Auth migration — T4, 7.3, 7.5 (full auth overhaul) | 2026-05-11 | Migration `20260511000005_supabase_auth_rls.sql`: added `email` col, dropped `pin_hash`/`failed_pin_attempts`/`locked_until`, dropped PIN RPCs, rewrote ~40 RLS policies to `TO authenticated`. Edge Functions: `create-user`, `reset-pin`, `deactivate-user`, `seed-auth-users`. Rewrote `auth.js`, `authStore.js`, `usersAdmin.js`. Fixed `PosPage.jsx` async handlers. |
+| Bug fix — users list empty after auth migration (6.1 partial) | 2026-05-11 | Migration `20260511000006_fix_users_authenticated_select.sql`. `anon` and `authenticated` are separate Postgres roles — added explicit SELECT policy for `authenticated` on `users` table. |
 
 ---
 
