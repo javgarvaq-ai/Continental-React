@@ -123,16 +123,46 @@ Never `DELETE` from `comanda_items`. Always `UPDATE { status: 'cancelled' }`. Th
 
 In Supabase, pgcrypto (and other extensions) live in the `extensions` schema, not `public`. Any SECURITY DEFINER function that calls `crypt()`, `gen_salt()`, or other pgcrypto functions **must** use `SET search_path = public, extensions`. Using only `SET search_path = public` causes a "function not found" error at runtime even though the extension is installed.
 
+## Adding NOT NULL to an Existing Column (live table)
+
+Never do a one-step `ALTER COLUMN ... SET NOT NULL` on a table that may have existing NULL rows — it will fail. Always two steps:
+1. `UPDATE table SET col = 0 WHERE col IS NULL;`
+2. `ALTER TABLE table ALTER COLUMN col SET DEFAULT 0; ALTER TABLE table ALTER COLUMN col SET NOT NULL;`
+
+## DROP COLUMN Auto-Drops Associated Indexes
+
+In Postgres, dropping a column automatically drops any index whose only column is the one being dropped. You do not need a separate `DROP INDEX` statement. If the index covers multiple columns, it stays (with the column removed from it).
+
+## updated_at Trigger Pattern
+
+When adding an `updated_at` audit column to an existing table:
+```sql
+ALTER TABLE your_table ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();
+UPDATE your_table SET updated_at = created_at WHERE updated_at IS NULL; -- back-fill
+
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN NEW.updated_at = NOW(); RETURN NEW; END;
+$$;
+
+DROP TRIGGER IF EXISTS your_table_set_updated_at ON your_table;
+CREATE TRIGGER your_table_set_updated_at
+    BEFORE UPDATE ON your_table
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+```
+`set_updated_at()` is reusable — attach the same function to any table that needs it.
+
 ## Patterns to Avoid
 
 - Never introduce `window.alert / confirm / prompt` — all feedback goes through React state (`setStatus`).
-- Never run git commands from the bash sandbox.
+- Never run git or Supabase CLI commands from the bash sandbox.
 - Don't add a second logo or duplicate branding elements — one logo, top-right of POS header.
 
 ---
 
-## Features Built (this session)
+## Features Built
 
+### Session 1 (2026-05-08/10)
 - Replaced all browser dialogs with in-app UI across entire codebase
 - ComandaPanel + PaymentPanel UI rewrite
 - Logo integration (transparent PNG processing via PIL)
@@ -140,3 +170,11 @@ In Supabase, pgcrypto (and other extensions) live in the `extensions` schema, no
 - Weekly schedule system: `employee_schedule_shifts` table, admin editor, visual grid, actual hours entry, pay summary
 - `ScheduleViewPanel` — read-only schedule modal accessible from POS TopBar for all roles
 - `hourly_rate` field on employees with daily rate reference and weekly pay calculation
+
+### Session 2 (2026-05-11)
+- Supabase Auth migration — replaced custom PIN auth; all RLS policies require authenticated session
+- Edge Functions: `create-user`, `reset-pin`, `deactivate-user`, `seed-auth-users`
+- `activate_membership` RPC — atomic membership + comanda charge in one transaction
+- `verify_pin` rate limiting migration (then superseded by Supabase Auth)
+- Service layer refactor: `services/shifts.js`, `getUserById` + `checkUsersExist` in `users.js`
+- DB schema cleanup: orphaned columns dropped, payments NOT NULL, users.updated_at trigger, missing indexes added

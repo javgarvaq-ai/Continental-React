@@ -138,105 +138,54 @@ Implementado 2026-05-08. 6 bloques en 6 archivos de código + 3 migraciones nuev
 
 ---
 
-## Supabase Auth Migration — Phase 2 Security (planned 2026-05-11)
+## Session 2 — Deep Review & Hardening (2026-05-11) ✅
 
-### Context
-App is deployed on Vercel (public internet). Supabase anon key is in the bundle.
-Current RLS is USING(true) — anyone with the anon key can read/write all data.
-Goal: proper Supabase Auth so every DB request requires a real session.
-Auth UX is unchanged — staff still tap name + enter PIN.
+Full backlog in `tasks/pos-action-plan.md`. Summary of what shipped:
 
-### Architecture decisions
-- Per-employee Supabase Auth accounts (Option A)
-- Email format: `{user_id}@continental.bar` (UUID prefix, no collision risk)
-- Default temp PIN for existing users: `000000` (dummy data, admin resets after)
-- User management (create/reset/deactivate) → Supabase Edge Functions (hold service role key server-side)
-- `pin_hash` column → make nullable, stop populating (Supabase Auth owns passwords now)
-- `failed_pin_attempts` + `locked_until` → drop (Supabase Auth has built-in rate limiting)
-- `verify_pin` RPC → drop (replaced by supabase.auth.signInWithPassword)
+### Supabase Auth migration ✅
+Replaced custom PIN auth with Supabase Auth. App is now safe on Vercel (public internet).
+- `20260511000005_supabase_auth_rls.sql` — added `users.email`, dropped pin RPCs, rewrote ~40 RLS policies to `TO authenticated`
+- `20260511000006_fix_users_authenticated_select.sql` — bug fix: anon ≠ authenticated in Postgres; added authenticated SELECT policy on users
+- Edge Functions deployed: `create-user`, `reset-pin`, `deactivate-user`, `seed-auth-users`
+- Rewrote `auth.js`, `authStore.js`, `usersAdmin.js`, `PosPage.jsx`
+- Secret: `SB_SERVICE_ROLE_KEY` (not `SUPABASE_` prefix — reserved by CLI)
 
-### Step 1 — Migration: schema + RLS [ ]
-File: `20260511000005_supabase_auth_rls.sql`
-- [ ] Add `email text` column to `users`
-- [ ] Make `pin_hash` nullable (transition period — stop writing it, drop later)
-- [ ] Drop `failed_pin_attempts` + `locked_until` from `users` (Supabase Auth handles this)
-- [ ] Populate `email` for all existing users: `UPDATE users SET email = id || '@continental.bar'`
-- [ ] Drop `verify_pin` RPC (replaced by Supabase Auth)
-- [ ] Drop old `create_user`, `reset_user_pin`, `update_user_active` RPCs (replaced by Edge Functions)
-- [ ] Update ALL RLS policies:
-  - `users` SELECT: keep anon (needed for employee list on login screen before auth)
-  - `users` INSERT/UPDATE: drop (Edge Functions handle this with service role key)
-  - All other tables: replace USING(true) → USING(auth.role() = 'authenticated')
+### Bug fixes ✅
+- `20260511000002` — dropped total membership unique constraint (blocked same-month reactivation)
+- `20260511000003` — verify_pin rate limiting (superseded by Auth migration, but applied cleanly)
+- `20260511000004` — `activate_membership` RPC: atomic membership + comanda charge; no more $0 bug
+- `products.js` — `updateComandaPersonas` now accepts `processing_payment` status too
+- `CustomersAdminPage` — membership status label handles all 3 states (active / cancelled / expired)
+- `tickets.js` — `.maybeSingle()` on payments; no crash on cancelled comanda reprint
+- `membership.js` — ilike wildcard input escaped before query
 
-### Step 2 — Supabase Edge Functions [ ]
-Three functions in `supabase/functions/`:
-- [ ] `create-user/index.ts` — verify caller is admin → create Supabase Auth user → insert into users table
-- [ ] `reset-pin/index.ts` — verify caller is admin → update Supabase Auth user password
-- [ ] `deactivate-user/index.ts` — verify caller is admin → enable/disable Supabase Auth + update users.active
+### T3 — Service layer refactor ✅
+- Created `src/services/shifts.js` (5 functions)
+- Added `getUserById` + `checkUsersExist` to `src/services/users.js`
+- `useShift.js`, `authStore.js`, `SetupAdminPage.jsx` — zero direct Supabase DB calls outside services
+- `SetupAdminPage` — removed broken `create_user` RPC call (dropped in auth migration)
 
-Each function: validates JWT from request header, checks caller role = admin in users table, then calls Supabase Admin API with service role key.
+### Quick wins ✅
+- `20260511000007_add_missing_indexes.sql` — `comanda_items(comanda_id) WHERE active` + `comandas(cobrado_at) WHERE paid`
+- Dead code removed: `getCustomerByNumber`, unused `import React` + null `Ticket()`, `useNavigate` in CustomersAdminPage, duplicate `getCurrentMonthDate`
+- `Ticket.jsx` — print window closes after print (`onafterprint`)
+- `useCustomer.handleSearchCustomer` — network error now surfaces as status message
 
-### Step 3 — Frontend changes [ ]
-- [ ] `src/services/auth.js`
-  - Replace `verify_pin` RPC call with `supabase.auth.signInWithPassword({ email: user.email, password: pin })`
-  - Add `logout()` using `supabase.auth.signOut()`
-  - Fetch user email from users table before signing in
-- [ ] `src/store/authStore.js`
-  - On app init: call `supabase.auth.getSession()` to restore session
-  - Subscribe to `supabase.auth.onAuthStateChange()` for cross-tab sync
-  - Remove manual localStorage user management (keep shiftId in localStorage — that's our data)
-  - Keep `verifySession` for shift check + user active/role check (still our custom logic)
-- [ ] `src/services/usersAdmin.js`
-  - `createUser` → call Edge Function `create-user`
-  - `resetUserPin` → call Edge Function `reset-pin`
-  - `updateUserActive` → call Edge Function `deactivate-user`
+### DB schema cleanup ✅
+- `20260511000008_schema_cleanup.sql`:
+  - `comanda_events` — dropped orphaned `mesa_id` + `details` columns (index auto-dropped)
+  - `products.category_id` — removed `DEFAULT gen_random_uuid()` (was silently creating bad FKs)
+  - `payments` — `efectivo`, `tarjeta`, `transferencia`, `total_paid` now `NOT NULL DEFAULT 0`
+  - `users.updated_at` — new column with auto-update trigger `users_set_updated_at`
 
-### Step 4 — Seed existing users into Supabase Auth [ ]
-- [ ] One-time script or Edge Function call that creates Auth accounts for all existing users
-- [ ] Temp PIN: `000000` — admin resets from UsersAdminPage after migration
+---
 
-### Step 5 — Deploy + verify [ ]
-- [ ] `npx supabase db push` (migration)
-- [ ] `npx supabase functions deploy create-user`
-- [ ] `npx supabase functions deploy reset-pin`
-- [ ] `npx supabase functions deploy deactivate-user`
-- [ ] `npx supabase secrets set SUPABASE_SERVICE_ROLE_KEY=...`
-- [ ] Test: login works, admin can create user, reset PIN, deactivate
+## Pending — Next Session
 
-### ⚠️ Important: all steps must be done in one session
-After Step 1 (RLS migration), the app breaks until Step 3 (frontend) is done.
-Do not push the migration without having the frontend changes ready to deploy immediately.
+### Round B — Runtime bugs (no migrations needed)
+- [ ] **6.3 🔴** `addNormalProductToComanda` / `addShotWithFreeMixers` / `decreaseCartItem` — missing `status='open'` guard. Race condition can add items to a comanda already in payment.
+- [ ] **3.5** Cancelled comanda can print a ticket — add status check before print branch in PosPage
+- [ ] **4.5** Product catalog re-fetched on every comanda switch — move to session-level load
 
-### Supabase Auth Migration — COMPLETED (2026-05-11)
-
-#### Step 1 — Migration ✅
-- [x] `20260511000005_supabase_auth_rls.sql`
-  - Added `email` column to users, populated as `{id}@continental.bar`
-  - Made `pin_hash` nullable
-  - Dropped `failed_pin_attempts` + `locked_until`
-  - Dropped `verify_pin`, `create_user`, `reset_user_pin`, `update_user_active` RPCs
-  - Rewrote all RLS policies: users SELECT stays anon, everything else requires authenticated
-
-#### Step 2 — Supabase Edge Functions ✅
-- [x] `supabase/functions/create-user/index.ts`
-- [x] `supabase/functions/reset-pin/index.ts`
-- [x] `supabase/functions/deactivate-user/index.ts`
-- [x] `supabase/functions/seed-auth-users/index.ts` (one-time seed)
-
-#### Step 3 — Frontend ✅
-- [x] `src/services/auth.js` — uses supabase.auth.signInWithPassword
-- [x] `src/store/authStore.js` — uses getSession, clearAuth/clearUser are now async
-- [x] `src/services/usersAdmin.js` — calls Edge Functions
-- [x] `src/pages/PosPage.jsx` — clearAuth/clearUser awaited
-
-#### Step 4 — Deploy (action required) ⏳
-1. `npx supabase db push`
-2. `npx supabase secrets set SUPABASE_SERVICE_ROLE_KEY=your_key_here`
-3. `npx supabase functions deploy create-user`
-4. `npx supabase functions deploy reset-pin`
-5. `npx supabase functions deploy deactivate-user`
-6. `npx supabase functions deploy seed-auth-users`
-7. `npx supabase functions invoke seed-auth-users --no-verify-jwt`
-8. Reset all user PINs from UsersAdminPage
-9. git push → Vercel deploys automatically
-10. Test: login, create user, reset PIN, deactivate user
+### T1 — Server-side role enforcement (bigger work, plan before starting)
+- [ ] **7.6 🔴** Admin service files (categoriesAdmin, productsAdmin, unitsAdmin, etc.) have no server-side role check. Any authenticated user can call admin writes. Fix: SECURITY DEFINER RPCs with role check, or RLS policies that check `auth.uid()` role.
