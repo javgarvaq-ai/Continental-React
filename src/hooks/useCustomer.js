@@ -6,7 +6,7 @@ import {
     cancelMembershipOnComanda,
     addFreeBenefitItemToComanda,
 } from '../services/membership'
-import { addNormalProductToComanda, getProductById } from '../services/products'
+// addNormalProductToComanda + getProductById removed: now handled atomically inside activate_membership RPC
 import { getNextCustomerNumber } from '../services/customersAdmin'
 import { createCustomer } from '../services/customers'
 import { assignCustomerToComanda } from '../services/comandas'
@@ -185,10 +185,6 @@ export function useCustomer({ currentComanda, cartTotal, isOnline, setStatus, on
         if (!currentCustomer || !currentComanda?.id || !membershipRenewalState.selectedPlanId) return
         setIsProcessingMembership(true)
 
-        const selectedPlan = membershipRenewalState.plans.find(
-            p => p.id === membershipRenewalState.selectedPlanId
-        )
-
         const { data: newMembership, error: membershipError } = await activateMembership({
             customerId: currentCustomer.id,
             planId: membershipRenewalState.selectedPlanId,
@@ -201,14 +197,8 @@ export function useCustomer({ currentComanda, cartTotal, isOnline, setStatus, on
             return
         }
 
-        if (selectedPlan?.product_id) {
-            const { data: product } = await getProductById(selectedPlan.product_id)
-
-            if (product) {
-                await addNormalProductToComanda({ comandaId: currentComanda.id, product })
-                await onReloadComanda(currentComanda.id)
-            }
-        }
+        // The RPC already added the charge to comanda_items atomically — just reload the cart
+        await onReloadComanda(currentComanda.id)
 
         setCurrentMembership(newMembership)
         setMembershipRenewalState({ open: false, plans: [], selectedPlanId: '' })

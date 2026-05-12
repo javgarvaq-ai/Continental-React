@@ -92,8 +92,8 @@ These are the highest-impact findings. Everything else can wait until these are 
 - `[ ]` **3.2** `src/hooks/useCustomer.js:127–167` — `createCustomer` succeeds but `assignCustomerToComanda` can fail → orphaned customer with a consumed `customer_number`, no rollback. **Fix:** RPC `create_and_assign_customer`, or document and allow manual re-assignment.
   > _Notes:_
 
-- `[ ]` **3.3 🔴** `src/hooks/useCustomer.js:183–217` — `activateMembership` succeeds but `addNormalProductToComanda` (line 208) failure is silently ignored → membership active in DB, comanda has no charge, customer pays $0 for their membership. **Fix:** Include the comanda line INSERT inside the `activate_membership` RPC for atomicity.
-  > _Notes:_
+- `[x]` **3.3 🔴** `src/hooks/useCustomer.js:183–217` — `activateMembership` succeeded but `addNormalProductToComanda` failure was silently ignored → membership active in DB, comanda had no charge, customer paid $0. **Fix:** New `activate_membership` RPC wraps both INSERT operations in one transaction. Full rollback if either fails.
+  > _Done 2026-05-11 — migration `20260511000004_activate_membership_rpc.sql` + `src/services/membership.js` (RPC call + select) + `src/hooks/useCustomer.js` (removed separate product fetch/add calls). Requires `supabase db push`._
 
 - `[ ]` **3.4** `src/hooks/useCustomer.js:81–94` — Error from `searchCustomerByQuery` is swallowed; network failure shows "Cliente no encontrado" misleadingly. **Fix:** Surface error via `setStatus`.
   > _Notes:_
@@ -245,6 +245,7 @@ These are the highest-impact findings. Everything else can wait until these are 
 | R2 — `.single()` on payments crashes on cancelled comanda (5.5) | 2026-05-11 | `src/services/tickets.js` line 39 — changed to `.maybeSingle()`. |
 | R5 — ilike wildcard not escaped in customer search (7.1) | 2026-05-11 | `src/services/membership.js` line 213 — escape `%` and `_` before ilike. |
 | R4 — verify_pin brute-force (7.4) | 2026-05-11 | Migration `20260511000003_verify_pin_rate_limit.sql` — 5-attempt lockout for 15 min. No frontend changes. Requires `supabase db push`. |
+| R3 — activateMembership $0 charge bug (3.3) | 2026-05-11 | Migration `20260511000004_activate_membership_rpc.sql` + `membership.js` + `useCustomer.js`. Atomic RPC replaces two-step JS calls. Requires `supabase db push`. |
 
 ---
 

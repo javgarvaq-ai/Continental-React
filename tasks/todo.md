@@ -124,3 +124,14 @@ Implementado 2026-05-08. 6 bloques en 6 archivos de código + 3 migraciones nuev
 
 **Action required in production:**
 1. `supabase db push` to apply migration `20260511000003`
+
+### R3: activate_membership atomic RPC ✅ (2026-05-11)
+- [x] Migration `20260511000004_activate_membership_rpc.sql`
+  - New RPC `activate_membership(p_customer_id, p_plan_id, p_comanda_id)`
+  - Wraps customer_memberships INSERT + comanda_items INSERT/UPDATE in one transaction
+  - Full rollback if either step fails — no more $0 memberships
+- [x] `src/services/membership.js` — `activateMembership` now calls RPC, then fetches full membership row
+- [x] `src/hooks/useCustomer.js` — removed separate `getProductById` + `addNormalProductToComanda` calls; removed unused import
+
+**Action required in production:**
+1. `supabase db push` to apply migrations `20260511000002`, `20260511000003`, `20260511000004`

@@ -101,29 +101,20 @@ export async function getAllActiveMembershipPlans() {
 }
 
 export async function activateMembership({ customerId, planId, comandaId }) {
-    const currentMonth = getCurrentMonthDate()
+    // Single atomic RPC: inserts customer_memberships + comanda_items in one transaction.
+    // If either step fails the whole thing rolls back — no more $0 memberships.
+    const { data: result, error: rpcError } = await supabase.rpc('activate_membership', {
+        p_customer_id: customerId,
+        p_plan_id:     planId,
+        p_comanda_id:  comandaId,
+    })
 
-    const { data: existing } = await supabase
-        .from('customer_memberships')
-        .select('id')
-        .eq('customer_id', customerId)
-        .eq('month', currentMonth)
-        .eq('status', 'active')
-        .maybeSingle()
+    if (rpcError) return { data: null, error: rpcError }
+    if (!result?.ok) return { data: null, error: new Error(result?.error || 'Error activando membresía') }
 
-    if (existing) {
-        return { data: null, error: new Error('Este cliente ya tiene una membresía activa este mes.') }
-    }
-
+    // Fetch the full membership row (with plan + benefits) that the UI needs
     return await supabase
         .from('customer_memberships')
-        .insert([{
-            customer_id: customerId,
-            plan_id: planId,
-            month: currentMonth,
-            status: 'active',
-            paid_via_comanda_id: comandaId || null,
-        }])
         .select(`
             id, month, status, plan_id,
             membership_plans (
@@ -137,6 +128,7 @@ export async function activateMembership({ customerId, planId, comandaId }) {
                 )
             )
         `)
+        .eq('id', result.membership_id)
         .single()
 }
 
