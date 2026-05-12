@@ -1,24 +1,15 @@
 import { useEffect, useState } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
-import { supabase } from '../services/supabase'
+import { Navigate } from 'react-router-dom'
+import { checkUsersExist } from '../services/users'
 
 function SetupAdminPage() {
-    const navigate = useNavigate()
-
-    const [loading, setLoading] = useState(true)
+    const [loading, setLoading]       = useState(true)
     const [usersExist, setUsersExist] = useState(false)
-
-    const [name, setName] = useState('')
-    const [pin, setPin] = useState('')
-    const [confirmPin, setConfirmPin] = useState('')
-    const [status, setStatus] = useState('Checking system status...')
-    const [isSubmitting, setIsSubmitting] = useState(false)
+    const [status, setStatus]         = useState('Checking system status...')
 
     useEffect(() => {
-        async function checkUsers() {
-            const { count, error } = await supabase
-                .from('users')
-                .select('*', { count: 'exact', head: true })
+        async function check() {
+            const { exists, error } = await checkUsersExist()
 
             if (error) {
                 setStatus(`Error checking users: ${error.message}`)
@@ -26,81 +17,12 @@ function SetupAdminPage() {
                 return
             }
 
-            const hasUsers = (count || 0) > 0
-            setUsersExist(hasUsers)
-            setStatus(
-                hasUsers
-                    ? 'Users already exist. Redirecting to login...'
-                    : 'No users found. Create the first admin user.'
-            )
+            setUsersExist(exists)
             setLoading(false)
         }
 
-        checkUsers()
+        check()
     }, [])
-
-    function normalizePin(value) {
-        return value.replace(/\D/g, '').slice(0, 6)
-    }
-
-    async function handleSubmit(event) {
-        event.preventDefault()
-
-        if (isSubmitting) return
-
-        const trimmedName = name.trim()
-
-        if (!trimmedName) {
-            setStatus('Name is required.')
-            return
-        }
-
-        if (pin.length !== 6) {
-            setStatus('PIN must be exactly 6 digits.')
-            return
-        }
-
-        if (pin !== confirmPin) {
-            setStatus('PIN and confirmation do not match.')
-            return
-        }
-
-        setIsSubmitting(true)
-        setStatus('Creating admin user...')
-
-        const { count, error: countError } = await supabase
-            .from('users')
-            .select('*', { count: 'exact', head: true })
-
-        if (countError) {
-            setStatus(`Error validating setup state: ${countError.message}`)
-            setIsSubmitting(false)
-            return
-        }
-
-        if ((count || 0) > 0) {
-            setStatus('Setup is already completed. Redirecting to login...')
-            setUsersExist(true)
-            setIsSubmitting(false)
-            return
-        }
-
-        const { data: result, error: insertError } = await supabase.rpc('create_user', {
-            p_name: trimmedName,
-            p_role: 'admin',
-            p_pin:  pin,
-        })
-
-        if (insertError || !result?.success) {
-            setStatus(`Error creating admin user: ${insertError?.message || result?.error || 'Error desconocido'}`)
-            setIsSubmitting(false)
-            return
-        }
-
-        setStatus('Admin user created successfully. Redirecting to login...')
-        setIsSubmitting(false)
-        navigate('/login', { replace: true })
-    }
 
     if (loading) return null
 
@@ -108,6 +30,13 @@ function SetupAdminPage() {
         return <Navigate to="/login" replace />
     }
 
+    // The bootstrap user must be created via the Supabase Dashboard:
+    //   1. Go to Authentication → Users → Add User
+    //   2. Use email: <uuid>@continental.bar, password: 000000
+    //   3. Copy the UUID Supabase assigns
+    //   4. Run in SQL editor:
+    //      INSERT INTO public.users (id, name, role, email, active)
+    //      VALUES ('<uuid>', 'Admin', 'admin', '<uuid>@continental.bar', true);
     return (
         <div
             style={{
@@ -134,146 +63,16 @@ function SetupAdminPage() {
                     boxShadow: '0 10px 30px rgba(0,0,0,0.4)',
                 }}
             >
-                <h1 style={{ marginTop: 0, marginBottom: '12px' }}>Initial Admin Setup</h1>
+                <h1 style={{ marginTop: 0, marginBottom: '12px' }}>Initial Setup Required</h1>
                 <p style={{ marginTop: 0, marginBottom: '20px', opacity: 0.85 }}>{status}</p>
-
-                {!loading && (
-                    <form onSubmit={handleSubmit}>
-                        <div style={{ marginBottom: '16px' }}>
-                            <label
-                                htmlFor="name"
-                                style={{
-                                    display: 'block',
-                                    marginBottom: '8px',
-                                    fontWeight: 'bold',
-                                }}
-                            >
-                                Name
-                            </label>
-
-                            <input
-                                id="name"
-                                type="text"
-                                value={name}
-                                onChange={(event) => setName(event.target.value)}
-                                placeholder="Enter admin name"
-                                style={{
-                                    width: '100%',
-                                    padding: '12px',
-                                    borderRadius: '10px',
-                                    border: '1px solid #444',
-                                    background: '#111',
-                                    color: 'white',
-                                    boxSizing: 'border-box',
-                                }}
-                            />
-                        </div>
-
-                        <div style={{ marginBottom: '16px' }}>
-                            <label
-                                htmlFor="pin"
-                                style={{
-                                    display: 'block',
-                                    marginBottom: '8px',
-                                    fontWeight: 'bold',
-                                }}
-                            >
-                                PIN
-                            </label>
-
-                            <input
-                                id="pin"
-                                type="password"
-                                inputMode="numeric"
-                                autoComplete="off"
-                                value={pin}
-                                onChange={(event) => setPin(normalizePin(event.target.value))}
-                                placeholder="Enter 6-digit PIN"
-                                style={{
-                                    width: '100%',
-                                    padding: '12px',
-                                    borderRadius: '10px',
-                                    border: '1px solid #444',
-                                    background: '#111',
-                                    color: 'white',
-                                    boxSizing: 'border-box',
-                                }}
-                            />
-                        </div>
-
-                        <div style={{ marginBottom: '16px' }}>
-                            <label
-                                htmlFor="confirmPin"
-                                style={{
-                                    display: 'block',
-                                    marginBottom: '8px',
-                                    fontWeight: 'bold',
-                                }}
-                            >
-                                Confirm PIN
-                            </label>
-
-                            <input
-                                id="confirmPin"
-                                type="password"
-                                inputMode="numeric"
-                                autoComplete="off"
-                                value={confirmPin}
-                                onChange={(event) => setConfirmPin(normalizePin(event.target.value))}
-                                placeholder="Confirm 6-digit PIN"
-                                style={{
-                                    width: '100%',
-                                    padding: '12px',
-                                    borderRadius: '10px',
-                                    border: '1px solid #444',
-                                    background: '#111',
-                                    color: 'white',
-                                    boxSizing: 'border-box',
-                                }}
-                            />
-                        </div>
-
-                        <div style={{ marginTop: '16px', opacity: 0.9 }}>
-                            <p style={{ margin: '0 0 6px 0' }}>Role to create: admin</p>
-                            <p style={{ margin: 0 }}>Active: true</p>
-                        </div>
-
-                        <button
-                            type="submit"
-                            disabled={
-                                isSubmitting ||
-                                !name.trim() ||
-                                pin.length !== 6 ||
-                                confirmPin.length !== 6
-                            }
-                            style={{
-                                width: '100%',
-                                marginTop: '18px',
-                                padding: '12px',
-                                borderRadius: '10px',
-                                border: 'none',
-                                background:
-                                    isSubmitting ||
-                                        !name.trim() ||
-                                        pin.length !== 6 ||
-                                        confirmPin.length !== 6
-                                        ? '#555'
-                                        : '#2e7d32',
-                                color: 'white',
-                                fontWeight: 'bold',
-                                cursor:
-                                    isSubmitting ||
-                                        !name.trim() ||
-                                        pin.length !== 6 ||
-                                        confirmPin.length !== 6
-                                        ? 'default'
-                                        : 'pointer',
-                            }}
-                        >
-                            {isSubmitting ? 'Creating admin...' : 'Create First Admin'}
-                        </button>
-                    </form>
-                )}
+                <p style={{ opacity: 0.7, lineHeight: 1.6 }}>
+                    No users found. The first admin account must be created directly in the
+                    Supabase Dashboard. See the setup instructions in{' '}
+                    <code style={{ background: '#2a2a2a', padding: '2px 6px', borderRadius: 4 }}>
+                        tasks/todo.md
+                    </code>
+                    .
+                </p>
             </div>
         </div>
     )

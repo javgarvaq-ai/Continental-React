@@ -19,7 +19,7 @@ These are the highest-impact findings. Everything else can wait until these are 
 |---|---------|----------|--------|
 | T1 | Server-side role enforcement in admin RPCs (see 7.3 + 7.6) | 🔴 High | `[ ]` |
 | T2 | Duplicate index blocks membership reactivation same month (see 3.8 + 5.2) | 🔴 High | `[x]` |
-| T3 | useShift + authStore + SetupAdminPage bypass service layer — refactor to services/shifts.js + RPC close_shift (see 6.1) | 🔴 High | `[ ]` |
+| T3 | useShift + authStore + SetupAdminPage bypass service layer — refactor to services/shifts.js + RPC close_shift (see 6.1) | 🔴 High | `[x]` |
 | T4 | verify_pin has no rate limiting — PIN brute-force trivial with anon key (see 7.4) | 🔴 High | `[x]` |
 | T5 | canEditPersonas allows processing_payment but service only accepts open — UX bug in hot path (see 3.1) | 🟡 Medium | `[x]` |
 
@@ -179,13 +179,13 @@ These are the highest-impact findings. Everything else can wait until these are 
 
 ## 6. Inconsistencies
 
-- `[ ]` **6.1 🔴** Service layer bypass — Three files call Supabase directly, violating CLAUDE.md rules:
+- `[x]` **6.1 🔴** Service layer bypass — Three files call Supabase directly, violating CLAUDE.md rules:
   - `src/store/authStore.js:50–77` (`verifySession`)
   - `src/hooks/useShift.js` (entire shift logic)
   - `src/pages/SetupAdminPage.jsx:19,71,88`
   
-  **Fix:** Move to `src/services/auth.js` + `src/services/shifts.js` + RPC `close_shift`. `SetupAdminPage` should use `usersAdmin.createUser`.
-  > _Notes:_
+  **Fix:** Created `src/services/shifts.js` (getShiftById, getShiftSummary, getOpenComandasCount, closeShift, addCashMovement). Added getUserById + checkUsersExist to `users.js`. Updated useShift, authStore, SetupAdminPage to use services. Removed broken `create_user` RPC call from SetupAdminPage.
+  > _Done 2026-05-11 — no migrations needed. SetupAdminPage now shows instructions for Dashboard bootstrap instead of broken form._
 
 - `[ ]` **6.2** Inconsistent return shapes across services:
   - `products.js#addNormalProductToComanda` → `{ error }`
@@ -248,6 +248,7 @@ These are the highest-impact findings. Everything else can wait until these are 
 | R3 — activateMembership $0 charge bug (3.3) | 2026-05-11 | Migration `20260511000004_activate_membership_rpc.sql` + `membership.js` + `useCustomer.js`. Atomic RPC replaces two-step JS calls. Requires `supabase db push`. |
 | Supabase Auth migration — T4, 7.3, 7.5 (full auth overhaul) | 2026-05-11 | Migration `20260511000005_supabase_auth_rls.sql`: added `email` col, dropped `pin_hash`/`failed_pin_attempts`/`locked_until`, dropped PIN RPCs, rewrote ~40 RLS policies to `TO authenticated`. Edge Functions: `create-user`, `reset-pin`, `deactivate-user`, `seed-auth-users`. Rewrote `auth.js`, `authStore.js`, `usersAdmin.js`. Fixed `PosPage.jsx` async handlers. |
 | Bug fix — users list empty after auth migration (6.1 partial) | 2026-05-11 | Migration `20260511000006_fix_users_authenticated_select.sql`. `anon` and `authenticated` are separate Postgres roles — added explicit SELECT policy for `authenticated` on `users` table. |
+| T3 — Service layer refactor (6.1) | 2026-05-11 | Created `services/shifts.js`. Added getUserById + checkUsersExist to `services/users.js`. Rewrote `useShift.js`, `authStore.js`, `SetupAdminPage.jsx` — zero direct Supabase DB calls remain outside services. Fixed broken `create_user` RPC call in SetupAdminPage. |
 
 ---
 

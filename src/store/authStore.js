@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import { supabase } from '../services/supabase'
+import { getShiftById } from '../services/shifts'
+import { getUserById } from '../services/users'
 
 export const useAuthStore = create((set, get) => ({
     user:    null,
@@ -37,12 +39,7 @@ export const useAuthStore = create((set, get) => ({
         if (!shiftId) return
 
         // Check shift is still open
-        const { data: shift, error: shiftError } = await supabase
-            .from('shifts')
-            .select('id, status')
-            .eq('id', shiftId)
-            .single()
-
+        const { data: shift, error: shiftError } = await getShiftById(shiftId)
         if (shiftError || !shift || shift.status !== 'open') {
             localStorage.removeItem('continentalCurrentShiftId')
             set({ user: null, shiftId: null })
@@ -59,13 +56,7 @@ export const useAuthStore = create((set, get) => ({
         }
 
         // Get fresh user data — confirm still active and role unchanged
-        const { data: freshUser, error: userError } = await supabase
-            .from('users')
-            .select('id, name, role, active')
-            .eq('id', session.user.id)
-            .eq('active', true)
-            .single()
-
+        const { data: freshUser, error: userError } = await getUserById(session.user.id)
         if (userError || !freshUser) {
             localStorage.removeItem('continentalCurrentShiftId')
             set({ user: null, shiftId: null })
