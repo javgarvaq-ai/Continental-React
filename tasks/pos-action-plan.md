@@ -27,16 +27,16 @@ These are the highest-impact findings. Everything else can wait until these are 
 
 ## 1. Unused / Dead Code
 
-- `[ ]` **1.1** `src/services/customersAdmin.js:16–28` — `getCustomerByNumber` exported but has zero callers. **Fix:** Delete function.
+- `[x]` **1.1** `src/services/customersAdmin.js:16–28` — `getCustomerByNumber` exported but has zero callers. **Fix:** Delete function.
   > _Notes:_
 
-- `[ ]` **1.2** `src/components/Ticket.jsx:1,406–408` — `import React` unused (React 19 + Vite JSX runtime); `export default function Ticket()` is never imported anywhere. **Fix:** Remove import and the null default export — keep only `printTicket`.
+- `[x]` **1.2** `src/components/Ticket.jsx:1,406–408` — `import React` unused (React 19 + Vite JSX runtime); `export default function Ticket()` is never imported anywhere. **Fix:** Remove import and the null default export — keep only `printTicket`.
   > _Notes:_
 
-- `[ ]` **1.3** `src/pages/CustomersAdminPage.jsx:8,26` — `useNavigate` / `navigate` declared but never called. **Fix:** Remove or add a consistent "back to POS" button.
+- `[x]` **1.3** `src/pages/CustomersAdminPage.jsx:8,26` — `useNavigate` / `navigate` declared but never called. **Fix:** Removed.
   > _Notes:_
 
-- `[ ]` **1.4** `src/pages/CustomersAdminPage.jsx:20–23` — Local `getCurrentMonthDate()` duplicates `membership.js#getCurrentMonthDate()` exactly. **Fix:** Import from `services/membership.js`.
+- `[x]` **1.4** `src/pages/CustomersAdminPage.jsx:20–23` — Local `getCurrentMonthDate()` duplicates `membership.js#getCurrentMonthDate()` exactly. **Fix:** Import from `services/membership.js`.
   > _Notes:_
 
 - `[ ]` **1.5** `src/services/comandaCheckout.js:306` + `usePayment.js:337` — `confirmPayment` always returns `inventoryWarning: null`; the branch in `usePayment` never fires. **Fix:** Remove the field and the dead branch, or implement the real warning.
@@ -95,7 +95,7 @@ These are the highest-impact findings. Everything else can wait until these are 
 - `[x]` **3.3 🔴** `src/hooks/useCustomer.js:183–217` — `activateMembership` succeeded but `addNormalProductToComanda` failure was silently ignored → membership active in DB, comanda had no charge, customer paid $0. **Fix:** New `activate_membership` RPC wraps both INSERT operations in one transaction. Full rollback if either fails.
   > _Done 2026-05-11 — migration `20260511000004_activate_membership_rpc.sql` + `src/services/membership.js` (RPC call + select) + `src/hooks/useCustomer.js` (removed separate product fetch/add calls). Requires `supabase db push`._
 
-- `[ ]` **3.4** `src/hooks/useCustomer.js:81–94` — Error from `searchCustomerByQuery` is swallowed; network failure shows "Cliente no encontrado" misleadingly. **Fix:** Surface error via `setStatus`.
+- `[x]` **3.4** `src/hooks/useCustomer.js:81–94` — Error from `searchCustomerByQuery` is swallowed; network failure shows "Cliente no encontrado" misleadingly. **Fix:** Surface error via `setStatus`.
   > _Notes:_
 
 - `[ ]` **3.5** `src/pages/PosPage.jsx:228–250` — Cancelled comanda prints a "cuenta" ticket if it exists. **Fix:** Validate `comanda.status !== 'cancelled'` before branching; show error if cancelled.
@@ -104,7 +104,7 @@ These are the highest-impact findings. Everything else can wait until these are 
 - `[ ]` **3.6** `src/pages/PosPage.jsx:344–385` — `isNew=true` with `pendingCustomerData`: comanda is inserted with `customer_name` then a second `UPDATE` resets it with `customer_id`. If UPDATE fails → comanda with name but no `customer_id`. **Fix:** Pass `customerId` directly to `getOrCreateActiveComanda` (single INSERT with both fields).
   > _Notes:_
 
-- `[ ]` **3.7** `src/components/Ticket.jsx:368–404` — `setTimeout().print()` doesn't wait for image/font load; no `printWindow.close()` after printing. **Fix:** Use `printWindow.onafterprint = () => printWindow.close()`.
+- `[x]` **3.7** `src/components/Ticket.jsx:368–404` — No `printWindow.close()` after printing. **Fix:** Added `printWindow.onafterprint = () => printWindow.close()` inside the print handler.
   > _Notes:_
 
 - `[x]` **3.8 🔴** `src/services/membership.js:105–116` — `customer_memberships_customer_month_unique` (total index) blocks reactivation for same month if previous membership was cancelled/expired. **Fix:** Drop the total index — the partial `one_active_membership_per_customer_month` is the correct one. (See also 5.2)
@@ -148,7 +148,7 @@ These are the highest-impact findings. Everything else can wait until these are 
 
 ## 5. Database Schema Issues
 
-- `[ ]` **5.1** `comanda_items` — Missing index on `(comanda_id, status)` for frequent joins in `validateComandaInventoryBeforePayment` and `getActiveCartItems`. **Fix:** `CREATE INDEX comanda_items_comanda_status_idx ON comanda_items (comanda_id, status) WHERE status='active';`
+- `[x]` **5.1** `comanda_items` — Missing index on `(comanda_id, status)` for frequent joins in `validateComandaInventoryBeforePayment` and `getActiveCartItems`. **Fix:** Migration `20260511000007_add_missing_indexes.sql`.
   > _Notes:_
 
 - `[x]` **5.2 🔴** `customer_memberships` — Two conflicting unique indexes: total `customer_memberships_customer_month_unique` + partial `one_active_membership_per_customer_month`. The total one blocks reactivation. **Fix:** `DROP` the total index/constraint. The partial is correct.
@@ -169,7 +169,7 @@ These are the highest-impact findings. Everything else can wait until these are 
 - `[ ]` **5.7** `users` — No `updated_at` column. PIN changes and deactivations have no audit timestamp. **Fix:** Add `updated_at` with trigger.
   > _Notes:_
 
-- `[ ]` **5.8** `shifts` — No index on `comandas.cobrado_at` even though `getWeeklyReportData` filters on it. **Fix:** `CREATE INDEX comandas_cobrado_at_idx ON comandas (cobrado_at) WHERE status='paid';`
+- `[x]` **5.8** `shifts` — No index on `comandas.cobrado_at` even though `getWeeklyReportData` filters on it. **Fix:** Migration `20260511000007_add_missing_indexes.sql`.
   > _Notes:_
 
 - `[ ]` **5.9** `customers.customer_number` is `text` — Lexicographic ordering can cause gaps/collisions if numbers go out of sequence. **Fix:** Use `integer` + format to string in UI only.

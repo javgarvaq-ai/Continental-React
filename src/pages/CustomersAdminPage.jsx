@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import {
     getAllCustomers,
     createCustomer,
@@ -7,6 +6,7 @@ import {
     getNextCustomerNumber,
     getCustomerBenefitUsage,
 } from '../services/customersAdmin'
+import { getCurrentMonthDate } from '../services/membership'
 import AdminNav from '../components/AdminNav'
 import { useAuthStore } from '../store/authStore'
 
@@ -17,13 +17,7 @@ function formatMonth(monthStr) {
     return d.toLocaleString('es-MX', { month: 'long', year: 'numeric' })
 }
 
-function getCurrentMonthDate() {
-    const now = new Date()
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
-}
-
 function CustomersAdminPage() {
-    const navigate = useNavigate()
     const [customers, setCustomers] = useState([])
     const [status, setStatus] = useState('Loading...')
     const [loading, setLoading] = useState(true)

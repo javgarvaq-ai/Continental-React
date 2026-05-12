@@ -13,20 +13,6 @@ export async function getAllCustomers() {
         .order('customer_number', { ascending: true })
 }
 
-export async function getCustomerByNumber(customerNumber) {
-    return await supabase
-        .from('customers')
-        .select(`
-            *,
-            customer_memberships (
-                id, month, status,
-                membership_plans ( name, price_monthly )
-            )
-        `)
-        .eq('customer_number', customerNumber)
-        .single()
-}
-
 export async function createCustomer({ customer_number, name, phone, email }) {
     return await supabase
         .from('customers')

@@ -83,7 +83,13 @@ export function useCustomer({ currentComanda, cartTotal, isOnline, setStatus, on
         setIsSearchingCustomer(true)
         setCustomerSearchState(p => ({ ...p, notFound: false, results: [] }))
 
-        const { data } = await searchCustomerByQuery(customerSearchState.query.trim())
+        const { data, error } = await searchCustomerByQuery(customerSearchState.query.trim())
+
+        if (error) {
+            setStatus(`Error buscando cliente: ${error.message}`)
+            setIsSearchingCustomer(false)
+            return
+        }
 
         if (data && data.length > 0) {
             setCustomerSearchState(p => ({ ...p, results: data, notFound: false }))
