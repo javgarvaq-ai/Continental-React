@@ -187,5 +187,8 @@ Replaced custom PIN auth with Supabase Auth. App is now safe on Vercel (public i
 - [x] **3.5** Cancelled comanda can print a ticket — `handleReprintFolioSubmit` in PosPage now checks `comanda.status === 'cancelled'` before the else print branch and shows a clear error
 - [x] **4.5** Product catalog re-fetched on every comanda switch — catalog now loaded once at session start via dedicated `useEffect([], [])` in PosPage; `loadComandaView` now only fetches the cart
 
-### T1 — Server-side role enforcement (bigger work, plan before starting)
-- [ ] **7.6 🔴** Admin service files (categoriesAdmin, productsAdmin, unitsAdmin, etc.) have no server-side role check. Any authenticated user can call admin writes. Fix: SECURITY DEFINER RPCs with role check, or RLS policies that check `auth.uid()` role.
+### T1 — Server-side role enforcement ✅ (2026-05-12)
+- [x] **7.6 🔴** `20260512000001_admin_role_rls.sql` — restricted INSERT/UPDATE/DELETE on 12 admin-only tables to `role IN ('admin', 'manager')` via subquery on `public.users`. SELECT stays open (waiters read products/categories). `employees`, `employee_schedule_shifts`, `employee_time_logs` split from `FOR ALL` into separate SELECT (open) + write (admin/manager) policies.
+
+**Action required in production:**
+1. `supabase db push` to apply migration `20260512000001`
