@@ -160,8 +160,8 @@ These are the highest-impact findings. Everything else can wait until these are 
 - `[ ]` **5.4** `payments` columns — `efectivo`, `tarjeta`, `transferencia`, `total_paid` are `numeric nullable` without default. **Fix:** `NOT NULL DEFAULT 0`.
   > _Notes:_
 
-- `[ ]` **5.5** `tickets.getReprintData` — Uses `.single()` on payments; fails if comanda was cancelled before payment. **Fix:** Use `.maybeSingle()`.
-  > _Notes:_
+- `[x]` **5.5** `tickets.getReprintData` — Uses `.single()` on payments; fails if comanda was cancelled before payment. **Fix:** Use `.maybeSingle()`.
+  > _Done 2026-05-11 — `src/services/tickets.js` line 39. One-char change, no migration needed._
 
 - `[ ]` **5.6** `inventory_movements` — `quantity` (resulting stock) vs `quantity_change` (delta) naming is ambiguous. Future devs will invert them. **Fix:** Rename `quantity` → `resulting_stock`.
   > _Notes:_
@@ -202,8 +202,8 @@ These are the highest-impact findings. Everything else can wait until these are 
 - `[ ]` **6.4** Error logging — `InventoryPage` and `useCustomer.handleSearchCustomer` silently swallow errors. **Fix:** Surface all errors via `setStatus` per project convention.
   > _Notes:_
 
-- `[ ]` **6.5** `CustomersAdminPage.jsx:179` — `m.status === 'active' ? 'Activa' : 'Expirada'` doesn't handle `'cancelled'` — shows "Expirada" for cancelled memberships. **Fix:** Map all three states explicitly.
-  > _Notes:_
+- `[x]` **6.5** `CustomersAdminPage.jsx:179` — `m.status === 'active' ? 'Activa' : 'Expirada'` didn't handle `'cancelled'` — showed "Expirada" for cancelled memberships. **Fix:** Map all three states explicitly with distinct colors (green / red / grey).
+  > _Done 2026-05-11 — `src/pages/CustomersAdminPage.jsx` line 179. No migration needed._
 
 - `[ ]` **6.6** Week-start mismatch — `scheduleAdmin.js#getWeekStart` starts on Monday; `WeeklyReportPage.jsx:11` starts on Sunday. **Fix:** Unify to Monday.
   > _Notes:_
@@ -241,6 +241,8 @@ These are the highest-impact findings. Everything else can wait until these are 
 |------|------|-------|
 | T2 — Drop total membership unique constraint (3.8 + 5.2) | 2026-05-11 | Migration `20260511000002_fix_membership_unique_index.sql`. Partial index `one_active_membership_per_customer_month` remains. Requires `supabase db push` in prod. |
 | T5 — canEditPersonas / updateComandaPersonas status mismatch (3.1) | 2026-05-11 | `src/services/products.js` — `.in('status', ['open', 'processing_payment'])` + improved error message. No migration needed. |
+| R1 — Membership status label missing 'cancelled' (6.5) | 2026-05-11 | `src/pages/CustomersAdminPage.jsx` line 179 — mapped all 3 statuses with distinct colors. |
+| R2 — `.single()` on payments crashes on cancelled comanda (5.5) | 2026-05-11 | `src/services/tickets.js` line 39 — changed to `.maybeSingle()`. |
 
 ---
 

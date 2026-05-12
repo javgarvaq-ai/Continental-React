@@ -36,7 +36,7 @@ export async function getReprintData({ comanda, tipo, userId }) {
             .eq('comanda_id', comanda.id)
             .order('created_at', { ascending: false })
             .limit(1)
-            .single()
+            .maybeSingle()
 
         payment = paymentData
     }

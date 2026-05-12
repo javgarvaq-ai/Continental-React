@@ -176,7 +176,9 @@ function CustomersAdminPage() {
                                         .map(m => (
                                             <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', background: '#111', padding: '8px 12px', borderRadius: '8px', fontSize: '13px' }}>
                                                 <span>{formatMonth(m.month)} — {m.membership_plans?.name}</span>
-                                                <span style={{ color: m.status === 'active' ? '#66bb6a' : '#888' }}>{m.status === 'active' ? 'Activa' : 'Expirada'}</span>
+                                                <span style={{ color: m.status === 'active' ? '#66bb6a' : m.status === 'cancelled' ? '#ef5350' : '#888' }}>
+                                                    {m.status === 'active' ? 'Activa' : m.status === 'cancelled' ? 'Cancelada' : 'Expirada'}
+                                                </span>
                                             </div>
                                         ))
                                     }
