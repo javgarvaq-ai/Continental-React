@@ -33,7 +33,7 @@ All Edge Functions use `SB_SERVICE_ROLE_KEY` (not `SUPABASE_SERVICE_ROLE_KEY` â€
 - **Service layer pattern:** All Supabase calls must go in `src/services/`. Hooks and pages never call Supabase directly.
 - **No browser dialogs:** Never use `window.alert`, `window.confirm`, or `window.prompt`. Use `setStatus()` for messages and double-confirm pattern for destructive actions.
 - **Double-confirm pattern:** First click arms the button (turns red, shows warning text, 3s timeout), second click fires the action.
-- **No git commands in bash sandbox.** The sandbox is isolated and won't affect the real repo.
+- **No git or Supabase CLI commands in bash sandbox.** The sandbox is isolated â€” it has no access to the real repo or Supabase CLI config. Commands like `git push`, `supabase db push`, `supabase migration new`, `supabase functions deploy` must be run by the user in their own terminal.
 
 ---
 

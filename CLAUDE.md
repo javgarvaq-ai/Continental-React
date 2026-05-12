@@ -45,6 +45,23 @@
 5. **Document Results**: Add review section to `tasks/todo.md`.
 6. **Capture Lessons**: Update `tasks/lessons.md` after corrections.
 
+## Supabase & Database Work
+
+**Before touching anything Supabase or Postgres related, read these two skill files:**
+
+- `.agents/skills/supabase/SKILL.md` — Core Supabase guidelines: changelog verification, CLI gotchas, security checklist (RLS, views, SECURITY DEFINER, storage), migration workflow.
+- `.agents/skills/supabase-postgres-best-practices/SKILL.md` — Postgres performance rules across 8 categories (indexes, connection management, RLS, schema design, concurrency, etc.).
+
+**⚠️ CLI commands must be run by the user in their own terminal — never in the bash sandbox.** The sandbox is isolated and has no access to the Supabase project or local CLI config. Same rule as git commands.
+
+**Key rules extracted from those skills (do not skip these):**
+
+- **Migrations:** Write the SQL file directly under `supabase/migrations/` with the timestamp filename convention (`YYYYMMDDHHMMSS_<name>.sql`). Apply to prod with `npx supabase db push` (user runs this). Do NOT use `apply_migration` to iterate — it writes history on every call and blocks future diffs. Do NOT use `supabase db pull` to generate files — in this project migrations are written by hand and pushed.
+- **RLS:** Enable on every table in exposed schemas. A `TO anon` policy does NOT cover `authenticated` — they are separate Postgres roles. Views bypass RLS by default (use `security_invoker = true` in Postgres 15+). UPDATE requires a SELECT policy — without it, updates silently return 0 rows.
+- **SECURITY DEFINER functions:** Never place them in an exposed schema (e.g. `public`). Use a private schema.
+- **Supabase Auth:** Never use `user_metadata` / `raw_user_meta_data` in RLS policies — it is user-editable. Use `app_metadata` / `raw_app_meta_data` for authorization claims.
+- **CLI version check:** `supabase db query` requires CLI v2.79.0+; `supabase db advisors` requires v2.81.3+. Run `supabase --version` if unsure.
+
 ## Core Principles
 - **Simplicity First**: Make every change as simple as possible. Impact minimal code.
 - **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
