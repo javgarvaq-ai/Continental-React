@@ -72,7 +72,24 @@ export async function getActiveCartItems(comandaId) {
     return { data, error };
 }
 
+// Internal guard — rejects write operations if the comanda is no longer open.
+// Prevents adding/removing items from a comanda that has moved to payment or beyond.
+async function assertComandaOpen(comandaId) {
+    const { data, error } = await supabase
+        .from('comandas')
+        .select('status')
+        .eq('id', comandaId)
+        .single()
+    if (error) return { error }
+    if (data.status !== 'open') {
+        return { error: new Error('La comanda ya no está abierta. Recarga la página.') }
+    }
+    return { error: null }
+}
+
 export async function addNormalProductToComanda({ comandaId, product }) {
+    const { error: guardError } = await assertComandaOpen(comandaId)
+    if (guardError) return { error: guardError }
     const { data: existingItem, error: existingError } = await supabase
         .from('comanda_items')
         .select('*')
@@ -164,6 +181,9 @@ export async function addShotWithFreeMixers({
     if (!comandaId || !shotProduct?.id) {
         return { error: new Error('Datos incompletos para agregar shot.') };
     }
+
+    const { error: guardError } = await assertComandaOpen(comandaId)
+    if (guardError) return { error: guardError }
 
     if (!shotProduct.is_shot) {
         return { error: new Error('El producto seleccionado no es shot.') };
@@ -300,6 +320,9 @@ export async function decreaseCartItem({
     if (qty <= 0) {
         return { error: new Error('Cantidad inválida.') };
     }
+
+    const { error: guardError } = await assertComandaOpen(comandaId)
+    if (guardError) return { error: guardError }
 
     const { data: productRow, error: productError } = await supabase
         .from('products')

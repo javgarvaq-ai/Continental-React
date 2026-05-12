@@ -182,10 +182,10 @@ Replaced custom PIN auth with Supabase Auth. App is now safe on Vercel (public i
 
 ## Pending — Next Session
 
-### Round B — Runtime bugs (no migrations needed)
-- [ ] **6.3 🔴** `addNormalProductToComanda` / `addShotWithFreeMixers` / `decreaseCartItem` — missing `status='open'` guard. Race condition can add items to a comanda already in payment.
-- [ ] **3.5** Cancelled comanda can print a ticket — add status check before print branch in PosPage
-- [ ] **4.5** Product catalog re-fetched on every comanda switch — move to session-level load
+### Round B — Runtime bugs ✅ (2026-05-12)
+- [x] **6.3 🔴** `addNormalProductToComanda` / `addShotWithFreeMixers` / `decreaseCartItem` — added `assertComandaOpen` internal guard in `products.js`; rejects writes if comanda is not `open`
+- [x] **3.5** Cancelled comanda can print a ticket — `handleReprintFolioSubmit` in PosPage now checks `comanda.status === 'cancelled'` before the else print branch and shows a clear error
+- [x] **4.5** Product catalog re-fetched on every comanda switch — catalog now loaded once at session start via dedicated `useEffect([], [])` in PosPage; `loadComandaView` now only fetches the cart
 
 ### T1 — Server-side role enforcement (bigger work, plan before starting)
 - [ ] **7.6 🔴** Admin service files (categoriesAdmin, productsAdmin, unitsAdmin, etc.) have no server-side role check. Any authenticated user can call admin writes. Fix: SECURITY DEFINER RPCs with role check, or RLS policies that check `auth.uid()` role.

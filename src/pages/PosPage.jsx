@@ -194,6 +194,19 @@ function PosPage() {
         loadUnits();
     }, []);
 
+    // Load product catalog once per session — catalog doesn't change during a shift.
+    useEffect(() => {
+        async function loadCatalog() {
+            const result = await getProductsCatalog()
+            if (result.error) {
+                setStatus(`Error cargando productos: ${result.error.message}`)
+                return
+            }
+            setGroupedProducts(result.data?.groupedProducts || {})
+        }
+        loadCatalog()
+    }, []);
+
     useEffect(() => {
         if (currentComanda?.id) {
             loadComandaView(currentComanda.id);
@@ -242,6 +255,8 @@ function PosPage() {
         }
         if (comanda.status === 'paid') {
             setReprintDialog(d => ({ ...d, loading: false, phase: 'type', comanda }))
+        } else if (comanda.status === 'cancelled') {
+            setReprintDialog(d => ({ ...d, loading: false, error: 'Esta comanda fue cancelada y no tiene ticket.' }))
         } else {
             setReprintDialog(d => ({ ...d, loading: false }))
             await doPrintTicket({ tipo: 'cuenta', comanda })
@@ -258,25 +273,17 @@ function PosPage() {
         navigate('/inventory');
     }
 
-    // Full load: fetches catalog + cart. Used when first opening a comanda.
+    // Cart load: fetches only the active cart items for a comanda.
+    // Catalog is loaded once at session start (see useEffect above) and never re-fetched here.
     async function loadComandaView(comandaId) {
-        const [productsResult, cartResult] = await Promise.all([
-            getProductsCatalog(),
-            getActiveCartItems(comandaId),
-        ]);
+        const { data, error } = await getActiveCartItems(comandaId);
 
-        if (productsResult.error) {
-            setStatus(`Error cargando productos: ${productsResult.error.message}`);
+        if (error) {
+            setStatus(`Error cargando comanda: ${error.message}`);
             return;
         }
 
-        if (cartResult.error) {
-            setStatus(`Error cargando comanda: ${cartResult.error.message}`);
-            return;
-        }
-
-        setGroupedProducts(productsResult.data?.groupedProducts || {});
-        setCartItems(cartResult.data || []);
+        setCartItems(data || []);
         setStatus('Comanda cargada.');
     }
 
