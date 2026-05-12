@@ -114,3 +114,13 @@ Implementado 2026-05-08. 6 bloques en 6 archivos de código + 3 migraciones nuev
 
 **Acción requerida en producción:**
 1. `supabase db push` para aplicar migración `20260511000002`
+
+### R4: verify_pin rate limiting ✅ (2026-05-11)
+- [x] Migration `20260511000003_verify_pin_rate_limit.sql`
+  - Added `failed_pin_attempts integer NOT NULL DEFAULT 0` to `users`
+  - Added `locked_until timestamptz NULL` to `users`
+  - Recreated `verify_pin` RPC: 5 wrong attempts → 15 min lockout; correct PIN resets counter
+  - No frontend changes needed
+
+**Action required in production:**
+1. `supabase db push` to apply migration `20260511000003`

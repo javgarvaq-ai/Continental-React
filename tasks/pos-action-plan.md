@@ -224,8 +224,8 @@ These are the highest-impact findings. Everything else can wait until these are 
 - `[ ]` **7.3 🔴** `src/store/authStore.js:17–25` — Full user object (including `role`) stored in `localStorage`. Attacker with local access edits JSON → elevates to admin until `verifySession` runs. Admin RPCs (`create_user`, `reset_user_pin`, `update_user_active`) accept any anon call with no server-side role check. **Fix:** Add `p_caller_id` param to admin RPCs + role check inside `SECURITY DEFINER` function.
   > _Notes:_
 
-- `[ ]` **7.4 🔴** `verify_pin` RPC — No rate limiting. 6-digit PIN = 1M combinations, brute-forceable with anon key at network speed. **Fix:** Add `failed_pin_attempts` counter + temp lock on `users` table, or `pg_sleep(0.5)` on failure.
-  > _Notes:_
+- `[x]` **7.4 🔴** `verify_pin` RPC — No rate limiting. 6-digit PIN = 1M combinations, brute-forceable with anon key at network speed. **Fix:** Add `failed_pin_attempts` counter + `locked_until` on `users`; lock for 15 min after 5 failed attempts. Correct PIN resets both.
+  > _Done 2026-05-11 — migration `20260511000003_verify_pin_rate_limit.sql`. No frontend changes needed. Requires `supabase db push` in prod._
 
 - `[ ]` **7.5 (medium)** RLS open to anon — `comandas`, `comanda_items`, `payments`, etc. use `USING(true) WITH CHECK(true)`. Intentional for PIN-auth model on LAN. **Risk:** If tablet ever hits the internet, it's a full bypass. **Fix (long-term):** Supabase Auth sessions. **Fix (short-term):** Private LAN + reverse proxy. Document assumption in `lessons.md`.
   > _Notes:_
@@ -244,6 +244,7 @@ These are the highest-impact findings. Everything else can wait until these are 
 | R1 — Membership status label missing 'cancelled' (6.5) | 2026-05-11 | `src/pages/CustomersAdminPage.jsx` line 179 — mapped all 3 statuses with distinct colors. |
 | R2 — `.single()` on payments crashes on cancelled comanda (5.5) | 2026-05-11 | `src/services/tickets.js` line 39 — changed to `.maybeSingle()`. |
 | R5 — ilike wildcard not escaped in customer search (7.1) | 2026-05-11 | `src/services/membership.js` line 213 — escape `%` and `_` before ilike. |
+| R4 — verify_pin brute-force (7.4) | 2026-05-11 | Migration `20260511000003_verify_pin_rate_limit.sql` — 5-attempt lockout for 15 min. No frontend changes. Requires `supabase db push`. |
 
 ---
 
