@@ -7,6 +7,7 @@ function InventoryPage() {
 
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [loadError, setLoadError] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [unitFilter, setUnitFilter] = useState('all');
 
@@ -16,10 +17,13 @@ function InventoryPage() {
 
     async function loadInventory() {
         setLoading(true);
+        setLoadError('');
 
         const { data, error } = await getAllInventoryItems();
 
-        if (!error) {
+        if (error) {
+            setLoadError(`Error cargando inventario: ${error.message}`);
+        } else {
             setItems(data || []);
         }
 
@@ -155,6 +159,14 @@ function InventoryPage() {
                 boxSizing: 'border-box',
             }}
         >
+            {loadError && (
+                <div style={{
+                    background: '#5c1f1f', color: '#ffd7d7', border: '1px solid #a33a3a',
+                    borderRadius: '8px', padding: '12px 16px', marginBottom: '16px',
+                }}>
+                    {loadError}
+                </div>
+            )}
             <div
                 style={{
                     display: 'flex',

@@ -133,6 +133,17 @@ export async function activateMembership({ customerId, planId, comandaId }) {
 }
 
 export async function addFreeBenefitItemToComanda({ comandaId, productId }) {
+    // Guard: comanda must still be open before adding any free benefit item
+    const { data: comandaRow, error: comandaError } = await supabase
+        .from('comandas')
+        .select('status')
+        .eq('id', comandaId)
+        .single()
+    if (comandaError) return { error: comandaError }
+    if (comandaRow.status !== 'open') {
+        return { error: new Error('La comanda ya no está abierta. Recarga la página.') }
+    }
+
     // Check if this specific free benefit product was already added to this comanda
     const { data: existing } = await supabase
         .from('comanda_items')

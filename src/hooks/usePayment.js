@@ -47,6 +47,7 @@ export function usePayment({
     setStatus,
     onBackToUnits,
     onLoadUnits,
+    onReloadComanda,
 }) {
     const [paymentData, setPaymentData] = useState({
         efectivo: '',
@@ -201,6 +202,8 @@ export function usePayment({
 
             setCurrentComanda((prev) => ({ ...prev, status: 'open' }))
             resetPaymentState()
+            // Reload cart so waiter sees current items after reopen
+            if (onReloadComanda) await onReloadComanda(currentComanda.id)
             await onLoadUnits()
             setStatus('Comanda reabierta.')
         } finally {
@@ -295,9 +298,8 @@ export function usePayment({
                     milestoneVisits,
                 })
 
-                if (membershipResult?.membershipWarning) {
-                    setStatus(`Cobro registrado. Advertencia de membresía: ${membershipResult.membershipWarning}`)
-                }
+                // Warning is appended to the final success message below — not set here
+                // so it doesn't get overwritten when onBackToUnits fires.
             }
 
             printTicket({
@@ -334,10 +336,11 @@ export function usePayment({
             })
 
             let successMsg = 'Cobro registrado correctamente.'
-            if (data?.inventoryWarning) {
-                successMsg = `Cobro registrado con advertencia de inventario: ${data.inventoryWarning}`
-            } else if (membershipResult?.earnedBottleCredit) {
+            if (membershipResult?.earnedBottleCredit) {
                 successMsg += ` 🍾 ¡${currentCustomer.name} ganó un crédito de botella!`
+            }
+            if (membershipResult?.membershipWarning) {
+                successMsg += ` ⚠️ ${membershipResult.membershipWarning}`
             }
 
             await onBackToUnits(successMsg)

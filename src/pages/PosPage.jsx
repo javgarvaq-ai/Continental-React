@@ -168,6 +168,7 @@ function PosPage() {
         setStatus,
         onBackToUnits: handleBackToUnits,
         onLoadUnits: loadUnits,
+        onReloadComanda: reloadCart,
     });
 
     const [scheduleOpen, setScheduleOpen] = useState(false);

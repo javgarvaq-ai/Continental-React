@@ -21,12 +21,12 @@
 - **Problema:** El RPC hace `UPDATE comandas SET status='paid'` sin `WHERE status = 'processing_payment'`. Un retry por timeout o dos tablets confirmando al mismo tiempo insertan dos filas en `payments`, descuentan inventario dos veces, y registran dos `cobrado_at`.
 - **Fix:** Agregar `AND status = 'processing_payment'` al UPDATE del RPC. Usar `GET DIAGNOSTICS affected_rows = ROW_COUNT`; si 0, retornar `{ ok: false, error: 'comanda_not_in_processing_payment' }` antes de tocar `payments` o inventario.
 
-**S-3 🔴 RPC `activate_membership` no verifica que la comanda esté abierta**
+**S-3 ✅ CORREGIDO RPC `activate_membership` — guard de comanda abierta agregado**
 - **Archivo:** `supabase/migrations/20260511000004_activate_membership_rpc.sql`
 - **Problema:** Inserta en `customer_memberships` y en `comanda_items` sin verificar `comandas.status = 'open'`. Una sesión de UI desactualizada puede cobrar una membresía a una comanda ya en `pending_payment` o `paid`.
 - **Fix:** Al inicio del RPC: `IF NOT EXISTS (SELECT 1 FROM comandas WHERE id = p_comanda_id AND status = 'open') THEN RETURN jsonb_build_object('ok', false, 'error', 'La comanda no está abierta.'); END IF;`
 
-**S-4 🔴 `addFreeBenefitItemToComanda` en `membership.js` sin guard `assertComandaOpen`**
+**S-4 ✅ CORREGIDO `addFreeBenefitItemToComanda` en `membership.js` — guard agregado**
 - **Archivo:** `src/services/membership.js`
 - **Problema:** Las tres funciones mutantes de `products.js` ya tienen el guard de Round-B. Esta función que agrega beneficios gratis no lo tiene. Un waiter puede agregar un beneficio a una comanda en `pending_payment`.
 - **Fix:** Agregar el mismo patrón de `assertComandaOpen` como primer paso de `addFreeBenefitItemToComanda`.
@@ -36,12 +36,12 @@
 - **Problema:** Si dos tablets tienen la misma comanda abierta simultáneamente (sin real-time subscriptions), el Tablet A puede presentar la cuenta con un total que no incluye los items que Tablet B agregó. El RPC usa `p_total` del cliente para setear `final_total`. El cliente sale sub-cobrado.
 - **Fix:** En el RPC, calcular `final_total` desde la DB: `SELECT SUM(unit_price * quantity) FROM comanda_items WHERE comanda_id = p_comanda_id AND status = 'active'`, en lugar de usar `p_total`.
 
-**S-6 🟡 `anon` tiene EXECUTE en RPCs de membresía — nunca fue revocado**
+**S-6 ✅ CORREGIDO `anon` EXECUTE revocado en `activate_membership` y `process_membership_on_payment`**
 - **Archivo:** `supabase/migrations/20260511000004_activate_membership_rpc.sql` (línea 100), `20260511000001_process_membership_rpc.sql`
 - **Problema:** El grant es a `anon` pero el Auth migration luego re-granted a `authenticated`. El grant de `anon` nunca fue revocado. En práctica las tablas tienen RLS que bloquearía las escrituras, pero es un permiso innecesario.
 - **Fix:** `REVOKE EXECUTE ON FUNCTION public.activate_membership(uuid, uuid, uuid) FROM anon;` y similar para `process_membership_on_payment`.
 
-**S-7 🟡 Cualquier usuario autenticado puede INSERT/UPDATE en `shifts`**
+**S-7 ✅ CORREGIDO `shifts_insert` y `shifts_update` restringidos a admin/manager**
 - **Archivo:** `supabase/migrations/20260511000005_supabase_auth_rls.sql` — políticas de shifts
 - **Problema:** `shifts_insert` y `shifts_update` son `USING(true)` para cualquier `authenticated`. Un waiter con sesión válida puede abrir un nuevo turno con `starting_cash` arbitrario via REST API.
 - **Fix:** Agregar la misma verificación de rol que la migración `20260512000001` para `shifts_insert` y `shifts_update` → `role IN ('admin', 'manager')`.
@@ -70,12 +70,12 @@
 - **Problema:** La query de `comanda_items` en el reprint no tiene `.eq('status', 'active')`. Los items cancelados (soft-deleted) aparecen en el ticket reimpreso. Totales incorrectos.
 - **Fix:** Agregar `.eq('status', 'active')` al query de comanda_items en `getReprintData`.
 
-**B-4 🟡 Cart no se recarga después de `handleReopenComanda`**
+**B-4 ✅ CORREGIDO Cart recarga tras reabrir comanda**
 - **Archivo:** `src/hooks/usePayment.js`
 - **Problema:** `handleReopenComanda` llama `onLoadUnits()` pero no `reloadCart(currentComanda.id)`. El `useEffect([currentComanda?.id])` en PosPage no se re-dispara porque el ID no cambió. El cart queda en su estado pre-reopen hasta que el waiter sale y vuelve a entrar a la mesa.
 - **Fix:** Llamar `onReloadComanda(currentComanda.id)` dentro de `handleReopenComanda` después de que el status update sea exitoso.
 
-**B-5 🟡 `InventoryPage.loadInventory` traga errores silenciosamente**
+**B-5 ✅ CORREGIDO `InventoryPage` muestra banner de error al fallar la carga**
 - **Archivo:** `src/pages/InventoryPage.jsx`
 - **Problema:** `if (!error) { setItems(data || []) }` — si hay error, la página muestra lista vacía sin ningún mensaje explicativo.
 - **Fix:** `else { setStatus('Error cargando inventario: ' + error.message) }`
@@ -85,7 +85,7 @@
 - **Problema:** Si `createCustomer` tiene éxito pero `assignCustomerToComanda` falla (comanda cancelada por otro dispositivo, red caída), el cliente existe en la DB pero no está asignado. Además el contador de `customer_number` ya avanzó → gap en la numeración.
 - **Fix:** Tolerable en el corto plazo (el gap en números es cosmético). Fix ideal: RPC server-side `create_and_assign_customer` atómico.
 
-**B-7 🟡 `membershipWarning` reemplaza el mensaje de confirmación de cobro**
+**B-7 ✅ CORREGIDO `membershipWarning` se concatena al mensaje de éxito**
 - **Archivo:** `src/hooks/usePayment.js` — `handleConfirmPayment`
 - **Problema:** Si hay `membershipWarning` (e.g., config de milestone falta), el warning sobreescribe el mensaje de éxito del cobro. El waiter ve solo el warning y no ve la confirmación de que el cobro fue exitoso.
 - **Fix:** Concatenar el warning al mensaje de éxito en lugar de reemplazarlo.
