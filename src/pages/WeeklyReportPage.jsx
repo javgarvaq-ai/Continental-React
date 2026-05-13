@@ -8,7 +8,10 @@ function WeeklyReportPage() {
     const navigate = useNavigate();
 
     const startOfWeek = new Date(today);
-    startOfWeek.setDate(today.getDate() - today.getDay());
+    // Week starts on Monday (aligns with employee schedule)
+    // getDay: 0=Sun → go back 6 days, 1=Mon → 0, 2=Tue → 1, etc.
+    const dayOfWeek = today.getDay();
+    startOfWeek.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
 
     // Use local date (not UTC) so the default range is correct in Mexico timezone
     function toLocalDateString(date) {

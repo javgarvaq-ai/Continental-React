@@ -393,7 +393,7 @@ function PosPage() {
     async function handleBackToUnits(customStatus = null) {
         setSelectedUnit(null);
         setCurrentComanda(null);
-        setGroupedProducts({});
+        // Do NOT clear groupedProducts — catalog is loaded once per session (see useEffect above)
         setCartItems([]);
         resetPaymentState();
         resetShotSelector();
@@ -436,7 +436,7 @@ function PosPage() {
 
             setSelectedUnit(null);
             setCurrentComanda(null);
-            setGroupedProducts({});
+            // Do NOT clear groupedProducts — catalog is loaded once per session
             setCartItems([]);
             resetPaymentState();
             resetShotSelector();

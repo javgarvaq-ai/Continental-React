@@ -300,7 +300,10 @@ export async function confirmPayment({
     }
 
     if (rpcResult && !rpcResult.ok) {
-        return { error: new Error(rpcResult.error || 'Error al finalizar cobro.') };
+        const msg = rpcResult.error === 'already_paid'
+            ? 'Esta comanda ya fue cobrada. Recarga la página.'
+            : (rpcResult.error || 'Error al finalizar cobro.');
+        return { error: new Error(msg) };
     }
 
     return { error: null, data: { inventoryWarning: null } };

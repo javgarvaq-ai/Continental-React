@@ -180,6 +180,15 @@ Replaced custom PIN auth with Supabase Auth. App is now safe on Vercel (public i
 
 ---
 
+## Pre-apertura — Blockers ✅ (2026-05-12)
+
+- [x] **S-2** `20260512000002_finalize_payment_idempotent.sql` — `finalize_comanda_payment` RPC ahora verifica `status = 'processing_payment'` antes de hacer cualquier cosa. Doble cobro por retry imposible. Frontend mapea `already_paid` → "Esta comanda ya fue cobrada. Recarga la página."
+- [x] **B-1** PosPage — removidos `setGroupedProducts({})` de `handleBackToUnits` y `handleCancelMesa`. Catálogo persiste toda la sesión.
+- [x] **B-2** WeeklyReportPage — semana por defecto ahora inicia en lunes (alineado con schedule de empleados).
+
+**Acción requerida en producción:**
+1. `supabase db push` para aplicar `20260512000001` (admin RLS) y `20260512000002` (payment idempotent)
+
 ## Pending — Next Session
 
 ### Round B — Runtime bugs ✅ (2026-05-12)
