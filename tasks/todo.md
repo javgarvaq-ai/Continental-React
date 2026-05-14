@@ -200,6 +200,31 @@ Replaced custom PIN auth with Supabase Auth. App is now safe on Vercel (public i
 - [x] **S-7** `20260512000003_security_fixes.sql` → `shifts_insert` y `shifts_update` restringidos a `role IN ('admin', 'manager')`
 - [x] **B-3** Falso positivo — `getReprintData` en `tickets.js` ya tenía `.eq('status', 'active')`; no requería cambio
 
+## Sprint May 13th — En progreso
+
+### [x] 0.3 · B6+B9 — Apertura de mesa con cliente atómica ✅
+- [x] `comandas.js` → `getOrCreateActiveComanda`: acepta `customerId` opcional, lo incluye en el INSERT
+- [x] `PosPage.jsx` → `doOpenTable`: pasa `customerId` al crear comanda, eliminado `assignCustomerToComanda` separado
+- [x] Verificado: customer_id y customer_name van en el mismo INSERT — atómico por diseño
+
+### [x] 0.1 · B3 — `adjust_inventory_stock` cap a 0 ✅
+- [x] Migración `20260513000001_fix_adjust_inventory_stock.sql` — ajuste negativo falla con `insufficient_stock` + stock real en lugar de silenciosamente capear a 0
+- [x] `inventoryAdmin.js` → mensaje de error descriptivo con stock actual cuando `insufficient_stock`
+- [x] **Javi debe correr:** `supabase db push`
+### [x] 0.4 · C7 — Alinear semana a domingo en schedules ✅
+- [x] `scheduleAdmin.js` → `getWeekStart` retorna domingo (`d.getDay()` días de retroceso)
+- [x] `ScheduleAdminPage.jsx` + `ScheduleViewPanel.jsx` → DAYS/DAYS_FULL arrancan en 'Dom'
+- [x] Migración `20260513000002_schedule_week_start_sunday.sql` — renumera `day_of_week` y retrocede `week_start` en datos existentes
+- [x] **Javi debe correr:** `supabase db push`
+### [x] 0.2 · B5 — Ticket de pagado respeta membershipWarning ✅
+- [x] `usePayment.js` → `membershipInfo: null` cuando `membershipResult?.membershipWarning` está set — ticket no imprime sección de membresía que no fue otorgada
+
+### [x] 0.5 · S5 — isAdmin check en EmployeesAdminPage y ScheduleAdminPage ✅
+- [x] `EmployeesAdminPage.jsx` → import `useAuthStore` + `if (!isAdmin)` guard antes del render
+- [x] `ScheduleAdminPage.jsx` → mismo patrón
+
+---
+
 ## Pending — Next Session
 
 ### Round B — Runtime bugs ✅ (2026-05-12)

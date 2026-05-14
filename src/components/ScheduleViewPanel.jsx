@@ -4,7 +4,7 @@ import { getWeekSchedule, getWeekStart, toDateString } from '../services/schedul
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+const DAYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
 const GRID_SLOTS = [
     '11:00', '12:00', '13:00', '14:00', '15:00', '16:00',
@@ -58,10 +58,10 @@ function shiftCoversSlot(startTime, endTime, slot) {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 function ScheduleViewPanel({ open, onClose }) {
-    const todayMonday = toDateString(getWeekStart())
-    const nextMonday = toDateString(getWeekStart(addDays(new Date(todayMonday + 'T12:00:00'), 7)))
+    const todayWeekStart = toDateString(getWeekStart())
+    const nextWeekStart = toDateString(getWeekStart(addDays(new Date(todayWeekStart + 'T12:00:00'), 7)))
 
-    const [activeWeek, setActiveWeek] = useState(todayMonday)
+    const [activeWeek, setActiveWeek] = useState(todayWeekStart)
     const [employees, setEmployees] = useState([])
     const [shifts, setShifts] = useState([])
     const [loading, setLoading] = useState(false)
@@ -146,8 +146,8 @@ function ScheduleViewPanel({ open, onClose }) {
                 {/* Week tabs */}
                 <div style={{ display: 'flex', gap: '6px', padding: '12px 20px 0', flexShrink: 0 }}>
                     {[
-                        { label: 'Esta semana', week: todayMonday },
-                        { label: 'Próxima semana', week: nextMonday },
+                        { label: 'Esta semana', week: todayWeekStart },
+                        { label: 'Próxima semana', week: nextWeekStart },
                     ].map(({ label, week }) => (
                         <button
                             key={week}

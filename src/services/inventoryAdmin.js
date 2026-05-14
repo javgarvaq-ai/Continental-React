@@ -59,6 +59,13 @@ export async function adjustInventoryStock({ id, amount, note, userId, type }) {
     if (error) return { error }
 
     if (!result?.ok) {
+        if (result?.error === 'insufficient_stock') {
+            return {
+                error: new Error(
+                    `Stock insuficiente. Stock actual: ${result.current_stock} unidades.`
+                ),
+            }
+        }
         return { error: new Error(result?.error || 'Error al ajustar inventario.') }
     }
 

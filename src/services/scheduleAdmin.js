@@ -1,11 +1,10 @@
 import { supabase } from './supabase'
 
-/** Returns the Monday of the week containing `date` (defaults to today) */
+/** Returns the Sunday of the week containing `date` (defaults to today) */
 export function getWeekStart(date = new Date()) {
     const d = new Date(date)
-    const day = d.getDay() // 0=Sun
-    const diff = day === 0 ? -6 : 1 - day
-    d.setDate(d.getDate() + diff)
+    const day = d.getDay() // 0=Sun, 1=Mon, …, 6=Sat
+    d.setDate(d.getDate() - day) // rewind to Sunday
     d.setHours(0, 0, 0, 0)
     return d
 }

@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 
-export async function getOrCreateActiveComanda({ unitId, userId, customerName, prefetchedExisting = undefined }) {
+export async function getOrCreateActiveComanda({ unitId, userId, customerName, customerId = null, prefetchedExisting = undefined }) {
     let existing = prefetchedExisting
 
     if (existing === undefined) {
@@ -33,6 +33,7 @@ export async function getOrCreateActiveComanda({ unitId, userId, customerName, p
                 opened_by: userId,
                 personas: 0,
                 customer_name: cleanName || null,
+                customer_id: customerId || null,
             },
         ])
         .select()
@@ -66,6 +67,7 @@ export async function getOrCreateActiveComanda({ unitId, userId, customerName, p
             event_type: 'created',
             event_data: {
                 customer_name: cleanName || null,
+                customer_id: customerId || null,
             },
         },
     ])

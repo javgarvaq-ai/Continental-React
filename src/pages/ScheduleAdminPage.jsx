@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import AdminNav from '../components/AdminNav'
+import { useAuthStore } from '../store/authStore'
 import { getAllEmployeesWithStatus } from '../services/employeesAdmin'
 import {
     getWeekSchedule,
@@ -13,8 +14,8 @@ import {
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
-const DAYS_FULL = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+const DAYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+const DAYS_FULL = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 
 // Time slots for the visual grid: 11:00 → 02:00 (next day)
 const GRID_SLOTS = [
@@ -123,10 +124,13 @@ const sectionTitle = {
 // ── Main component ────────────────────────────────────────────────────────────
 
 function ScheduleAdminPage() {
-    const todayMonday = toDateString(getWeekStart())
-    const nextMonday = toDateString(getWeekStart(addDays(new Date(todayMonday + 'T12:00:00'), 7)))
+    const currentUser = useAuthStore(state => state.user)
+    const isAdmin = currentUser?.role === 'admin'
 
-    const [activeWeek, setActiveWeek] = useState(todayMonday)   // 'current' or 'next'
+    const todayWeekStart = toDateString(getWeekStart())
+    const nextWeekStart = toDateString(getWeekStart(addDays(new Date(todayWeekStart + 'T12:00:00'), 7)))
+
+    const [activeWeek, setActiveWeek] = useState(todayWeekStart)   // 'current' or 'next'
     const [employees, setEmployees] = useState([])
     const [shifts, setShifts] = useState([])                    // raw rows from DB
     const [loading, setLoading] = useState(true)
@@ -328,6 +332,12 @@ function ScheduleAdminPage() {
         </button>
     )
 
+    if (!isAdmin) return (
+        <div style={{ padding: '40px', textAlign: 'center', color: '#666', minHeight: '100vh', background: '#0e0e0e' }}>
+            Acceso denegado.
+        </div>
+    )
+
     return (
         <div style={{ padding: '20px', minHeight: '100vh', background: '#0e0e0e', color: '#e2e2e2' }}>
             <AdminNav currentPath="/admin/schedule" />
@@ -345,15 +355,15 @@ function ScheduleAdminPage() {
                 <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                     <button
                         type="button"
-                        onClick={() => { setActiveWeek(todayMonday); setEditingEmpId(null) }}
+                        onClick={() => { setActiveWeek(todayWeekStart); setEditingEmpId(null) }}
                         style={{
                             padding: '7px 14px',
                             borderRadius: '6px',
-                            border: activeWeek === todayMonday ? '1px solid #3a5a3a' : '1px solid #2a2a2a',
-                            background: activeWeek === todayMonday ? '#1a3a2a' : '#1a1a1a',
-                            color: activeWeek === todayMonday ? '#4ade80' : '#666',
+                            border: activeWeek === todayWeekStart ? '1px solid #3a5a3a' : '1px solid #2a2a2a',
+                            background: activeWeek === todayWeekStart ? '#1a3a2a' : '#1a1a1a',
+                            color: activeWeek === todayWeekStart ? '#4ade80' : '#666',
                             fontSize: '13px',
-                            fontWeight: activeWeek === todayMonday ? 600 : 400,
+                            fontWeight: activeWeek === todayWeekStart ? 600 : 400,
                             cursor: 'pointer',
                         }}
                     >
@@ -361,15 +371,15 @@ function ScheduleAdminPage() {
                     </button>
                     <button
                         type="button"
-                        onClick={() => { setActiveWeek(nextMonday); setEditingEmpId(null) }}
+                        onClick={() => { setActiveWeek(nextWeekStart); setEditingEmpId(null) }}
                         style={{
                             padding: '7px 14px',
                             borderRadius: '6px',
-                            border: activeWeek === nextMonday ? '1px solid #3a5a3a' : '1px solid #2a2a2a',
-                            background: activeWeek === nextMonday ? '#1a3a2a' : '#1a1a1a',
-                            color: activeWeek === nextMonday ? '#4ade80' : '#666',
+                            border: activeWeek === nextWeekStart ? '1px solid #3a5a3a' : '1px solid #2a2a2a',
+                            background: activeWeek === nextWeekStart ? '#1a3a2a' : '#1a1a1a',
+                            color: activeWeek === nextWeekStart ? '#4ade80' : '#666',
                             fontSize: '13px',
-                            fontWeight: activeWeek === nextMonday ? 600 : 400,
+                            fontWeight: activeWeek === nextWeekStart ? 600 : 400,
                             cursor: 'pointer',
                         }}
                     >

@@ -6,7 +6,7 @@ import { useCustomer } from '../hooks/useCustomer';
 import { useComanda } from '../hooks/useComanda';
 import { usePayment } from '../hooks/usePayment';
 import { useShift } from '../hooks/useShift';
-import { getOrCreateActiveComanda, cancelComanda, getActiveComandaByUnit, assignCustomerToComanda } from '../services/comandas';
+import { getOrCreateActiveComanda, cancelComanda, getActiveComandaByUnit } from '../services/comandas';
 import MesaGrid from '../components/MesaGrid';
 import ShotMixerSelector from '../components/ShotMixerSelector';
 import ComandaPanel from '../components/ComandaPanel';
@@ -356,6 +356,7 @@ function PosPage() {
             unitId: unit.id,
             userId: currentUser.id,
             customerName,
+            customerId: pendingCustomerData?.customer?.id ?? null,
             prefetchedExisting: existing,
         })
 
@@ -365,14 +366,6 @@ function PosPage() {
         }
 
         if (isNew && pendingCustomerData) {
-            const { error: linkError } = await assignCustomerToComanda({
-                comandaId: data.id,
-                customerId: pendingCustomerData.customer.id,
-                customerName: pendingCustomerData.customer.name,
-            })
-            if (linkError) {
-                setStatus(`Comanda abierta, pero no se pudo vincular el cliente: ${linkError.message}`)
-            }
             setCurrentCustomer(pendingCustomerData.customer)
             setCurrentMembership(pendingCustomerData.activeMembership)
         } else if (!isNew && data.customer_id) {

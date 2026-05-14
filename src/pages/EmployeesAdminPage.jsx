@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import AdminNav from '../components/AdminNav'
+import { useAuthStore } from '../store/authStore'
 import {
     getAllEmployeesWithStatus,
     checkInEmployee,
@@ -60,6 +61,9 @@ const labelStyle = {
 }
 
 function EmployeesAdminPage() {
+    const currentUser = useAuthStore(state => state.user)
+    const isAdmin = currentUser?.role === 'admin'
+
     const [employees, setEmployees] = useState([])
     const [loading, setLoading] = useState(true)
     const [status, setStatus] = useState('')
@@ -165,6 +169,12 @@ function EmployeesAdminPage() {
     }
 
     const onShift = employees.filter(e => e.isCheckedIn).length
+
+    if (!isAdmin) return (
+        <div style={{ padding: '40px', textAlign: 'center', color: '#666', minHeight: '100vh', background: '#0e0e0e' }}>
+            Acceso denegado.
+        </div>
+    )
 
     return (
         <div style={{ padding: '20px', minHeight: '100vh', background: '#0e0e0e', color: '#e2e2e2' }}>

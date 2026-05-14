@@ -6,7 +6,7 @@
 
 **Tech stack:** React 19 + Vite + React Router v7 + Zustand v5 + Supabase (backend/DB)
 
-**Deployment:** Vercel (public internet). The app is live online. Security decisions must assume any endpoint is reachable from the internet.
+**Deployment:** Vercel (public internet). The app is live online. **Operationally** it runs from a single PC at the bar (one cashier tablet behind the bar), but **technically** the URL is reachable from any IP on the internet, and the JS bundle (including the Supabase `anon` key) is downloadable by anyone with the link. Concurrent load is therefore tiny (1-2 simultaneous sessions max), so when trading off, **favor security and audit trail over performance/concurrency tricks**. Security decisions must assume any endpoint is reachable from the internet; do NOT assume LAN isolation.
 
 **Auth:** Supabase Auth — `signInWithPassword(email, password)`. Employees don't have real emails; internal email format is `{user_id}@continental.bar`. The PIN is the password. Auth tokens are managed by the Supabase client SDK (localStorage via `supabase-js`). There is no custom PIN verification anymore — `verify_pin`, `create_user`, `reset_user_pin`, `update_user_active` RPCs were all dropped in the Supabase Auth migration.
 

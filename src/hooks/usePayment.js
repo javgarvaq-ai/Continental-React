@@ -323,7 +323,10 @@ export function usePayment({
                         paymentSummary.transferencia,
                     change_given: paymentSummary.cambio,
                 },
-                membershipInfo: currentCustomer && currentMembership ? {
+                // If membershipWarning is set, the membership benefit wasn't applied
+                // cleanly — suppress the membership section from the printed ticket
+                // so the customer doesn't claim a benefit that wasn't granted.
+                membershipInfo: currentCustomer && currentMembership && !membershipResult?.membershipWarning ? {
                     customerName: currentCustomer.name,
                     customerNumber: currentCustomer.customer_number,
                     planName: currentMembership.membership_plans?.name,
