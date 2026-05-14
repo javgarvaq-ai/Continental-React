@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useStatus } from '../hooks/useStatus'
 import { getAllUnits, createUnit, updateUnit, deactivateUnit } from '../services/unitsAdmin'
 import AdminNav from '../components/AdminNav'
 import { useAuthStore } from '../store/authStore'
@@ -10,7 +11,7 @@ const UNIT_TYPES = ['mesa', 'barra', 'terraza', 'privado', 'otro']
 function UnitsAdminPage() {
     const navigate = useNavigate()
     const [units, setUnits] = useState([])
-    const [status, setStatus] = useState('Loading...')
+    const { status, statusColor, setStatus } = useStatus('Loading...')
     const [loading, setLoading] = useState(true)
     const [isSaving, setIsSaving] = useState(false)
     const [newName, setNewName] = useState('')
@@ -89,7 +90,7 @@ function UnitsAdminPage() {
                 <AdminNav currentPath="/admin/units" />
 
                 <h1 style={{ marginTop: 0 }}>Mesas / Unidades</h1>
-                <p style={{ opacity: 0.85 }}>{status}</p>
+                <p style={{ opacity: 0.85, color: statusColor }}>{status}</p>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: '24px', alignItems: 'start' }}>
 

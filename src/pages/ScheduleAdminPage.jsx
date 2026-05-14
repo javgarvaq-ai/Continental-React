@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useStatus } from '../hooks/useStatus'
 import AdminNav from '../components/AdminNav'
 import { useAuthStore } from '../store/authStore'
 import { getAllEmployeesWithStatus } from '../services/employeesAdmin'
@@ -134,7 +135,7 @@ function ScheduleAdminPage() {
     const [employees, setEmployees] = useState([])
     const [shifts, setShifts] = useState([])                    // raw rows from DB
     const [loading, setLoading] = useState(true)
-    const [status, setStatus] = useState('')
+    const { status, statusColor, setStatus } = useStatus('')
     const [isCopying, setIsCopying] = useState(false)
 
     // Editor state: which employee is open for editing
@@ -406,7 +407,7 @@ function ScheduleAdminPage() {
 
             {/* Status */}
             {status && (
-                <p style={{ margin: '0 0 14px 0', fontSize: '13px', color: '#888' }}>{status}</p>
+                <p style={{ margin: '0 0 14px 0', fontSize: '13px', color: statusColor }}>{status}</p>
             )}
 
             {/* ── Tabs ── */}

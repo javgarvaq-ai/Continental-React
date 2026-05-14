@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useStatus } from '../hooks/useStatus'
 import { Link, useNavigate } from 'react-router-dom'
 import { getActiveUsers } from '../services/users'
 import { loginWithPin, getOpenShift, createShift } from '../services/auth'
@@ -32,7 +33,7 @@ function LoginPage() {
 
     // Phase: 'login' → user/PIN form  |  'new_shift' → starting cash form
     const [phase, setPhase] = useState('login')
-    const [status, setStatus] = useState('Loading users...')
+    const { status, statusColor, setStatus } = useStatus('Loading users...')
     const [users, setUsers] = useState([])
     const [selectedUserId, setSelectedUserId] = useState('')
     const [pin, setPin] = useState('')
@@ -187,7 +188,7 @@ function LoginPage() {
 
                 {/* Error / status */}
                 {status && status !== 'Users loaded successfully.' && (
-                    <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: '#f87171', textAlign: 'center' }}>
+                    <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: statusColor, textAlign: 'center' }}>
                         {status}
                     </p>
                 )}

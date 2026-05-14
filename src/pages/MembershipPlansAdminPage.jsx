@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useStatus } from '../hooks/useStatus'
 import {
     getAllMembershipPlans,
     createMembershipPlan,
@@ -24,7 +25,7 @@ function MembershipPlansAdminPage() {
     const navigate = useNavigate()
     const [plans, setPlans] = useState([])
     const [allProducts, setAllProducts] = useState([])
-    const [status, setStatus] = useState('Loading...')
+    const { status, statusColor, setStatus } = useStatus('Loading...')
     const [loading, setLoading] = useState(true)
     const [isSaving, setIsSaving] = useState(false)
 
@@ -199,7 +200,7 @@ function MembershipPlansAdminPage() {
                 <AdminNav currentPath="/admin/membership-plans" />
 
                 <h1 style={{ marginTop: 0 }}>Membership Plans</h1>
-                <p style={{ opacity: 0.85 }}>{status}</p>
+                <p style={{ opacity: 0.85, color: statusColor }}>{status}</p>
 
                 {/* CREATE PLAN */}
                 <div style={{ background: '#181818', border: '1px solid #2f2f2f', borderRadius: '16px', padding: '20px', marginBottom: '24px' }}>

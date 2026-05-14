@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useStatus } from '../hooks/useStatus'
 import {
     getAllUsers,
     createUser,
@@ -12,7 +13,7 @@ import { useAuthStore } from '../store/authStore'
 function UsersAdminPage() {
     const [users, setUsers] = useState([])
     const navigate = useNavigate()
-    const [status, setStatus] = useState('Loading users...')
+    const { status, statusColor, setStatus } = useStatus('Loading users...')
     const [loading, setLoading] = useState(true)
     const [isSaving, setIsSaving] = useState(false)
 
@@ -195,7 +196,7 @@ function UsersAdminPage() {
             <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
                 <AdminNav currentPath="/admin/users" />
                 <h1 style={{ marginTop: 0 }}>Users Administration</h1>
-                <p style={{ opacity: 0.85 }}>{status}</p>
+                <p style={{ opacity: 0.85, color: statusColor }}>{status}</p>
 
                 <div
                     style={{

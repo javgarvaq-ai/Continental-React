@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
+import { useStatus } from '../hooks/useStatus'
 import { checkUsersExist } from '../services/users'
 
 function SetupAdminPage() {
     const [loading, setLoading]       = useState(true)
     const [usersExist, setUsersExist] = useState(false)
-    const [status, setStatus]         = useState('Checking system status...')
+    const { status, statusColor, setStatus } = useStatus('Checking system status...')
 
     useEffect(() => {
         async function check() {
@@ -64,7 +65,7 @@ function SetupAdminPage() {
                 }}
             >
                 <h1 style={{ marginTop: 0, marginBottom: '12px' }}>Initial Setup Required</h1>
-                <p style={{ marginTop: 0, marginBottom: '20px', opacity: 0.85 }}>{status}</p>
+                <p style={{ marginTop: 0, marginBottom: '20px', opacity: 0.85, color: statusColor }}>{status}</p>
                 <p style={{ opacity: 0.7, lineHeight: 1.6 }}>
                     No users found. The first admin account must be created directly in the
                     Supabase Dashboard. See the setup instructions in{' '}

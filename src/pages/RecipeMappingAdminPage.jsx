@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useStatus } from '../hooks/useStatus'
 import {
     getRecipeMappingsAdminData,
     createRecipeMapping,
@@ -17,7 +18,7 @@ function RecipeMappingAdminPage() {
     const [inventoryItems, setInventoryItems] = useState([])
     const [recipeRows, setRecipeRows] = useState([])
 
-    const [status, setStatus] = useState('Loading recipe mappings...')
+    const { status, statusColor, setStatus } = useStatus('Loading recipe mappings...')
     const [loading, setLoading] = useState(true)
     const [isSaving, setIsSaving] = useState(false)
 
@@ -268,7 +269,7 @@ function RecipeMappingAdminPage() {
                 <AdminNav currentPath="/admin/recipe-mappings" />
 
                 <h1 style={{ marginTop: 0 }}>Recipe Mapping Administration</h1>
-                <p style={{ opacity: 0.85 }}>{status}</p>
+                <p style={{ opacity: 0.85, color: statusColor }}>{status}</p>
                 <div
                     style={{
                         display: 'grid',

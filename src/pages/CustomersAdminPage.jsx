@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useStatus } from '../hooks/useStatus'
 import {
     getAllCustomers,
     createCustomer,
@@ -19,7 +20,7 @@ function formatMonth(monthStr) {
 
 function CustomersAdminPage() {
     const [customers, setCustomers] = useState([])
-    const [status, setStatus] = useState('Loading...')
+    const { status, statusColor, setStatus } = useStatus('Loading...')
     const [loading, setLoading] = useState(true)
     const [isSaving, setIsSaving] = useState(false)
     const [search, setSearch] = useState('')
@@ -142,7 +143,7 @@ function CustomersAdminPage() {
                 <AdminNav currentPath="/admin/customers" />
 
                 <h1 style={{ marginTop: 0 }}>Customers</h1>
-                <p style={{ opacity: 0.85 }}>{status}</p>
+                <p style={{ opacity: 0.85, color: statusColor }}>{status}</p>
 
                 {/* DETAIL MODAL */}
                 {viewingCustomer && (

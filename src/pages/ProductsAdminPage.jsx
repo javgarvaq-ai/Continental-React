@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useStatus } from '../hooks/useStatus'
 import {
     getAllProductsAdmin,
     createProductAdmin,
@@ -16,7 +17,7 @@ function ProductsAdminPage() {
     const [products, setProducts] = useState([])
     const [categories, setCategories] = useState([])
     const navigate = useNavigate()
-    const [status, setStatus] = useState('Loading products...')
+    const { status, statusColor, setStatus } = useStatus('Loading products...')
     const [loading, setLoading] = useState(true)
     const [isSaving, setIsSaving] = useState(false)
     const [managingMixersForId, setManagingMixersForId] = useState(null)
@@ -309,7 +310,7 @@ function ProductsAdminPage() {
             <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
                 <AdminNav currentPath="/admin/products" />
                 <h1 style={{ marginTop: 0 }}>Products Administration</h1>
-                <p style={{ opacity: 0.85 }}>{status}</p>
+                <p style={{ opacity: 0.85, color: statusColor }}>{status}</p>
 
                 <div
                     style={{

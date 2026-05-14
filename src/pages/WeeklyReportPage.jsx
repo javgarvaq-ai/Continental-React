@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useStatus } from '../hooks/useStatus';
 import { getWeeklyReportData } from '../services/reports';
 import { useNavigate } from 'react-router-dom';
 import { money } from '../utils/money';
@@ -25,7 +26,7 @@ function WeeklyReportPage() {
     const [endDate, setEndDate] = useState(toLocalDateString(today));
 
     const [loading, setLoading] = useState(false);
-    const [status, setStatus] = useState('');
+    const { status, statusColor, setStatus } = useStatus('');
     const [payments, setPayments] = useState([]);
     const [cashMovements, setCashMovements] = useState([]);
     const [comandas, setComandas] = useState([]);
@@ -252,7 +253,7 @@ function WeeklyReportPage() {
                     marginBottom: '16px',
                 }}
             >
-                <div>{loading ? 'Cargando...' : status}</div>
+                <div style={{ color: loading ? undefined : statusColor }}>{loading ? 'Cargando...' : status}</div>
                 <div style={{ marginTop: '10px' }}>Pagos: {payments.length}</div>
                 <div>Movimientos de caja: {cashMovements.length}</div>
                 <div>Comandas pagadas: {comandas.length}</div>

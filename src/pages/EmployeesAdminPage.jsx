@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useStatus } from '../hooks/useStatus'
 import AdminNav from '../components/AdminNav'
 import { useAuthStore } from '../store/authStore'
 import {
@@ -66,7 +67,7 @@ function EmployeesAdminPage() {
 
     const [employees, setEmployees] = useState([])
     const [loading, setLoading] = useState(true)
-    const [status, setStatus] = useState('')
+    const { status, statusColor, setStatus } = useStatus('')
 
     // Add form
     const [showAddForm, setShowAddForm] = useState(false)
@@ -209,7 +210,7 @@ function EmployeesAdminPage() {
 
             {/* Status message */}
             {status && (
-                <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: '#888' }}>{status}</p>
+                <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: statusColor }}>{status}</p>
             )}
 
             {/* Add employee form */}

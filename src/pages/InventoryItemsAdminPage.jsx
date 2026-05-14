@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useStatus } from '../hooks/useStatus'
 import {
     getAllInventoryItems,
     createInventoryItem,
@@ -20,7 +21,7 @@ const STATUS_COLOR = (stock, unitType) => {
 function InventoryItemsAdminPage() {
     const navigate = useNavigate()
     const [items, setItems] = useState([])
-    const [status, setStatus] = useState('Loading inventory items...')
+    const { status, statusColor, setStatus } = useStatus('Loading inventory items...')
     const [loading, setLoading] = useState(true)
     const [isSaving, setIsSaving] = useState(false)
 
@@ -96,7 +97,7 @@ function InventoryItemsAdminPage() {
             <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
                 <AdminNav currentPath="/admin/inventory-items" />
                 <h1 style={{ marginTop: 0 }}>Inventory Items</h1>
-                <p style={{ opacity: 0.85 }}>{status}</p>
+                <p style={{ opacity: 0.85, color: statusColor }}>{status}</p>
 
                 {/* CREATE FORM */}
                 <div style={{ background: '#181818', border: '1px solid #2f2f2f', borderRadius: '16px', padding: '20px', marginBottom: '24px' }}>

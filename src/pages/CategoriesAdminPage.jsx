@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useStatus } from '../hooks/useStatus'
 import {
     getAllCategories,
     createCategory,
@@ -13,7 +14,7 @@ import { useAuthStore } from '../store/authStore'
 function CategoriesAdminPage() {
     const navigate = useNavigate()
     const [categories, setCategories] = useState([])
-    const [status, setStatus] = useState('Loading categories...')
+    const { status, statusColor, setStatus } = useStatus('Loading categories...')
     const [loading, setLoading] = useState(true)
     const [isSaving, setIsSaving] = useState(false)
     const [newName, setNewName] = useState('')
@@ -112,7 +113,7 @@ function CategoriesAdminPage() {
                 <AdminNav currentPath="/admin/categories" />
 
                 <h1 style={{ marginTop: 0 }}>Categories</h1>
-                <p style={{ opacity: 0.85 }}>{status}</p>
+                <p style={{ opacity: 0.85, color: statusColor }}>{status}</p>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: '24px', alignItems: 'start' }}>
 

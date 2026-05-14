@@ -2,7 +2,7 @@ export function requireOnline(isOnline, setStatus) {
     if (isOnline) return true
 
     if (typeof setStatus === 'function') {
-        setStatus('Sin conexión. Usa comandas manuales y captura después cuando regrese internet.')
+        setStatus({ message: 'Sin conexión. Verifica tu red.', type: 'warning' })
     }
 
     return false

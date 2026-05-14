@@ -24,7 +24,7 @@
 
 ## 🐛 Bugs
 
-- [ ] **B1 🟡** `displayedTotal` in `usePayment.js` uses `cartTotal` when status is `open` but switches to `currentComanda.final_total` otherwise. If a waiter adds items to the cart and then enters the payment screen without the comanda transitioning, `final_total` is stale and the displayed total is wrong. **File:** `src/hooks/usePayment.js` lines 62–66. **Fix:** always derive from live `cartItems` sum + membership discount; never read `final_total` for display.
+- [x] **B1 🟡** `displayedTotal` in `usePayment.js` uses `cartTotal` when status is `open` but switches to `currentComanda.final_total` otherwise. If a waiter adds items to the cart and then enters the payment screen without the comanda transitioning, `final_total` is stale and the displayed total is wrong. **File:** `src/hooks/usePayment.js` lines 62–66. **Fix:** always derive from live `cartItems` sum + membership discount; never read `final_total` for display.
 
 - [ ] **B2 🟡** `loadComandaView` only re-runs when `currentComanda.id` changes (the `useEffect` dep). Any mutation that doesn't call `reloadCart` after completing will leave the cart desynchronized. **File:** `src/pages/PosPage.jsx` lines 211–214. **Fix:** shared reload counter in PosPage that every mutation hook increments; `loadComandaView` depends on it.
 
@@ -38,7 +38,7 @@
 
 - [ ] **A2 🟢** `useOnlineStatus` called independently in `PosPage` and `TopBar` — two event listener instances. **Fix:** `src/context/OnlineStatusContext.jsx` provider, both components consume it. **Low risk if skipped** — both instances always agree since they listen to the same browser events.
 
-- [ ] **A3 🟢** `loadComandaView` in `PosPage` is a plain `async function`, not wrapped in `useCallback`. It's referenced inside a `useEffect` but not listed in deps (safe today because of `currentComanda.id` dep, but fragile). **Fix:** `useCallback` with `[currentComanda?.id]` dep + add to `useEffect` deps array.
+- [x] **A3 🟢** `loadComandaView` in `PosPage` is a plain `async function`, not wrapped in `useCallback`. It's referenced inside a `useEffect` but not listed in deps (safe today because of `currentComanda.id` dep, but fragile). **Fix:** `useCallback` with `[currentComanda?.id]` dep + add to `useEffect` deps array.
 
 - [ ] **A4 🟡** `add_item_to_comanda` as a `SECURITY DEFINER` RPC — wraps `assertComandaOpen` + INSERT/UPDATE in one atomic server-side call, closing the TOCTOU window properly. **Prerequisite for B3 fix.** Defer until second tablet is confirmed.
 
@@ -70,7 +70,7 @@
 
 - [x] **U1 🟡** `ErrorBoundary` catches JS crashes but logs nothing. Migration `20260513000003` (error_log table). `src/services/errors.js` (logError). `ErrorBoundary.jsx` calls it fire-and-forget in componentDidCatch. **Fix:** on `componentDidCatch`, insert a row into a `error_log` Supabase table (`created_at`, `error_message`, `stack`, `user_id`, `route`). Simple: one migration + one `supabase.from('error_log').insert(...)` call in the boundary. No Sentry needed yet.
 
-- [ ] **U2 🟢** `setStatus` has no visual variants — everything renders the same. A warning looks identical to an error. **Fix:** accept `{ message, type: 'info' | 'warning' | 'error' }` shape; render with distinct background colors. Requires updating all `setStatus(string)` callsites to `setStatus({ message, type })` — wide change, do in one pass.
+- [x] **U2 🟢** `setStatus` has no visual variants — everything renders the same. **Fix:** `src/hooks/useStatus.js` — auto-classifying hook; strings auto-typed via regex heuristics; explicit `{ message, type }` objects bypass classification. Applied across all 15 pages/hooks. `requireOnline` explicitly passes `type: 'warning'`.
 
 - [ ] **U3 🟢** Multi-tab logout — if another tab signs out, this tab doesn't know until the next `verifySession` runs (next navigation). **Fix:** `window.addEventListener('storage', ...)` in `authStore` watching for the Supabase session key being cleared, then call `clearAuth()`. **Low risk** — bar runs from one tablet.
 

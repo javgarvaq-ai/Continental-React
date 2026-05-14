@@ -62,10 +62,10 @@ export function usePayment({
 
     // --- Derived values ---
 
-    const displayedTotal =
-        currentComanda?.status === 'open'
-            ? Math.max(cartTotal - discountAmount, 0)
-            : Number(currentComanda?.final_total ?? cartTotal)
+    // Always derive from live cart math — never read final_total for display.
+    // final_total is a DB snapshot taken at "presentar cuenta" time; if any item
+    // is cancelled after that point the snapshot would be stale.
+    const displayedTotal = Math.max(cartTotal - discountAmount, 0)
 
     const paymentSummary = useMemo(() => {
         return getPaymentSummary(displayedTotal, paymentData)

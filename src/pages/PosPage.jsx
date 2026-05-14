@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useStatus } from '../hooks/useStatus';
 import logo from '../assets/logo.png';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
@@ -37,7 +38,7 @@ function PosPage() {
     const currentShiftId = useAuthStore(state => state.shiftId);
     const clearAuth = useAuthStore(state => state.clearAuth);
     const clearUser = useAuthStore(state => state.clearUser);
-    const [status, setStatus] = useState('Cargando mesas...');
+    const { status, statusColor, setStatus } = useStatus('Cargando mesas...');
     // Shared state — owned by PosPage because multiple hooks need it
     const [currentComanda, setCurrentComanda] = useState(null);
     const [catalogData, setCatalogData] = useState({ products: [], categories: [] });
@@ -482,7 +483,7 @@ function PosPage() {
                         ) : null}
                     </p>
                     {status && (
-                        <p style={{ margin: '6px 0 0 0', fontSize: '12px', color: '#555' }}>{status}</p>
+                        <p style={{ margin: '6px 0 0 0', fontSize: '12px', color: statusColor }}>{status}</p>
                     )}
                 </div>
                 <img
