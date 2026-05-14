@@ -1,4 +1,8 @@
-# POS Action Plan — Deep Review May 11th
+# ~~POS Action Plan — Deep Review May 11th~~
+
+> **ARCHIVED 2026-05-13** — All open items migrated to `tasks/backlog.md`. This file is kept for historical reference only.
+
+---
 
 > Generated from full codebase review on 2026-05-11.
 > Use this file as the working backlog. Mark each item with a status tag and leave inline notes as you go.

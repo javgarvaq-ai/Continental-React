@@ -1,4 +1,8 @@
-# Principal Architect Audit & Action Plan — 10 May 2026
+# ~~Principal Architect Audit & Action Plan — 10 May 2026~~
+
+> **ARCHIVED 2026-05-13** — All open items migrated to `tasks/backlog.md`. This file is kept for historical reference only.
+
+---
 
 ## Scope Reviewed
 `PosPage.jsx` (1148 lines), `useComanda.js`, `useCustomer.js`, `useShift.js`, `authStore.js`, `comandas.js`, `comandaCheckout.js`, `products.js`, `membership.js`, all migrations through `20260510000002`. Full file tree cross-referenced.

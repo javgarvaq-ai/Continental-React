@@ -1,4 +1,5 @@
 import { Component } from 'react';
+import { logError } from '../services/errors';
 
 class ErrorBoundary extends Component {
     constructor(props) {
@@ -12,6 +13,12 @@ class ErrorBoundary extends Component {
 
     componentDidCatch(error, info) {
         console.error('POS crashed:', error, info);
+        // Fire-and-forget — never blocks the fallback UI from rendering
+        logError({
+            message: error?.message,
+            stack:   info?.componentStack,
+            route:   window.location.pathname,
+        }).catch(() => {})
     }
 
     render() {

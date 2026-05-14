@@ -74,8 +74,8 @@ Cerrar los items que el bar puede sentir el primer día de operación pública y
 #### [x] 1.B.3 · D5 — Dead `inventoryWarning` branch removed ✅
 - `comandaCheckout.js` — return simplified to `{ error: null }`.
 
-#### [ ] 1.B.4 · A5 — `useOnlineStatus` en context único
-- **Archivos:** crear `src/context/OnlineStatusContext.jsx`, ajustar `PosPage` y `TopBar` para consumirlo.
+#### [ ] 1.B.4 · A5 — `useOnlineStatus` en context único ⏸ PENDING (next sprint)
+- Low risk: both instances listen to the same browser events, always stay in sync. No operational impact. Defer until after launch.
 
 ### Cluster C — Performance fácil
 
@@ -125,4 +125,13 @@ Cerrar los items que el bar puede sentir el primer día de operación pública y
 
 ## Review
 
-_(Se llenará al cierre del sprint con commits, lecciones nuevas y migraciones aplicadas.)_
+**Sprint closed 2026-05-13.** All remaining open items migrated to `tasks/backlog.md`.
+
+### Migrations applied this sprint
+- `20260513000001_fix_adjust_inventory_stock.sql` — B3: strict stock check, rejects insufficient
+- `20260513000002_schedule_week_start_sunday.sql` — C7: renumbers day_of_week, shifts week_start to Sunday
+
+### Commits
+- `fix: fase 0 pre-launch — apertura de mesa atómica, inventory stock strict, semana desde domingo, ticket membership guard, admin page guards`
+- `fix: B7 customer number ordering, D5 dead inventoryWarning branch, P8 open comandas HEAD count`
+- `refactor: A3 explicit service return shapes, B10 processMembership { data, error }, B7/D5/P8 cleanup`
