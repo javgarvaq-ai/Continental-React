@@ -40,10 +40,12 @@ export async function updateCustomer({ id, name, phone, email }) {
 }
 
 export async function getNextCustomerNumber() {
+    // Order by the numeric value of customer_number so gaps or out-of-order
+    // inserts don't cause a lower number to be assigned to a new customer.
     const { data, error } = await supabase
         .from('customers')
         .select('customer_number')
-        .order('created_at', { ascending: false })
+        .order('customer_number', { ascending: false })
         .limit(1)
 
     if (error || !data || data.length === 0) return '0001'

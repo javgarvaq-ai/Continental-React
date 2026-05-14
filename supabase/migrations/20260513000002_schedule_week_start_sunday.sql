@@ -9,5 +9,5 @@
 
 UPDATE employee_schedule_shifts
 SET
-    week_start  = (week_start::date - INTERVAL '1 day')::date::text,
+    week_start  = week_start - INTERVAL '1 day',
     day_of_week = (day_of_week + 1) % 7;

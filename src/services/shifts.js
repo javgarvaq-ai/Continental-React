@@ -103,13 +103,12 @@ export async function getShiftSummary(shiftId) {
  * Used to block shift close while tables are still active.
  */
 export async function getOpenComandasCount() {
-    const { data, error } = await supabase
+    const { count, error } = await supabase
         .from('comandas')
-        .select('id')
+        .select('id', { count: 'exact', head: true })
         .in('status', ['open', 'pending_payment', 'processing_payment'])
-        .limit(1)
 
-    return { data, error }
+    return { count, error }
 }
 
 // ─── Write ─────────────────────────────────────────────────────────────────

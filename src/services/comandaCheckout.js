@@ -306,5 +306,5 @@ export async function confirmPayment({
         return { error: new Error(msg) };
     }
 
-    return { error: null, data: { inventoryWarning: null } };
+    return { error: null };
 }

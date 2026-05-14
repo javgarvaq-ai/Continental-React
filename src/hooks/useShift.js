@@ -37,12 +37,12 @@ export function useShift({ currentUser, currentShiftId, isOnline, setStatus, onS
 
         // Filter by status only — no date filter so ghost comandas
         // from before the shift can't slip past and block close.
-        const { data: openComandas } = await getOpenComandasCount()
+        const { count: openComandasCount } = await getOpenComandasCount()
 
         return {
             data: {
                 summary,
-                hasOpenComandas: !!(openComandas && openComandas.length > 0),
+                hasOpenComandas: !!(openComandasCount && openComandasCount > 0),
             },
             error: null,
         }
