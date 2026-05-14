@@ -35,27 +35,10 @@ export async function getProductsCatalog() {
         return { data: null, error: categoriesError };
     }
 
-    const categoryMap = {};
-    (categories || []).forEach((category) => {
-        categoryMap[category.id] = category.name;
-    });
-
-    const groupedProducts = {};
-    (products || []).forEach((product) => {
-        const categoryName = categoryMap[product.category_id] || 'Sin categoría';
-
-        if (!groupedProducts[categoryName]) {
-            groupedProducts[categoryName] = [];
-        }
-
-        groupedProducts[categoryName].push(product);
-    });
-
     return {
         data: {
-            groupedProducts,
+            products:   products   || [],
             categories: categories || [],
-            products: products || [],
         },
         error: null,
     };

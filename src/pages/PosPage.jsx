@@ -40,7 +40,7 @@ function PosPage() {
     const [status, setStatus] = useState('Cargando mesas...');
     // Shared state — owned by PosPage because multiple hooks need it
     const [currentComanda, setCurrentComanda] = useState(null);
-    const [groupedProducts, setGroupedProducts] = useState({});
+    const [catalogData, setCatalogData] = useState({ products: [], categories: [] });
     const [cartItems, setCartItems] = useState([]);
     const [isCancellingMesa, setIsCancellingMesa] = useState(false);
     const [cancelConfirming, setCancelConfirming] = useState(false)
@@ -54,15 +54,22 @@ function PosPage() {
         return cartItems.filter((item) => !item.is_free_mixer);
     }, [cartItems]);
 
-    const productsById = useMemo(() => {
-        const map = {};
-        Object.values(groupedProducts).forEach((products) => {
-            products.forEach((product) => {
-                map[product.id] = product;
-            });
+    // Single pass: build both groupedProducts (for the catalog UI) and
+    // productsById (for cart lookups) from the flat catalog arrays.
+    const { groupedProducts, productsById } = useMemo(() => {
+        const categoryMap = {};
+        catalogData.categories.forEach((c) => { categoryMap[c.id] = c.name; });
+
+        const grouped = {};
+        const byId = {};
+        catalogData.products.forEach((p) => {
+            byId[p.id] = p;
+            const cat = categoryMap[p.category_id] || 'Sin categoría';
+            if (!grouped[cat]) grouped[cat] = [];
+            grouped[cat].push(p);
         });
-        return map;
-    }, [groupedProducts]);
+        return { groupedProducts: grouped, productsById: byId };
+    }, [catalogData]);
 
     const cartTotal = useMemo(() => {
         return visibleCartItems.reduce((sum, item) => {
@@ -203,7 +210,10 @@ function PosPage() {
                 setStatus(`Error cargando productos: ${result.error.message}`)
                 return
             }
-            setGroupedProducts(result.data?.groupedProducts || {})
+            setCatalogData({
+                products:   result.data?.products   || [],
+                categories: result.data?.categories || [],
+            })
         }
         loadCatalog()
     }, []);
@@ -228,7 +238,7 @@ function PosPage() {
         await clearUser()
         setSelectedUnit(null)
         setCurrentComanda(null)
-        setGroupedProducts({})
+        setCatalogData({ products: [], categories: [] })
         setCartItems([])
         resetPaymentState()
         resetShotSelector()

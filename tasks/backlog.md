@@ -16,9 +16,9 @@
 
 - [!] **D3 🟡** `customers.customer_number` is `text` — lexicographic sort can mis-order (e.g. "9" > "1000"). Today B7 fixes ordering in JS, but the root problem is the column type. **Decision needed:** convert to `integer` + format to 4-digit string only in UI, or leave as text and document the padding convention. If converting: migration with `USING customer_number::integer`, update all `padStart` callers.
 
-- [ ] **D4 🟡** `finalize_comanda_payment` RPC has redundant params: `p_tip_total` and `p_tip_amount` both receive `safePropina`; `p_total_paid` and `p_total_aplicado` both receive `totalPaid`; `p_cobrado_at` is passed from JS when `NOW()` server-side is more accurate. **Fix:** simplify RPC signature (migration) + update `comandaCheckout.js` callsite.
+- [x] **D4 🟡** `finalize_comanda_payment` RPC has redundant params: `p_tip_total` and `p_tip_amount` both receive `safePropina`; `p_total_paid` and `p_total_aplicado` both receive `totalPaid`; `p_cobrado_at` is passed from JS when `NOW()` server-side is more accurate. **Fix:** simplify RPC signature (migration `20260513000005`) + update `comandaCheckout.js` callsite. Also dropped `p_cash_received` (computable as `p_efectivo + p_change_given` server-side).
 
-- [ ] **D5 🟢** `getProductsCatalog` in `products.js` builds `groupedProducts` server-side, then `PosPage` re-groups it in a `useMemo`. Double pass. **Fix:** return flat `products[]` from the service and do a single group in the `useMemo`, or return only `groupedProducts` and remove the `useMemo`.
+- [x] **D5 🟢** `getProductsCatalog` in `products.js` builds `groupedProducts` server-side, then `PosPage` re-groups it in a `useMemo`. Double pass. **Fix:** service now returns flat `{ products, categories }`. Single `useMemo` in PosPage builds both `groupedProducts` and `productsById` in one pass.
 
 ---
 

@@ -246,7 +246,6 @@ export async function confirmPayment({
 }) {
     const safePropina       = Number(propina       || 0);
     const safeCambio        = Number(cambio        || 0);
-    const cashReceived      = Number(efectivo      || 0);
     const safeTarjeta       = Number(tarjeta       || 0);
     const safeTransferencia = Number(transferencia || 0);
     const safeTotal         = Number(total         || 0);
@@ -283,20 +282,16 @@ export async function confirmPayment({
     const { data: rpcResult, error: rpcError } = await supabase.rpc(
         'finalize_comanda_payment',
         {
-            p_comanda_id:     comandaId,
-            p_user_id:        userId,
-            p_shift_id:       shiftId,
-            p_cobrado_at:     new Date().toISOString(),
-            p_tip_total:      safePropina,
-            p_efectivo:       netCashApplied,
-            p_tarjeta:        safeTarjeta,
-            p_transferencia:  safeTransferencia,
-            p_total_paid:     totalPaid,
-            p_tip_amount:     safePropina,
-            p_change_given:   safeCambio,
-            p_total:          safeTotal,
-            p_cash_received:  cashReceived,
-            p_total_aplicado: totalPaid,
+            p_comanda_id:    comandaId,
+            p_user_id:       userId,
+            p_shift_id:      shiftId,
+            p_propina:       safePropina,
+            p_efectivo:      netCashApplied,
+            p_tarjeta:       safeTarjeta,
+            p_transferencia: safeTransferencia,
+            p_total_paid:    totalPaid,
+            p_change_given:  safeCambio,
+            p_total:         safeTotal,
         }
     );
 
