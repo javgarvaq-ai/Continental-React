@@ -12,7 +12,7 @@
 
 - [x] **D1 🟡** Drop 5 legacy `products` columns — `inventory_type`, `base_unit`, `current_stock`, `parent_product_id`, `deduct_amount`. Migration `20260513000004`. Note: `deduct_amount` on `product_recipes` is alive and untouched. All unused since `product_recipes` migration. **Before writing migration:** grep each column name across `src/` to confirm zero callers. Then single `ALTER TABLE products DROP COLUMN` migration.
 
-- [ ] **D2 🟢** `inventory_movements.quantity` column name is ambiguous — could be read as "how many units" but actually means "resulting stock after movement". **Fix:** rename to `resulting_stock`. Migration required. Update all callers in `comandaCheckout.js` and any report queries.
+- [x] **D2 🟢** `inventory_movements.quantity` column name is ambiguous — could be read as "how many units" but actually means "resulting stock after movement". **Fix:** renamed to `resulting_stock`. Migration `20260514000001`. Recreated `deduct_inventory_item` and `adjust_inventory_stock` RPCs to use new column name. No JS callers needed updating.
 
 - [!] **D3 🟡** `customers.customer_number` is `text` — lexicographic sort can mis-order (e.g. "9" > "1000"). Today B7 fixes ordering in JS, but the root problem is the column type. **Decision needed:** convert to `integer` + format to 4-digit string only in UI, or leave as text and document the padding convention. If converting: migration with `USING customer_number::integer`, update all `padStart` callers.
 
@@ -44,7 +44,7 @@
 
 - [x] **A5 🟡** Payment math (`totalDue`, `totalReceived`, `netCashApplied`) is duplicated in `usePayment.getPaymentSummary` and `comandaCheckout.confirmPayment`. Risk of divergence if one is updated without the other. **Fix:** extract to `src/utils/payments.js`, import in both.
 
-- [ ] **A6 🟢** Membership discount computed in 3 separate places: `useCustomer`, `usePayment.displayedTotal`, `Ticket.jsx`. **Fix:** `computeMembershipDiscount(membership, cartTotal)` helper in `src/utils/membership.js`, imported by all three.
+- [x] **A6 🟢** Membership discount logic was inline in `useCustomer`. **Fix:** `computeMembershipDiscount(membership, cartTotal)` extracted to `src/utils/membership.js`. `useCustomer` now imports and uses it. Returns `{ pct, amount }` — single place to change if rounding rules or formula ever change.
 
 ---
 
@@ -80,7 +80,7 @@
 
 ## 🗄️ Database Schema
 
-- [ ] **DB1** — same as D2 above (`inventory_movements.quantity` rename).
+- [x] **DB1** — same as D2 above (`inventory_movements.quantity` rename). Done.
 - [ ] **DB2** — same as D3 above (`customer_number` type decision).
 
 ---

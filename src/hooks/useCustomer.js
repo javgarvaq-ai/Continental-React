@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { computeMembershipDiscount } from '../utils/membership'
 import {
     searchCustomerByQuery,
     getAllActiveMembershipPlans,
@@ -50,13 +51,8 @@ export function useCustomer({ currentComanda, cartTotal, isOnline, setStatus, on
 
     // --- Derived values ---
 
-    const membershipDiscountBenefit = currentMembership?.membership_plans?.membership_plan_benefits?.find(
-        b => b.benefit_type === 'discount'
-    )
-    const membershipDiscountPct = Number(membershipDiscountBenefit?.discount_percentage || 0)
-    const discountAmount = membershipDiscountPct > 0
-        ? Math.round(cartTotal * (membershipDiscountPct / 100) * 100) / 100
-        : 0
+    const { pct: membershipDiscountPct, amount: discountAmount } =
+        computeMembershipDiscount(currentMembership, cartTotal)
 
     // --- Helpers ---
 
