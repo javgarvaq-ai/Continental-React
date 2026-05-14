@@ -1,10 +1,11 @@
 import { supabase } from './supabase'
 
 export async function getAllInventoryItems() {
-    return await supabase
+    const { data, error } = await supabase
         .from('inventory_items')
         .select('*')
         .order('created_at', { ascending: true })
+    return { data, error }
 }
 
 export async function createInventoryItem({
@@ -12,7 +13,7 @@ export async function createInventoryItem({
     unitType,
     capacityOz,
 }) {
-    return await supabase.from('inventory_items').insert([
+    const { data, error } = await supabase.from('inventory_items').insert([
         {
             name: name.trim(),
             unit_type: unitType,
@@ -20,6 +21,7 @@ export async function createInventoryItem({
             active: true,
         },
     ])
+    return { data, error }
 }
 
 export async function updateInventoryItem({
@@ -29,7 +31,7 @@ export async function updateInventoryItem({
     capacityOz,
     active,
 }) {
-    return await supabase
+    const { data, error } = await supabase
         .from('inventory_items')
         .update({
             name: name.trim(),
@@ -38,13 +40,15 @@ export async function updateInventoryItem({
             active: Boolean(active),
         })
         .eq('id', id)
+    return { data, error }
 }
 
 export async function toggleInventoryItemActive({ id, active }) {
-    return await supabase
+    const { data, error } = await supabase
         .from('inventory_items')
         .update({ active: Boolean(active) })
         .eq('id', id)
+    return { data, error }
 }
 
 export async function adjustInventoryStock({ id, amount, note, userId, type }) {

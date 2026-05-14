@@ -192,24 +192,26 @@ export async function processMembershipOnPayment({
 
     if (error) {
         return {
-            newVisitCount:             null,
-            earnedBottleCredit:        false,
-            newBottleCreditsAvailable: null,
-            membershipWarning: `No se pudo procesar la membresía: ${error.message}`,
+            data: null,
+            error: null, // don't fail the payment — surface as warning instead
+            warning: `No se pudo procesar la membresía: ${error.message}`,
         }
     }
 
     if (result?.already_processed) {
-        return { newVisitCount: null, earnedBottleCredit: false, newBottleCreditsAvailable: null }
+        return { data: { newVisitCount: null, earnedBottleCredit: false, newBottleCreditsAvailable: null, membershipWarning: null }, error: null }
     }
 
     return {
-        newVisitCount:             result?.new_visit_count      ?? null,
-        earnedBottleCredit:        result?.earned_bottle_credit ?? false,
-        newBottleCreditsAvailable: result?.new_bottle_credits   ?? null,
-        membershipWarning: result?.milestone_config_missing
-            ? 'El plan tiene beneficio "botella gratis" pero no tiene milestone_visits configurado — no se otorgó crédito. Revisa la configuración del plan.'
-            : null,
+        data: {
+            newVisitCount:             result?.new_visit_count      ?? null,
+            earnedBottleCredit:        result?.earned_bottle_credit ?? false,
+            newBottleCreditsAvailable: result?.new_bottle_credits   ?? null,
+            membershipWarning: result?.milestone_config_missing
+                ? 'El plan tiene beneficio "botella gratis" pero no tiene milestone_visits configurado — no se otorgó crédito. Revisa la configuración del plan.'
+                : null,
+        },
+        error: null,
     }
 }
 export async function searchCustomerByQuery(query) {

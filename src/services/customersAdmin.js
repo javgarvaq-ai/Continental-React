@@ -1,7 +1,7 @@
 import { supabase } from './supabase'
 
 export async function getAllCustomers() {
-    return await supabase
+    const { data, error } = await supabase
         .from('customers')
         .select(`
             *,
@@ -11,10 +11,11 @@ export async function getAllCustomers() {
             )
         `)
         .order('customer_number', { ascending: true })
+    return { data, error }
 }
 
 export async function createCustomer({ customer_number, name, phone, email }) {
-    return await supabase
+    const { data, error } = await supabase
         .from('customers')
         .insert([{
             customer_number: customer_number.trim(),
@@ -24,10 +25,11 @@ export async function createCustomer({ customer_number, name, phone, email }) {
         }])
         .select()
         .single()
+    return { data, error }
 }
 
 export async function updateCustomer({ id, name, phone, email }) {
-    return await supabase
+    const { data, error } = await supabase
         .from('customers')
         .update({
             name: name.trim(),
@@ -37,6 +39,7 @@ export async function updateCustomer({ id, name, phone, email }) {
         .eq('id', id)
         .select()
         .single()
+    return { data, error }
 }
 
 export async function getNextCustomerNumber() {
@@ -56,9 +59,10 @@ export async function getNextCustomerNumber() {
 }
 
 export async function getCustomerBenefitUsage(customerId) {
-    return await supabase
+    const { data, error } = await supabase
         .from('membership_benefit_usage')
         .select('*')
         .eq('customer_id', customerId)
         .order('created_at', { ascending: false })
+    return { data, error }
 }

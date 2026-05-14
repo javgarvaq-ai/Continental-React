@@ -202,6 +202,25 @@ Replaced custom PIN auth with Supabase Auth. App is now safe on Vercel (public i
 
 ## Sprint May 13th — En progreso
 
+### Fase 1 — Cluster A/B/C (deuda visible)
+
+#### [x] A3 — Return shape `{ data, error }` uniforme ✅
+- [x] `customersAdmin.js` — getAllCustomers, createCustomer, updateCustomer, getCustomerBenefitUsage
+- [x] `unitsAdmin.js` — getAllUnits, createUnit, updateUnit, deactivateUnit
+- [x] `inventoryAdmin.js` — getAllInventoryItems, createInventoryItem, updateInventoryItem, toggleInventoryItemActive
+- [x] Callers already used `{ data, error }` destructuring — no caller changes needed
+
+#### [x] A4 — Error handling ✅ (already done in previous sessions)
+- [x] `InventoryPage` and `useCustomer` already surface errors correctly
+
+#### [x] B10 — `processMembershipOnPayment` returns `{ data, error }` ✅
+- [x] `membership.js` — now returns `{ data: { newVisitCount, ... }, error, warning }`
+- [x] `usePayment.js` — destructures `{ data: mData, warning: mWarning }`, single `membershipWarning` variable
+
+#### [x] B7 — `getNextCustomerNumber` order by number ✅
+#### [x] D5 — Dead `inventoryWarning` branch removed ✅
+#### [x] P8 — `getOpenComandasCount` HEAD count query ✅
+
 ### [x] 0.3 · B6+B9 — Apertura de mesa con cliente atómica ✅
 - [x] `comandas.js` → `getOrCreateActiveComanda`: acepta `customerId` opcional, lo incluye en el INSERT
 - [x] `PosPage.jsx` → `doOpenTable`: pasa `customerId` al crear comanda, eliminado `assignCustomerToComanda` separado

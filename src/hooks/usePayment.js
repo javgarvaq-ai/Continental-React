@@ -284,12 +284,13 @@ export function usePayment({
 
             // Process membership if customer is assigned
             let membershipResult = null
+            let membershipWarning = null
             if (currentCustomer && currentMembership) {
                 const benefits = currentMembership.membership_plans?.membership_plan_benefits || []
                 const milestoneBenefit = benefits.find(b => b.benefit_type === 'free_bottle_milestone')
                 const milestoneVisits = milestoneBenefit ? Number(milestoneBenefit.milestone_visits || 0) : 0
 
-                membershipResult = await processMembershipOnPayment({
+                const { data: mData, warning: mWarning } = await processMembershipOnPayment({
                     customerId:     currentCustomer.id,
                     membershipId:   currentMembership.id,
                     comandaId:      currentComanda.id,
@@ -298,8 +299,8 @@ export function usePayment({
                     milestoneVisits,
                 })
 
-                // Warning is appended to the final success message below — not set here
-                // so it doesn't get overwritten when onBackToUnits fires.
+                membershipResult = mData
+                membershipWarning = mWarning ?? mData?.membershipWarning ?? null
             }
 
             printTicket({
@@ -323,10 +324,9 @@ export function usePayment({
                         paymentSummary.transferencia,
                     change_given: paymentSummary.cambio,
                 },
-                // If membershipWarning is set, the membership benefit wasn't applied
-                // cleanly — suppress the membership section from the printed ticket
-                // so the customer doesn't claim a benefit that wasn't granted.
-                membershipInfo: currentCustomer && currentMembership && !membershipResult?.membershipWarning ? {
+                // If membershipWarning is set, the benefit wasn't applied cleanly —
+                // suppress the membership section so the customer can't claim it.
+                membershipInfo: currentCustomer && currentMembership && !membershipWarning ? {
                     customerName: currentCustomer.name,
                     customerNumber: currentCustomer.customer_number,
                     planName: currentMembership.membership_plans?.name,
@@ -342,8 +342,8 @@ export function usePayment({
             if (membershipResult?.earnedBottleCredit) {
                 successMsg += ` 🍾 ¡${currentCustomer.name} ganó un crédito de botella!`
             }
-            if (membershipResult?.membershipWarning) {
-                successMsg += ` ⚠️ ${membershipResult.membershipWarning}`
+            if (membershipWarning) {
+                successMsg += ` ⚠️ ${membershipWarning}`
             }
 
             await onBackToUnits(successMsg)

@@ -54,52 +54,35 @@ Cerrar los items que el bar puede sentir el primer día de operación pública y
 
 ### Cluster A — Normalización de services
 
-#### [ ] 1.A.1 · A3 — Return shape `{ data, error }` uniforme
+#### [x] 1.A.1 · A3 — Return shape `{ data, error }` uniforme ✅
+- `customersAdmin.js`, `unitsAdmin.js`, `inventoryAdmin.js` — all functions now use explicit `const { data, error } = await supabase...; return { data, error }`. Callers already destructured correctly, no changes needed there.
 
-- **Archivos:** `src/services/customersAdmin.js` (getAllCustomers, createCustomer, updateCustomer), `src/services/unitsAdmin.js`, `src/services/inventoryAdmin.js`. Reemplazar `return await supabase...` por `const { data, error } = await supabase...; return { data, error }`.
-- **Callers afectados:** todas las admin pages — verificar cada uno.
+#### [x] 1.A.2 · A4 — Error handling ✅ (already done in previous sessions)
+- `InventoryPage` and `useCustomer.handleSearchCustomer` already surface errors via `setStatus`.
 
-#### [ ] 1.A.2 · A4 — Error handling: no más swallow
-
-- **Archivos:** `src/pages/InventoryPage.jsx` líneas 17-27, `src/hooks/useCustomer.js` líneas 81-94.
-- **Acción:** chequear `error` y surface con `setStatus`. Distinguir "no encontrado" vs error de red.
-
-#### [ ] 1.A.3 · B10 — `processMembershipOnPayment` retorna `{ data, error }`
-
-- **Archivos:** `src/services/membership.js` líneas 173-211, `src/hooks/usePayment.js` (callsite).
-- **Acción:** envolver el resultado actual en `{ data: { newVisitCount, ..., warning }, error }`. Caller distingue error vs warning sin parsear strings.
+#### [x] 1.A.3 · B10 — `processMembershipOnPayment` retorna `{ data, error }` ✅
+- `membership.js` — returns `{ data: { newVisitCount, earnedBottleCredit, newBottleCreditsAvailable, membershipWarning }, error, warning }`. RPC errors surface as `warning` (not `error`) to avoid failing the payment.
+- `usePayment.js` — destructures `{ data: mData, warning: mWarning }`, single `membershipWarning` variable drives ticket suppression and success message.
 
 ### Cluster B — Bugs y race conditions
 
-#### [ ] 1.B.1 · B7 — `getNextCustomerNumber` ordenar por número
+#### [x] 1.B.1 · B7 — `getNextCustomerNumber` order by number ✅
+- `customersAdmin.js` — `.order('customer_number', { ascending: false })` instead of `created_at`.
 
-- **Archivo:** `src/services/customersAdmin.js` líneas 42-54.
-- **Acción:** `.order('customer_number', { ascending: false }).limit(1)` o RPC `next_customer_number()` con `SELECT MAX(customer_number::int)` en SQL. Recomendación: RPC, más simple y atómico.
+#### [x] 1.B.2 · B12 — `getReprintData` → `.maybeSingle()` ✅ (done in Session 2)
 
-#### [ ] 1.B.2 · B12 — `getReprintData` → `.maybeSingle()`
-
-- **Archivo:** `src/services/tickets.js` líneas 33-41.
-- **Acción:** una línea. Evita throw si payment huérfano.
-
-#### [ ] 1.B.3 · D5 — Borrar rama muerta `inventoryWarning`
-
-- **Archivos:** `src/services/comandaCheckout.js` línea 309, `src/hooks/usePayment.js` línea ~337.
-- **Acción:** drop el `inventoryWarning: null` del return y la rama del caller. Si en el futuro hace falta, se reintroduce con shape.
+#### [x] 1.B.3 · D5 — Dead `inventoryWarning` branch removed ✅
+- `comandaCheckout.js` — return simplified to `{ error: null }`.
 
 #### [ ] 1.B.4 · A5 — `useOnlineStatus` en context único
-
 - **Archivos:** crear `src/context/OnlineStatusContext.jsx`, ajustar `PosPage` y `TopBar` para consumirlo.
 
 ### Cluster C — Performance fácil
 
-#### [ ] 1.C.1 · P5 — Catálogo se carga una vez por sesión
+#### [x] 1.C.1 · P5 — Catálogo se carga una vez por sesión ✅ (done in Session 3)
 
-- **Archivo:** `src/pages/PosPage.jsx` líneas 262-281.
-- **Acción:** mover `getProductsCatalog` a `useEffect([], ...)` y cachear en state. No recargar por cambio de `currentComanda.id` (el catálogo no cambia entre comandas).
-
-#### [ ] 1.C.2 · P8 — `fetchShiftPanelData` count en vez de SELECT
-
-- **Archivo:** `src/services/shifts.js#getOpenComandasCount` — usar `.select('id', { count: 'exact', head: true })`. Aviso: ajustar callsite en `useShift.fetchShiftPanelData`.
+#### [x] 1.C.2 · P8 — `fetchShiftPanelData` count en vez de SELECT ✅
+- `shifts.js` — `getOpenComandasCount` now uses `{ count: 'exact', head: true }`. `useShift.js` callsite updated to use `count` instead of `data.length`.
 
 ---
 
