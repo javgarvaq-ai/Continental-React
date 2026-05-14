@@ -4,7 +4,7 @@ const labelStyle = {
     display: 'block',
     fontSize: '10px',
     fontWeight: 600,
-    color: '#555',
+    color: '#94a3b8',
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
     marginBottom: '5px',
@@ -26,7 +26,7 @@ const inputStyle = {
 function SummaryRow({ label, value, highlight }) {
     return (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '12px', color: '#555' }}>{label}</span>
+            <span style={{ fontSize: '12px', color: '#94a3b8' }}>{label}</span>
             <span style={{
                 fontSize: '13px',
                 fontWeight: highlight ? 700 : 500,
@@ -58,7 +58,7 @@ function PaymentPanel({
 
     return (
         <div style={{ marginTop: '18px', paddingTop: '16px', borderTop: '1px solid #2a2a2a' }}>
-            <div style={{ fontSize: '11px', fontWeight: 600, color: '#444', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '14px' }}>
+            <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '14px' }}>
                 Desglose de cobro
             </div>
 
@@ -120,7 +120,7 @@ function PaymentPanel({
                                 borderRadius: '6px',
                                 border: '1px solid #2a2a2a',
                                 background: '#161616',
-                                color: '#666',
+                                color: '#94a3b8',
                                 cursor: 'pointer',
                                 fontSize: '11px',
                                 fontWeight: 600,
@@ -170,7 +170,7 @@ function PaymentPanel({
                     borderRadius: '8px',
                     border: isReady ? '1px solid #2a5a3a' : '1px solid #1e1e1e',
                     background: isReady ? '#1a3a2a' : '#111',
-                    color: isReady ? '#4ade80' : '#333',
+                    color: isReady ? '#4ade80' : '#475569',
                     cursor: isReady && !isConfirmingPayment ? 'pointer' : 'not-allowed',
                     fontWeight: 700,
                     fontSize: '14px',

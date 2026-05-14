@@ -42,7 +42,7 @@ function ComandaPanel({
                 alignItems: 'center',
                 marginBottom: '10px',
             }}>
-                <span style={{ fontSize: '12px', fontWeight: 600, color: '#444', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                     Comanda
                 </span>
                 {statusInfo && (
@@ -62,7 +62,7 @@ function ComandaPanel({
 
             {/* Cart items */}
             {visibleCartItems.length === 0 ? (
-                <p style={{ fontSize: '13px', color: '#444', margin: '16px 0' }}>Sin productos.</p>
+                <p style={{ fontSize: '13px', color: '#94a3b8', margin: '16px 0' }}>Sin productos.</p>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                     {visibleCartItems.map((item) => (
@@ -82,9 +82,9 @@ function ComandaPanel({
                                 <div style={{ fontSize: '13px', fontWeight: 600, color: '#e2e2e2', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                     {item.products?.name || 'Producto'}
                                 </div>
-                                <div style={{ fontSize: '12px', color: '#555', marginTop: '1px' }}>
+                                <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '1px' }}>
                                     {item.quantity} × {money(item.unit_price)}
-                                    <span style={{ color: '#888', marginLeft: '6px' }}>
+                                    <span style={{ color: '#64748b', marginLeft: '6px' }}>
                                         = {money(Number(item.quantity || 0) * Number(item.unit_price || 0))}
                                     </span>
                                 </div>
@@ -128,7 +128,7 @@ function ComandaPanel({
                                             borderRadius: '5px',
                                             border: '1px solid #2a2a2a',
                                             background: '#111',
-                                            color: '#777',
+                                            color: '#94a3b8',
                                             cursor: 'pointer',
                                             fontSize: '16px',
                                             lineHeight: 1,
@@ -155,7 +155,7 @@ function ComandaPanel({
                 paddingTop: '12px',
                 borderTop: '1px solid #222',
             }}>
-                <span style={{ fontSize: '12px', color: '#555', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total</span>
+                <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total</span>
                 <span style={{ fontSize: '22px', fontWeight: 700, color: '#e2e2e2', letterSpacing: '-0.5px' }}>
                     {money(displayedTotal)}
                 </span>
@@ -194,7 +194,7 @@ function ComandaPanel({
                             borderRadius: '7px',
                             border: cancelConfirming ? '1px solid #ef4444' : '1px solid #2a1a1a',
                             background: cancelConfirming ? '#3d1a1a' : 'transparent',
-                            color: cancelConfirming ? '#ef4444' : '#3d2020',
+                            color: cancelConfirming ? '#ef4444' : '#7f1d1d',
                             cursor: 'pointer',
                             fontWeight: 600,
                             fontSize: '13px',
@@ -216,7 +216,7 @@ function ComandaPanel({
                                 borderRadius: '7px',
                                 border: '1px solid #2a2a2a',
                                 background: 'transparent',
-                                color: '#666',
+                                color: '#94a3b8',
                                 cursor: 'pointer',
                                 fontWeight: 600,
                                 fontSize: '13px',

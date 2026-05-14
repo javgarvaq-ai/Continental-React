@@ -126,7 +126,7 @@ function ScheduleViewPanel({ open, onClose }) {
                         <h3 style={{ margin: '0 0 2px 0', fontSize: '16px', fontWeight: 700, color: '#e8e8e8' }}>
                             Horario semanal
                         </h3>
-                        <p style={{ margin: 0, fontSize: '12px', color: '#555' }}>
+                        <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8' }}>
                             {formatWeekLabel(activeWeek)}
                         </p>
                     </div>
@@ -136,7 +136,7 @@ function ScheduleViewPanel({ open, onClose }) {
                         style={{
                             padding: '6px 10px', borderRadius: '6px',
                             border: '1px solid #2a2a2a', background: 'transparent',
-                            color: '#555', fontSize: '16px', cursor: 'pointer',
+                            color: '#94a3b8', fontSize: '16px', cursor: 'pointer',
                         }}
                     >
                         ✕
@@ -158,7 +158,7 @@ function ScheduleViewPanel({ open, onClose }) {
                                 borderRadius: '6px',
                                 border: activeWeek === week ? '1px solid #3a5a3a' : '1px solid #2a2a2a',
                                 background: activeWeek === week ? '#1a3a2a' : 'transparent',
-                                color: activeWeek === week ? '#4ade80' : '#555',
+                                color: activeWeek === week ? '#4ade80' : '#94a3b8',
                                 fontSize: '12px',
                                 fontWeight: activeWeek === week ? 600 : 400,
                                 cursor: 'pointer',
@@ -172,9 +172,9 @@ function ScheduleViewPanel({ open, onClose }) {
                 {/* Body */}
                 <div style={{ overflowY: 'auto', flex: 1, padding: '16px 20px 20px' }}>
                     {loading ? (
-                        <p style={{ color: '#444', fontSize: '13px', margin: '20px 0' }}>Cargando...</p>
+                        <p style={{ color: '#94a3b8', fontSize: '13px', margin: '20px 0' }}>Cargando...</p>
                     ) : !hasAnyShift ? (
-                        <p style={{ color: '#444', fontSize: '13px', margin: '20px 0' }}>
+                        <p style={{ color: '#94a3b8', fontSize: '13px', margin: '20px 0' }}>
                             No hay turnos programados para esta semana.
                         </p>
                     ) : (
@@ -203,13 +203,13 @@ function ScheduleViewPanel({ open, onClose }) {
                                 <table style={{ borderCollapse: 'collapse', minWidth: '520px', width: '100%' }}>
                                     <thead>
                                         <tr>
-                                            <th style={{ width: '52px', padding: '5px 6px', fontSize: '10px', color: '#444', textAlign: 'left', borderBottom: '1px solid #1e1e1e' }}>
+                                            <th style={{ width: '52px', padding: '5px 6px', fontSize: '10px', color: '#64748b', textAlign: 'left', borderBottom: '1px solid #1e1e1e' }}>
                                                 Hora
                                             </th>
                                             {DAYS.map((d, i) => (
-                                                <th key={d} style={{ padding: '5px 3px', fontSize: '10px', color: '#555', textAlign: 'center', borderBottom: '1px solid #1e1e1e', minWidth: '60px' }}>
+                                                <th key={d} style={{ padding: '5px 3px', fontSize: '10px', color: '#94a3b8', textAlign: 'center', borderBottom: '1px solid #1e1e1e', minWidth: '60px' }}>
                                                     <div>{d}</div>
-                                                    <div style={{ fontSize: '9px', color: '#333' }}>{formatDateShort(activeWeek, i)}</div>
+                                                    <div style={{ fontSize: '9px', color: '#64748b' }}>{formatDateShort(activeWeek, i)}</div>
                                                 </th>
                                             ))}
                                         </tr>
@@ -217,7 +217,7 @@ function ScheduleViewPanel({ open, onClose }) {
                                     <tbody>
                                         {GRID_SLOTS.map(slot => (
                                             <tr key={slot}>
-                                                <td style={{ padding: '2px 6px', fontSize: '10px', color: '#3a3a3a', borderBottom: '1px solid #0f0f0f', whiteSpace: 'nowrap' }}>
+                                                <td style={{ padding: '2px 6px', fontSize: '10px', color: '#64748b', borderBottom: '1px solid #0f0f0f', whiteSpace: 'nowrap' }}>
                                                     {slot}
                                                 </td>
                                                 {Array.from({ length: 7 }, (_, dayIdx) => {

@@ -55,7 +55,7 @@ function MesaGrid({ units, onUnitClick }) {
                                 {unit.statusLabel}
                             </span>
                             {unit.customerName ? (
-                                <div style={{ fontSize: '12px', color: '#666', marginTop: '6px' }}>
+                                <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px' }}>
                                     {unit.customerName}
                                 </div>
                             ) : null}

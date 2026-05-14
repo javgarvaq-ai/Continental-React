@@ -538,7 +538,7 @@ function PosPage() {
                                 borderRadius: '6px',
                                 border: '1px solid #2a2a2a',
                                 background: 'transparent',
-                                color: '#666',
+                                color: '#94a3b8',
                                 cursor: 'pointer',
                                 fontSize: '13px',
                             }}
@@ -560,7 +560,7 @@ function PosPage() {
                             marginBottom: '16px',
                         }}
                     >
-                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#444', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>
                             Mesa activa
                         </div>
 
@@ -994,9 +994,9 @@ function PosPage() {
                         <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', fontWeight: 700, color: '#e8e8e8' }}>
                             {openTableDialog.unit?.name}
                         </h3>
-                        <p style={{ margin: '0 0 20px 0', fontSize: '13px', color: '#555' }}>Mesa nueva</p>
+                        <p style={{ margin: '0 0 20px 0', fontSize: '13px', color: '#94a3b8' }}>Mesa nueva</p>
 
-                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#666', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>
+                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>
                             Cliente (opcional)
                         </label>
                         <input
@@ -1028,7 +1028,7 @@ function PosPage() {
                             <button
                                 type="button"
                                 onClick={() => setOpenTableDialog({ open: false, unit: null, existing: null, input: '', searching: false, notFound: false })}
-                                style={{ flex: 1, padding: '10px', borderRadius: '7px', border: '1px solid #222', background: 'transparent', color: '#666', fontSize: '13px', cursor: 'pointer' }}
+                                style={{ flex: 1, padding: '10px', borderRadius: '7px', border: '1px solid #222', background: 'transparent', color: '#94a3b8', fontSize: '13px', cursor: 'pointer' }}
                             >
                                 Cancelar
                             </button>
@@ -1052,14 +1052,14 @@ function PosPage() {
                         <h3 style={{ margin: '0 0 8px 0', fontSize: '17px', fontWeight: 700, color: '#e8e8e8' }}>
                             Cambiar usuario
                         </h3>
-                        <p style={{ margin: '0 0 24px 0', fontSize: '13px', color: '#666' }}>
+                        <p style={{ margin: '0 0 24px 0', fontSize: '13px', color: '#94a3b8' }}>
                             El turno permanece abierto. Volverás al login para seleccionar otro usuario.
                         </p>
                         <div style={{ display: 'flex', gap: '8px' }}>
                             <button
                                 type="button"
                                 onClick={() => setChangeUserDialog(false)}
-                                style={{ flex: 1, padding: '10px', borderRadius: '7px', border: '1px solid #222', background: 'transparent', color: '#666', fontSize: '13px', cursor: 'pointer' }}
+                                style={{ flex: 1, padding: '10px', borderRadius: '7px', border: '1px solid #222', background: 'transparent', color: '#94a3b8', fontSize: '13px', cursor: 'pointer' }}
                             >
                                 Cancelar
                             </button>
@@ -1085,7 +1085,7 @@ function PosPage() {
 
                         {reprintDialog.phase === 'folio' && (
                             <>
-                                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#666', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>
+                                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>
                                     Folio
                                 </label>
                                 <input
@@ -1104,7 +1104,7 @@ function PosPage() {
                                     <button
                                         type="button"
                                         onClick={() => setReprintDialog({ open: false, folioInput: '', phase: 'folio', comanda: null, loading: false, error: '' })}
-                                        style={{ flex: 1, padding: '10px', borderRadius: '7px', border: '1px solid #222', background: 'transparent', color: '#666', fontSize: '13px', cursor: 'pointer' }}
+                                        style={{ flex: 1, padding: '10px', borderRadius: '7px', border: '1px solid #222', background: 'transparent', color: '#94a3b8', fontSize: '13px', cursor: 'pointer' }}
                                     >
                                         Cancelar
                                     </button>
@@ -1143,7 +1143,7 @@ function PosPage() {
                                     <button
                                         type="button"
                                         onClick={() => setReprintDialog(d => ({ ...d, phase: 'folio', comanda: null }))}
-                                        style={{ padding: '10px', borderRadius: '7px', border: '1px solid #1a1a1a', background: 'transparent', color: '#555', fontSize: '13px', cursor: 'pointer' }}
+                                        style={{ padding: '10px', borderRadius: '7px', border: '1px solid #1a1a1a', background: 'transparent', color: '#94a3b8', fontSize: '13px', cursor: 'pointer' }}
                                     >
                                         ← Volver
                                     </button>
