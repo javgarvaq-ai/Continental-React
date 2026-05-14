@@ -42,7 +42,7 @@
 
 - [ ] **A4 🟡** `add_item_to_comanda` as a `SECURITY DEFINER` RPC — wraps `assertComandaOpen` + INSERT/UPDATE in one atomic server-side call, closing the TOCTOU window properly. **Prerequisite for B3 fix.** Defer until second tablet is confirmed.
 
-- [ ] **A5 🟡** Payment math (`totalDue`, `totalReceived`, `netCashApplied`) is duplicated in `usePayment.getPaymentSummary` and `comandaCheckout.confirmPayment`. Risk of divergence if one is updated without the other. **Fix:** extract to `src/utils/payments.js`, import in both.
+- [x] **A5 🟡** Payment math (`totalDue`, `totalReceived`, `netCashApplied`) is duplicated in `usePayment.getPaymentSummary` and `comandaCheckout.confirmPayment`. Risk of divergence if one is updated without the other. **Fix:** extract to `src/utils/payments.js`, import in both.
 
 - [ ] **A6 🟢** Membership discount computed in 3 separate places: `useCustomer`, `usePayment.displayedTotal`, `Ticket.jsx`. **Fix:** `computeMembershipDiscount(membership, cartTotal)` helper in `src/utils/membership.js`, imported by all three.
 
@@ -50,7 +50,7 @@
 
 ## ⚡ Performance
 
-- [ ] **P1 🟡** N+1 in `searchCustomerByQuery` — for results by name, fires one `customer_memberships` SELECT per customer found (up to 5 round trips). **File:** `src/services/membership.js` lines 212–278. **Fix:** collect all `customer_id`s from the name query, then single `.in('customer_id', ids)` on memberships, group in JS.
+- [x] **P1 🟡** N+1 in `searchCustomerByQuery` — for results by name, fires one `customer_memberships` SELECT per customer found (up to 5 round trips). **File:** `src/services/membership.js` lines 212–278. **Fix:** collect all `customer_id`s from the name query, then single `.in('customer_id', ids)` on memberships, group in JS.
 
 - [ ] **P2 🟢** `WeeklyReportPage` runs 8 independent `reduce` passes over `cashMovements` to compute different aggregates. **File:** `src/pages/WeeklyReportPage.jsx` lines 81–190. **Fix:** single `forEach` with one accumulator object producing all metrics.
 
@@ -60,9 +60,9 @@
 
 ## 🔒 Security
 
-- [ ] **S1 🟢** RPC error strings are inserted directly into `new Error(result.error)` and rendered in the status toast. A long or malformed payload from the DB could overflow the toast layout. **File:** `src/services/comandaCheckout.js` line 14. **Fix:** truncate to 200 chars before wrapping in `Error`.
+- [x] **S1 🟢** RPC error strings are inserted directly into `new Error(result.error)` and rendered in the status toast. A long or malformed payload from the DB could overflow the toast layout. **File:** `src/services/comandaCheckout.js` line 14. **Fix:** truncate to 200 chars before wrapping in `Error`.
 
-- [ ] **S2 🟢** `S8` — build a whitelist of known user-facing error messages (e.g. `already_paid`, `insufficient_stock`, `comanda_not_open`); map them to clean Spanish strings; anything else → "Error interno. Contacta al administrador." **Files:** `comandaCheckout.js`, `products.js`, `membership.js`.
+- [x] **S2 🟢** `S8` — build a whitelist of known user-facing error messages (e.g. `already_paid`, `insufficient_stock`, `comanda_not_open`); map them to clean Spanish strings; anything else → "Error interno. Contacta al administrador." **Files:** `comandaCheckout.js`, `membership.js`. Utility: `src/utils/rpcErrors.js`.
 
 ---
 

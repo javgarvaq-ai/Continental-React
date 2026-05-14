@@ -1,4 +1,6 @@
 import { supabase } from './supabase';
+import { computePaymentBreakdown } from '../utils/payments';
+import { friendlyRpcError } from '../utils/rpcErrors';
 
 export async function presentBill({ comandaId, userId, total }) {
     const safeTotal = Number(total || 0);
@@ -12,7 +14,7 @@ export async function presentBill({ comandaId, userId, total }) {
     if (error) return { error };
 
     if (!result?.ok) {
-        return { error: new Error(result?.error || 'Error al presentar cuenta.') };
+        return { error: new Error(friendlyRpcError(result?.error, 'Error al presentar cuenta.')) };
     }
 
     return { error: null };
@@ -242,22 +244,25 @@ export async function confirmPayment({
     propina,
     cambio,
 }) {
-    const safeTotal = Number(total || 0);
-    const cashReceived = Number(efectivo || 0);
-    const safeTarjeta = Number(tarjeta || 0);
+    const safePropina       = Number(propina       || 0);
+    const safeCambio        = Number(cambio        || 0);
+    const cashReceived      = Number(efectivo      || 0);
+    const safeTarjeta       = Number(tarjeta       || 0);
     const safeTransferencia = Number(transferencia || 0);
-    const safePropina = Number(propina || 0);
-    const safeCambio = Number(cambio || 0);
+    const safeTotal         = Number(total         || 0);
 
-    const totalDue = safeTotal + safePropina;
-    const totalReceived = cashReceived + safeTarjeta + safeTransferencia;
+    const { totalDue, totalReceived, netCashApplied, totalPaid } = computePaymentBreakdown({
+        total,
+        efectivo,
+        tarjeta,
+        transferencia,
+        propina: safePropina,
+        cambio:  safeCambio,
+    });
 
     if (totalReceived < totalDue) {
         return { error: new Error('El monto pagado es insuficiente.') };
     }
-
-    const netCashApplied = Math.max(cashReceived - safeCambio, 0);
-    const totalPaid = netCashApplied + safeTarjeta + safeTransferencia;
 
     if (Math.abs(totalPaid - totalDue) > 0.009) {
         return {
@@ -296,14 +301,12 @@ export async function confirmPayment({
     );
 
     if (rpcError) {
-        return { error: rpcError };
+        const msg = (rpcError.message || 'Error al finalizar cobro.').slice(0, 200)
+        return { error: new Error(msg) };
     }
 
     if (rpcResult && !rpcResult.ok) {
-        const msg = rpcResult.error === 'already_paid'
-            ? 'Esta comanda ya fue cobrada. Recarga la página.'
-            : (rpcResult.error || 'Error al finalizar cobro.');
-        return { error: new Error(msg) };
+        return { error: new Error(friendlyRpcError(rpcResult.error, 'Error al finalizar cobro.')) };
     }
 
     return { error: null };

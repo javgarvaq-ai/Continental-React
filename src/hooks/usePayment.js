@@ -9,6 +9,7 @@ import { processMembershipOnPayment } from '../services/membership'
 import { printTicket } from '../components/Ticket'
 import { money } from '../utils/money'
 import { requireOnline } from '../utils/requireOnline'
+import { computePaymentBreakdown } from '../utils/payments'
 
 function getPaymentSummary(totalCuenta, paymentData) {
     const efectivo = Number(paymentData.efectivo || 0)
@@ -303,6 +304,15 @@ export function usePayment({
                 membershipWarning = mWarning ?? mData?.membershipWarning ?? null
             }
 
+            const { netCashApplied, totalPaid } = computePaymentBreakdown({
+                total:         displayedTotal,
+                efectivo:      paymentSummary.efectivo,
+                tarjeta:       paymentSummary.tarjeta,
+                transferencia: paymentSummary.transferencia,
+                propina:       paymentSummary.propina,
+                cambio:        paymentSummary.cambio,
+            })
+
             printTicket({
                 tipo: 'pagado',
                 comanda: {
@@ -315,14 +325,11 @@ export function usePayment({
                 unit: selectedUnit,
                 onBlocked: (msg) => setStatus(msg),
                 payment: {
-                    efectivo: Math.max(paymentSummary.efectivo - paymentSummary.cambio, 0),
-                    tarjeta: paymentSummary.tarjeta,
+                    efectivo:      netCashApplied,
+                    tarjeta:       paymentSummary.tarjeta,
                     transferencia: paymentSummary.transferencia,
-                    total_paid:
-                        Math.max(paymentSummary.efectivo - paymentSummary.cambio, 0) +
-                        paymentSummary.tarjeta +
-                        paymentSummary.transferencia,
-                    change_given: paymentSummary.cambio,
+                    total_paid:    totalPaid,
+                    change_given:  paymentSummary.cambio,
                 },
                 // If membershipWarning is set, the benefit wasn't applied cleanly —
                 // suppress the membership section so the customer can't claim it.

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import logo from '../assets/logo.png';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
@@ -212,7 +212,7 @@ function PosPage() {
         if (currentComanda?.id) {
             loadComandaView(currentComanda.id);
         }
-    }, [currentComanda?.id]);
+    }, [currentComanda?.id, loadComandaView]);
 
     function handleWeeklyReport() {
         navigate('/weekly-report');
@@ -276,7 +276,7 @@ function PosPage() {
 
     // Cart load: fetches only the active cart items for a comanda.
     // Catalog is loaded once at session start (see useEffect above) and never re-fetched here.
-    async function loadComandaView(comandaId) {
+    const loadComandaView = useCallback(async (comandaId) => {
         const { data, error } = await getActiveCartItems(comandaId);
 
         if (error) {
@@ -286,7 +286,7 @@ function PosPage() {
 
         setCartItems(data || []);
         setStatus('Comanda cargada.');
-    }
+    }, []);
 
     // Cart-only reload: used after add/remove/benefit operations — catalog doesn't change.
     async function reloadCart(comandaId) {

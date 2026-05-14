@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { friendlyRpcError } from '../utils/rpcErrors'
 
 export function getCurrentMonthDate() {
     const now = new Date()
@@ -110,7 +111,7 @@ export async function activateMembership({ customerId, planId, comandaId }) {
     })
 
     if (rpcError) return { data: null, error: rpcError }
-    if (!result?.ok) return { data: null, error: new Error(result?.error || 'Error activando membresía') }
+    if (!result?.ok) return { data: null, error: new Error(friendlyRpcError(result?.error, 'Error activando membresía.')) }
 
     // Fetch the full membership row (with plan + benefits) that the UI needs
     return await supabase
@@ -220,7 +221,7 @@ export async function searchCustomerByQuery(query) {
     const currentMonth = getCurrentMonthDate()
 
     const membershipSelect = `
-        id, month, status, plan_id,
+        customer_id, id, month, status, plan_id,
         membership_plans (
             id, name, price_monthly, product_id,
             membership_plan_benefits (
@@ -265,19 +266,25 @@ export async function searchCustomerByQuery(query) {
         return { data: [], error: null }
     }
 
-    const results = await Promise.all(
-        customers.map(async (customer) => {
-            const { data: membership } = await supabase
-                .from('customer_memberships')
-                .select(membershipSelect)
-                .eq('customer_id', customer.id)
-                .eq('month', currentMonth)
-                .eq('status', 'active')
-                .maybeSingle()
+    // Single batched query instead of one per customer (was N+1 with Promise.all)
+    const customerIds = customers.map(c => c.id)
+    const { data: memberships } = await supabase
+        .from('customer_memberships')
+        .select(membershipSelect)
+        .in('customer_id', customerIds)
+        .eq('month', currentMonth)
+        .eq('status', 'active')
 
-            return { customer, activeMembership: membership || null }
-        })
-    )
+    // Index by customer_id for O(1) lookup — at most one active membership per customer per month
+    const membershipByCustomerId = {}
+    for (const m of memberships || []) {
+        membershipByCustomerId[m.customer_id] = m
+    }
+
+    const results = customers.map(customer => ({
+        customer,
+        activeMembership: membershipByCustomerId[customer.id] || null,
+    }))
 
     return { data: results, error: null }
 }
