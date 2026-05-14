@@ -74,7 +74,7 @@
 
 - [ ] **U3 🟢** Multi-tab logout — if another tab signs out, this tab doesn't know until the next `verifySession` runs (next navigation). **Fix:** `window.addEventListener('storage', ...)` in `authStore` watching for the Supabase session key being cleared, then call `clearAuth()`. **Low risk** — bar runs from one tablet.
 
-- [ ] **U4 🟢** Print fail notification — today if the print popup is blocked, a status message appears but it disappears when `onBackToUnits` fires. **Fix:** persist the "impresión bloqueada" warning in a separate state that survives the panel reset, or show it as a modal the cashier must dismiss.
+- [x] **U4 🟢** Print fail notification — today if the print popup is blocked, a status message appears but it disappears when `onBackToUnits` fires. **Fix:** capture block synchronously via `printBlocked` flag; append the warning to the `onBackToUnits` message so it can't be overwritten. Applied in both `handlePresentBill` and `handleConfirmPayment` in `usePayment.js`.
 
 ---
 

@@ -147,6 +147,7 @@ export function usePayment({
                 return
             }
 
+            let printBlocked = false
             printTicket({
                 tipo: 'cuenta',
                 comanda: {
@@ -156,10 +157,14 @@ export function usePayment({
                 },
                 items: visibleCartItems,
                 unit: selectedUnit,
-                onBlocked: (msg) => setStatus(msg),
+                onBlocked: () => { printBlocked = true },
             })
 
-            await onBackToUnits(`Cuenta presentada. Total ${money(displayedTotal)}`)
+            await onBackToUnits(
+                printBlocked
+                    ? `⚠️ Cuenta presentada (${money(displayedTotal)}). Impresión bloqueada — permite pop-ups y usa "Reimprimir folio".`
+                    : `Cuenta presentada. Total ${money(displayedTotal)}`
+            )
         } finally {
             setIsUpdatingComandaStatus(false)
         }
@@ -313,6 +318,7 @@ export function usePayment({
                 cambio:        paymentSummary.cambio,
             })
 
+            let printBlocked = false
             printTicket({
                 tipo: 'pagado',
                 comanda: {
@@ -323,7 +329,7 @@ export function usePayment({
                 },
                 items: visibleCartItems,
                 unit: selectedUnit,
-                onBlocked: (msg) => setStatus(msg),
+                onBlocked: () => { printBlocked = true },
                 payment: {
                     efectivo:      netCashApplied,
                     tarjeta:       paymentSummary.tarjeta,
@@ -351,6 +357,9 @@ export function usePayment({
             }
             if (membershipWarning) {
                 successMsg += ` ⚠️ ${membershipWarning}`
+            }
+            if (printBlocked) {
+                successMsg += ' ⚠️ Impresión bloqueada — permite pop-ups y usa "Reimprimir folio".'
             }
 
             await onBackToUnits(successMsg)
