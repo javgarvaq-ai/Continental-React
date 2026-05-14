@@ -7,7 +7,7 @@ function MesaGrid({ units, onUnitClick }) {
                 fontWeight: 600,
                 letterSpacing: '0.12em',
                 textTransform: 'uppercase',
-                color: '#555',
+                color: '#94a3b8',
             }}>
                 Mesas
             </p>

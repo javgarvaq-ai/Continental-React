@@ -219,6 +219,21 @@ function PosPage() {
         loadCatalog()
     }, []);
 
+    // Cart load: fetches only the active cart items for a comanda.
+    // Catalog is loaded once at session start (see useEffect above) and never re-fetched here.
+    // Defined before the useEffect that depends on it — const (useCallback) is not hoisted.
+    const loadComandaView = useCallback(async (comandaId) => {
+        const { data, error } = await getActiveCartItems(comandaId);
+
+        if (error) {
+            setStatus(`Error cargando comanda: ${error.message}`);
+            return;
+        }
+
+        setCartItems(data || []);
+        setStatus('Comanda cargada.');
+    }, []);
+
     useEffect(() => {
         if (currentComanda?.id) {
             loadComandaView(currentComanda.id);
@@ -284,20 +299,6 @@ function PosPage() {
     function handleInventory() {
         navigate('/inventory');
     }
-
-    // Cart load: fetches only the active cart items for a comanda.
-    // Catalog is loaded once at session start (see useEffect above) and never re-fetched here.
-    const loadComandaView = useCallback(async (comandaId) => {
-        const { data, error } = await getActiveCartItems(comandaId);
-
-        if (error) {
-            setStatus(`Error cargando comanda: ${error.message}`);
-            return;
-        }
-
-        setCartItems(data || []);
-        setStatus('Comanda cargada.');
-    }, []);
 
     // Cart-only reload: used after add/remove/benefit operations — catalog doesn't change.
     async function reloadCart(comandaId) {
@@ -474,10 +475,10 @@ function PosPage() {
                 }}
             >
                 <div>
-                    <p style={{ margin: 0, fontSize: '13px', color: '#777' }}>
+                    <p style={{ margin: 0, fontSize: '13px', color: '#cbd5e1' }}>
                         {currentUser ? `${currentUser.name} · ${currentUser.role}` : 'Cargando...'}
                         {currentShiftId ? (
-                            <span style={{ marginLeft: '10px', color: '#444', fontSize: '12px' }}>
+                            <span style={{ marginLeft: '10px', color: '#64748b', fontSize: '12px' }}>
                                 #{currentShiftId.slice(-8)}
                             </span>
                         ) : null}

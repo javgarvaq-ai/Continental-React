@@ -5,10 +5,10 @@ import { useState, useCallback } from 'react'
  * Used by the hook and can be imported directly when needed.
  */
 export const STATUS_COLORS = {
-    error:   '#dc2626', // red-600
-    warning: '#d97706', // amber-600
-    success: '#16a34a', // green-600
-    info:    '#6b7280', // gray-500
+    error:   '#f87171', // red-400   — readable on dark backgrounds
+    warning: '#fbbf24', // amber-400 — readable on dark backgrounds
+    success: '#4ade80', // green-400 — readable on dark backgrounds
+    info:    '#94a3b8', // slate-400 — readable on dark backgrounds
 }
 
 // ── Auto-classification heuristics ────────────────────────────────────────────
