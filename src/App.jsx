@@ -19,6 +19,7 @@ import CustomersAdminPage from './pages/CustomersAdminPage'
 import UnitsAdminPage from './pages/UnitsAdminPage'
 import EmployeesAdminPage from './pages/EmployeesAdminPage'
 import ScheduleAdminPage from './pages/ScheduleAdminPage'
+import SqlAdminPage from './pages/SqlAdminPage' // DEV TOOL — remove after QA
 
 function App() {
   const verifySession = useAuthStore(state => state.verifySession)
@@ -119,6 +120,15 @@ function App() {
           element={
             <AuthRoute>
               <ScheduleAdminPage />
+            </AuthRoute>
+          }
+        />
+        {/* DEV TOOL — remove after QA */}
+        <Route
+          path="/admin/sql"
+          element={
+            <AuthRoute>
+              <SqlAdminPage />
             </AuthRoute>
           }
         />

@@ -1,7 +1,7 @@
 # Continental POS — Backlog
 
 > Consolidated from: `pos-action-plan.md`, `sprint review-action-plan-10-May.md`, `Sprint May 13th.md`
-> Last updated: 2026-05-13
+> Last updated: 2026-05-14
 >
 > **Priority legend:** 🔴 High · 🟡 Medium · 🟢 Low / nice-to-have
 > **Status:** `[ ]` Pending · `[~]` In progress · `[x]` Done · `[!]` Blocked/decision needed
@@ -38,7 +38,7 @@
 
 - [ ] **A2 🟢** `useOnlineStatus` called independently in `PosPage` and `TopBar` — two event listener instances. **Fix:** `src/context/OnlineStatusContext.jsx` provider, both components consume it. **Low risk if skipped** — both instances always agree since they listen to the same browser events.
 
-- [x] **A3 🟢** `loadComandaView` in `PosPage` is a plain `async function`, not wrapped in `useCallback`. It's referenced inside a `useEffect` but not listed in deps (safe today because of `currentComanda.id` dep, but fragile). **Fix:** `useCallback` with `[currentComanda?.id]` dep + add to `useEffect` deps array.
+- [x] **A3 🟢** `loadComandaView` in `PosPage` is a plain `async function`, not wrapped in `useCallback`. It's referenced inside a `useEffect` but not listed in deps (safe today because of `currentComanda.id` dep, but fragile). **Fix:** `useCallback` with `[currentComanda?.id]` dep + add to `useEffect` deps array. **Bug found during beautify:** converting to `const useCallback` removed hoisting — the `useEffect` deps array evaluated `loadComandaView` before it was declared, causing a TDZ crash on every POS load. Fixed by moving the declaration above the `useEffect`.
 
 - [ ] **A4 🟡** `add_item_to_comanda` as a `SECURITY DEFINER` RPC — wraps `assertComandaOpen` + INSERT/UPDATE in one atomic server-side call, closing the TOCTOU window properly. **Prerequisite for B3 fix.** Defer until second tablet is confirmed.
 
@@ -75,6 +75,10 @@
 - [ ] **U3 🟢** Multi-tab logout — if another tab signs out, this tab doesn't know until the next `verifySession` runs (next navigation). **Fix:** `window.addEventListener('storage', ...)` in `authStore` watching for the Supabase session key being cleared, then call `clearAuth()`. **Low risk** — bar runs from one tablet.
 
 - [x] **U4 🟢** Print fail notification — today if the print popup is blocked, a status message appears but it disappears when `onBackToUnits` fires. **Fix:** capture block synchronously via `printBlocked` flag; append the warning to the `onBackToUnits` message so it can't be overwritten. Applied in both `handlePresentBill` and `handleConfirmPayment` in `usePayment.js`.
+
+- [x] **U5 🟢** **Beautify — WeeklyReportPage.** Bare-bones plain-div layout replaced with metric cards, color-coded values (green = income, red = expense), featured Utilidad estimada row with dynamic background tint, responsive auto-fill grid per section, styled date range bar, and mini record-count stats. Logic/data untouched. **File:** `src/pages/WeeklyReportPage.jsx`.
+
+- [x] **U6 🟢** **Beautify — Dark-on-dark contrast audit.** Every `#333`–`#777` text color on near-black backgrounds (`#0f0f0f`–`#1a1a1a`) replaced across the POS. Mapping: section headers `#444` → `#64748b`, body/muted text `#555`–`#777` → `#94a3b8`, ghost/cancel buttons `#666` → `#94a3b8`, all `STATUS_COLORS` in `useStatus.js` bumped to `-400` Tailwind equivalents. **Files:** `useStatus.js`, `ComandaPanel.jsx`, `PaymentPanel.jsx`, `ScheduleViewPanel.jsx`, `MesaGrid.jsx`, `PosPage.jsx`.
 
 ---
 
