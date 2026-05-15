@@ -8,24 +8,23 @@ import { supabase } from '../services/supabase'
 const PRESETS = [
     {
         label: 'Comandas activas',
-        sql: `SELECT c.id, c.status, c.created_at, u.name AS mesa, cu.name AS cliente
+        sql: `SELECT c.id, c.folio, c.status, c.opened_at, u.name AS mesa, cu.name AS cliente
 FROM comandas c
 LEFT JOIN units u ON u.id = c.unit_id
 LEFT JOIN customers cu ON cu.id = c.customer_id
 WHERE c.status NOT IN ('paid', 'cancelled')
-ORDER BY c.created_at DESC
+ORDER BY c.opened_at DESC
 LIMIT 20`,
     },
     {
-        label: 'Inventario bajo',
-        sql: `SELECT name, current_stock, unit_of_measure
+        label: 'Inventario',
+        sql: `SELECT name, current_stock, unit_type, active
 FROM inventory_items
-ORDER BY current_stock ASC
-LIMIT 20`,
+ORDER BY current_stock ASC`,
     },
     {
         label: 'Últimos movimientos',
-        sql: `SELECT im.created_at, ii.name, im.movement_type, im.change_amount, im.resulting_stock
+        sql: `SELECT im.created_at, ii.name, im.movement_type, im.quantity_change, im.resulting_stock
 FROM inventory_movements im
 JOIN inventory_items ii ON ii.id = im.inventory_item_id
 ORDER BY im.created_at DESC
@@ -33,31 +32,32 @@ LIMIT 30`,
     },
     {
         label: 'Membresías activas',
-        sql: `SELECT cu.name, cu.customer_number, mp.name AS plan, cm.start_date, cm.end_date
+        sql: `SELECT cu.name, cu.customer_number, mp.name AS plan, cm.month, cm.status
 FROM customer_memberships cm
 JOIN customers cu ON cu.id = cm.customer_id
-JOIN membership_plans mp ON mp.id = cm.membership_plan_id
-WHERE cm.end_date >= current_date
-ORDER BY cm.end_date ASC`,
+JOIN membership_plans mp ON mp.id = cm.plan_id
+WHERE cm.status = 'active'
+ORDER BY cm.month DESC`,
     },
     {
         label: 'Turno actual',
         sql: `SELECT s.id, s.status, s.opened_at, s.closed_at,
        u.name AS abierto_por
 FROM shifts s
-LEFT JOIN users u ON u.id = s.opened_by
+LEFT JOIN users u ON u.id = s.opened_by_user_id
 WHERE s.status = 'open'
 ORDER BY s.opened_at DESC
 LIMIT 5`,
     },
     {
         label: 'Últimos pagos',
-        sql: `SELECT cp.created_at, cp.payment_method, cp.amount,
-       c.id AS comanda_id, cu.name AS cliente
-FROM comanda_payments cp
-JOIN comandas c ON c.id = cp.comanda_id
+        sql: `SELECT p.created_at, p.total_paid, p.efectivo, p.tarjeta,
+       p.transferencia, p.tip_amount, p.change_given,
+       c.folio, cu.name AS cliente
+FROM payments p
+JOIN comandas c ON c.id = p.comanda_id
 LEFT JOIN customers cu ON cu.id = c.customer_id
-ORDER BY cp.created_at DESC
+ORDER BY p.created_at DESC
 LIMIT 20`,
     },
     {
