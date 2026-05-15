@@ -23,6 +23,7 @@ const NAV_ITEMS = [
     { label: 'Mesas/Unidades', path: '/admin/units' },
     { label: 'Empleados', path: '/admin/employees' },
     { label: 'Horarios', path: '/admin/schedule' },
+    { label: '🛠 SQL', path: '/admin/sql', dev: true }, // DEV TOOL — remove after QA
 ]
 
 function AdminNav({ currentPath }) {
@@ -37,8 +38,13 @@ function AdminNav({ currentPath }) {
                     onClick={() => navigate(item.path)}
                     style={{
                         ...navButtonStyle,
-                        background: currentPath === item.path ? '#1d3557' : '#222',
-                        borderColor: currentPath === item.path ? '#4a90d9' : '#555',
+                        background: item.dev
+                            ? (currentPath === item.path ? '#451a03' : '#1c1208')
+                            : (currentPath === item.path ? '#1d3557' : '#222'),
+                        borderColor: item.dev
+                            ? (currentPath === item.path ? '#d97706' : '#854d0e')
+                            : (currentPath === item.path ? '#4a90d9' : '#555'),
+                        color: item.dev ? '#fbbf24' : 'white',
                     }}
                 >
                     {item.label}
