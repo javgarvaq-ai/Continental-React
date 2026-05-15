@@ -165,7 +165,7 @@ export function useCustomer({ currentComanda, cartTotal, isOnline, setStatus, on
             showCreateForm: false, newName: '', newPhone: '',
         })
         setIsProcessingMembership(false)
-        setStatus(`Cliente creado y asignado: ${newCustomer.name} #${newCustomer.customer_number}`)
+        setStatus(`Cliente creado y asignado: ${newCustomer.name} #${String(newCustomer.customer_number).padStart(4, '0')}`)
     }
 
     async function handleOpenMembershipRenewal() {

@@ -119,7 +119,7 @@ function CustomersAdminPage() {
 
     const filteredCustomers = customers.filter(c =>
         c.name.toLowerCase().includes(search.toLowerCase()) ||
-        c.customer_number.includes(search)
+        String(c.customer_number).padStart(4, '0').includes(search)
     )
 
     function getActiveMembership(customer) {
@@ -150,7 +150,7 @@ function CustomersAdminPage() {
                     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
                         <div style={{ background: '#181818', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '600px', maxHeight: '80vh', overflowY: 'auto', border: '1px solid #2f2f2f' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                                <h2 style={{ margin: 0 }}>#{viewingCustomer.customer_number} — {viewingCustomer.name}</h2>
+                                <h2 style={{ margin: 0 }}>#{String(viewingCustomer.customer_number).padStart(4, '0')} — {viewingCustomer.name}</h2>
                                 <button onClick={() => setViewingCustomer(null)} style={{ background: 'none', border: 'none', color: 'white', fontSize: '24px', cursor: 'pointer' }}>×</button>
                             </div>
 
@@ -295,7 +295,7 @@ function CustomersAdminPage() {
                                                     <div>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                                             <span style={{ fontWeight: 'bold', fontSize: '16px' }}>{customer.name}</span>
-                                                            <span style={{ opacity: 0.6, fontSize: '13px' }}>#{customer.customer_number}</span>
+                                                            <span style={{ opacity: 0.6, fontSize: '13px' }}>#{String(customer.customer_number).padStart(4, '0')}</span>
                                                             {activeMembership ? (
                                                                 <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '10px', background: '#1b5e20', color: '#66bb6a' }}>
                                                                     {activeMembership.membership_plans?.name}

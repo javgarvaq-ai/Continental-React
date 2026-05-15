@@ -14,7 +14,7 @@
 
 - [x] **D2 🟢** `inventory_movements.quantity` column name is ambiguous — could be read as "how many units" but actually means "resulting stock after movement". **Fix:** renamed to `resulting_stock`. Migration `20260514000001`. Recreated `deduct_inventory_item` and `adjust_inventory_stock` RPCs to use new column name. No JS callers needed updating.
 
-- [!] **D3 🟡** `customers.customer_number` is `text` — lexicographic sort can mis-order (e.g. "9" > "1000"). Today B7 fixes ordering in JS, but the root problem is the column type. **Decision needed:** convert to `integer` + format to 4-digit string only in UI, or leave as text and document the padding convention. If converting: migration with `USING customer_number::integer`, update all `padStart` callers.
+- [x] **D3 🟡** `customers.customer_number` is `text` — lexicographic sort can mis-order (e.g. "9" > "1000"). **Fix:** migration `20260514000003` converts column to `integer` (`USING customer_number::integer`). All display sites use `String(n).padStart(4, '0')`. DB lookups use `parseInt` before `.eq()`. `getNextCustomerNumber` returns a plain number; `createCustomer` stores it as integer.
 
 - [x] **D4 🟡** `finalize_comanda_payment` RPC has redundant params: `p_tip_total` and `p_tip_amount` both receive `safePropina`; `p_total_paid` and `p_total_aplicado` both receive `totalPaid`; `p_cobrado_at` is passed from JS when `NOW()` server-side is more accurate. **Fix:** simplify RPC signature (migration `20260513000005`) + update `comandaCheckout.js` callsite. Also dropped `p_cash_received` (computable as `p_efectivo + p_change_given` server-side).
 
@@ -26,7 +26,7 @@
 
 - [x] **B1 🟡** `displayedTotal` in `usePayment.js` uses `cartTotal` when status is `open` but switches to `currentComanda.final_total` otherwise. If a waiter adds items to the cart and then enters the payment screen without the comanda transitioning, `final_total` is stale and the displayed total is wrong. **File:** `src/hooks/usePayment.js` lines 62–66. **Fix:** always derive from live `cartItems` sum + membership discount; never read `final_total` for display.
 
-- [ ] **B2 🟡** `loadComandaView` only re-runs when `currentComanda.id` changes (the `useEffect` dep). Any mutation that doesn't call `reloadCart` after completing will leave the cart desynchronized. **File:** `src/pages/PosPage.jsx` lines 211–214. **Fix:** shared reload counter in PosPage that every mutation hook increments; `loadComandaView` depends on it.
+- [x] **B2 🟡** `loadComandaView` only re-runs when `currentComanda.id` changes (the `useEffect` dep). Any mutation that doesn't call `reloadCart` after completing will leave the cart desynchronized. **Fix:** added `reloadCounter` state to PosPage; all hooks call `reloadCart()` which increments the counter; `loadComandaView` useEffect depends on it — any mutation path automatically triggers a re-fetch.
 
 - [ ] **B3 🟢** Cart TOCTOU — `addNormalProductToComanda` / `addShotWithFreeMixers` do SELECT → INSERT with no lock. Race window is microseconds on a single-tablet model so consequence is a duplicate display row (correct totals, correct inventory). **Deferred intentionally** — only relevant if a second tablet is added. Revisit when P3 (realtime) is implemented.
 
@@ -85,7 +85,7 @@
 ## 🗄️ Database Schema
 
 - [x] **DB1** — same as D2 above (`inventory_movements.quantity` rename). Done.
-- [ ] **DB2** — same as D3 above (`customer_number` type decision).
+- [x] **DB2** — same as D3 above (`customer_number` type decision). Done.
 
 ---
 

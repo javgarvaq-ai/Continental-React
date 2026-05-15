@@ -48,6 +48,9 @@ function PosPage() {
     const [changeUserDialog, setChangeUserDialog] = useState(false)
     const [openTableDialog, setOpenTableDialog] = useState({ open: false, unit: null, existing: null, input: '', searching: false, notFound: false })
     const [reprintDialog, setReprintDialog] = useState({ open: false, folioInput: '', phase: 'folio', comanda: null, loading: false, error: '' })
+    // B2 fix: counter incremented by any mutation — loadComandaView depends on it
+    // so the cart re-fetches after every operation without needing a direct reloadCart call
+    const [reloadCounter, setReloadCounter] = useState(0)
     const isOnline = useOnlineStatus()
 
     // Derived cart values — computed before hooks so they can be passed down
@@ -238,7 +241,7 @@ function PosPage() {
         if (currentComanda?.id) {
             loadComandaView(currentComanda.id);
         }
-    }, [currentComanda?.id, loadComandaView]);
+    }, [currentComanda?.id, loadComandaView, reloadCounter]);
 
     function handleWeeklyReport() {
         navigate('/weekly-report');
@@ -300,16 +303,12 @@ function PosPage() {
         navigate('/inventory');
     }
 
-    // Cart-only reload: used after add/remove/benefit operations — catalog doesn't change.
-    async function reloadCart(comandaId) {
-        const { data, error } = await getActiveCartItems(comandaId);
-
-        if (error) {
-            setStatus(`Error actualizando carrito: ${error.message}`);
-            return;
-        }
-
-        setCartItems(data || []);
+    // Cart reload: incrementing the counter triggers loadComandaView via its useEffect dep.
+    // All hooks receive this as onLoadComanda / onReloadComanda — they don't need to
+    // call getActiveCartItems themselves. The comandaId argument is accepted but ignored
+    // since loadComandaView always reads currentComanda.id from the closure.
+    function reloadCart() {
+        setReloadCounter(c => c + 1)
     }
 
     async function handleUnitClick(unit) {
@@ -622,7 +621,7 @@ function PosPage() {
                                                         {customerSearchState.results.map((item) => (
                                                             <div key={item.customer.id} style={{ background: '#111', borderRadius: '8px', padding: '10px' }}>
                                                                 <div style={{ fontSize: '13px', fontWeight: 'bold' }}>
-                                                                    #{item.customer.customer_number} — {item.customer.name}
+                                                                    #{String(item.customer.customer_number).padStart(4, '0')} — {item.customer.name}
                                                                 </div>
                                                                 <div style={{ fontSize: '12px', opacity: 0.7, marginTop: '2px' }}>
                                                                     {item.customer.phone && (
@@ -706,7 +705,7 @@ function PosPage() {
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
                                     <div>
                                         <span style={{ fontSize: '13px', fontWeight: 'bold' }}>
-                                            👤 #{currentCustomer.customer_number} — {currentCustomer.name}
+                                            👤 #{String(currentCustomer.customer_number).padStart(4, '0')} — {currentCustomer.name}
                                         </span>
                                         <span style={{ marginLeft: '10px', fontSize: '12px', opacity: 0.7 }}>
                                             {currentCustomer.visit_count} visitas · {currentCustomer.bottle_credits_available} 🍾

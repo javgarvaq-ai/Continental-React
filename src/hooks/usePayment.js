@@ -341,7 +341,7 @@ export function usePayment({
                 // suppress the membership section so the customer can't claim it.
                 membershipInfo: currentCustomer && currentMembership && !membershipWarning ? {
                     customerName: currentCustomer.name,
-                    customerNumber: currentCustomer.customer_number,
+                    customerNumber: String(currentCustomer.customer_number).padStart(4, '0'),
                     planName: currentMembership.membership_plans?.name,
                     discountAmount,
                     discountPct: membershipDiscountPct,

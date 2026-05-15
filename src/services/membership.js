@@ -10,7 +10,7 @@ export async function getCustomerWithMembership(customerNumber) {
     const { data: customer, error: customerError } = await supabase
         .from('customers')
         .select('*')
-        .eq('customer_number', customerNumber.trim())
+        .eq('customer_number', parseInt(customerNumber.trim(), 10))
         .single()
 
     if (customerError || !customer) {
@@ -238,7 +238,7 @@ export async function searchCustomerByQuery(query) {
         const { data: customer, error: customerError } = await supabase
             .from('customers')
             .select('*')
-            .eq('customer_number', trimmed)
+            .eq('customer_number', parseInt(trimmed, 10))
             .maybeSingle()
 
         if (customerError || !customer) {

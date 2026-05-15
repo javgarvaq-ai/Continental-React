@@ -18,7 +18,7 @@ export async function createCustomer({ customer_number, name, phone, email }) {
     const { data, error } = await supabase
         .from('customers')
         .insert([{
-            customer_number: customer_number.trim(),
+            customer_number: parseInt(customer_number, 10),
             name: name.trim(),
             phone: phone?.trim() || null,
             email: email?.trim() || null,
@@ -43,19 +43,17 @@ export async function updateCustomer({ id, name, phone, email }) {
 }
 
 export async function getNextCustomerNumber() {
-    // Order by the numeric value of customer_number so gaps or out-of-order
-    // inserts don't cause a lower number to be assigned to a new customer.
+    // Column is now integer — order is always numeric, no parseInt needed.
     const { data, error } = await supabase
         .from('customers')
         .select('customer_number')
         .order('customer_number', { ascending: false })
         .limit(1)
 
-    if (error || !data || data.length === 0) return '0001'
+    if (error || !data || data.length === 0) return 1
 
-    const last = parseInt(data[0].customer_number, 10)
-    if (isNaN(last)) return '0001'
-    return String(last + 1).padStart(4, '0')
+    const last = data[0].customer_number
+    return isNaN(last) ? 1 : last + 1
 }
 
 export async function getCustomerBenefitUsage(customerId) {
