@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../services/supabase'
 
 // ─────────────────────────────────────────────────────────────
@@ -93,8 +94,8 @@ const S = {
     header: {
         fontSize: '22px',
         fontWeight: '700',
-        marginBottom: '20px',
         color: '#f1f5f9',
+        margin: 0,
     },
     layout: {
         display: 'grid',
@@ -253,6 +254,7 @@ function SqlAdminPage() {
     const [activePreset, setActivePreset] = useState(0)
     const [elapsed, setElapsed] = useState(null)
     const textareaRef = useRef(null)
+    const navigate = useNavigate()
 
     async function runQuery() {
         if (!sql.trim() || loading) return
@@ -313,7 +315,23 @@ function SqlAdminPage() {
                 </span>
             </div>
 
-            <div style={S.header}>SQL Explorer</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+                <div style={S.header}>SQL Explorer</div>
+                <button
+                    onClick={() => navigate('/pos')}
+                    style={{
+                        background: 'transparent',
+                        border: '1px solid #334155',
+                        borderRadius: '6px',
+                        color: '#94a3b8',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        padding: '7px 14px',
+                    }}
+                >
+                    ← Volver al POS
+                </button>
+            </div>
 
             <div style={S.layout}>
                 {/* Preset sidebar */}
