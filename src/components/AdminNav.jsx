@@ -13,7 +13,10 @@ const navButtonStyle = {
 
 const NAV_ITEMS = [
     { label: 'POS', path: '/pos' },
-    { label: '📊 Dashboard', path: '/dashboard' },
+    { label: '📊 Dashboard',   path: '/dashboard'              },
+    { label: '📈 Analytics',   path: '/analytics'              },
+    { label: '👥 Clientes',    path: '/customers/intelligence' },
+    { label: '📦 Inventario',  path: '/inventory/dashboard'   },
     { label: 'Usuarios', path: '/admin/users' },
     { label: 'Categorías', path: '/admin/categories' },
     { label: 'Productos', path: '/admin/products' },
