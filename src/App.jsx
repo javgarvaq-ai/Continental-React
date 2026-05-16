@@ -20,6 +20,7 @@ import UnitsAdminPage from './pages/UnitsAdminPage'
 import EmployeesAdminPage from './pages/EmployeesAdminPage'
 import ScheduleAdminPage from './pages/ScheduleAdminPage'
 import SqlAdminPage from './pages/SqlAdminPage' // DEV TOOL — remove after QA
+import DashboardPage from './pages/DashboardPage'
 
 function App() {
   const verifySession = useAuthStore(state => state.verifySession)
@@ -120,6 +121,14 @@ function App() {
           element={
             <AuthRoute>
               <ScheduleAdminPage />
+            </AuthRoute>
+          }
+        />
+        <Route
+          path="/dashboard"
+          element={
+            <AuthRoute>
+              <DashboardPage />
             </AuthRoute>
           }
         />
