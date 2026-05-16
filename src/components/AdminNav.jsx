@@ -14,6 +14,7 @@ const navButtonStyle = {
 const NAV_ITEMS = [
     { label: 'POS', path: '/pos' },
     { label: '📊 Dashboard',   path: '/dashboard'              },
+    { label: '🧾 Folios',      path: '/admin/folios'           },
     { label: '📈 Analytics',   path: '/analytics'              },
     { label: '👥 Clientes',    path: '/customers/intelligence' },
     { label: '📦 Inventario',  path: '/inventory/dashboard'   },

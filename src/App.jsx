@@ -24,6 +24,7 @@ import DashboardPage from './pages/DashboardPage'
 import AnalyticsPage from './pages/AnalyticsPage'
 import CustomerIntelligencePage from './pages/CustomerIntelligencePage'
 import InventoryDashboardPage from './pages/InventoryDashboardPage'
+import FolioHistoryPage from './pages/FolioHistoryPage'
 
 function App() {
   const verifySession = useAuthStore(state => state.verifySession)
@@ -135,6 +136,7 @@ function App() {
             </AuthRoute>
           }
         />
+        <Route path="/admin/folios" element={<AuthRoute><FolioHistoryPage /></AuthRoute>} />
         <Route path="/analytics" element={<AuthRoute><AnalyticsPage /></AuthRoute>} />
         <Route path="/customers/intelligence" element={<AuthRoute><CustomerIntelligencePage /></AuthRoute>} />
         <Route path="/inventory/dashboard" element={<AuthRoute><InventoryDashboardPage /></AuthRoute>} />
