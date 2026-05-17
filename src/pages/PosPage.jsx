@@ -462,7 +462,7 @@ function PosPage() {
         : '';
 
     return (
-        <div style={{ padding: '16px' }}>
+        <div style={{ padding: '16px', minHeight: '100vh', background: '#0f0f0f', color: '#e2e8f0', boxSizing: 'border-box' }}>
             <header
                 style={{
                     display: 'flex',
