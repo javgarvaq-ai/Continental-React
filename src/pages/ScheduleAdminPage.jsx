@@ -340,7 +340,7 @@ function ScheduleAdminPage() {
     )
 
     return (
-        <div style={{ padding: '20px', minHeight: '100vh', background: '#0e0e0e', color: '#e2e2e2' }}>
+        <div style={{ padding: '20px', paddingLeft: '216px', minHeight: '100vh', background: '#0e0e0e', color: '#e2e2e2' }}>
             <AdminNav currentPath="/admin/schedule" />
 
             {/* ── Page header ── */}

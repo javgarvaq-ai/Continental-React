@@ -83,7 +83,7 @@ function InventoryDashboardPage() {
     const maxConsumed = topConsumed[0]?.totalDeducted || 1
 
     return (
-        <div style={{ minHeight: '100vh', background: '#0f0f0f', color: '#e2e8f0', padding: '24px', boxSizing: 'border-box', fontFamily: 'system-ui, sans-serif' }}>
+        <div style={{ minHeight: '100vh', background: '#0f0f0f', color: '#e2e8f0', padding: '24px', paddingLeft: '216px', boxSizing: 'border-box', fontFamily: 'system-ui, sans-serif' }}>
             <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
                 <AdminNav currentPath="/inventory/dashboard" />
 

@@ -107,7 +107,7 @@ function CategoriesAdminPage() {
     }
 
     return (
-        <div style={{ minHeight: '100vh', background: '#111', color: 'white', padding: '24px', boxSizing: 'border-box' }}>
+        <div style={{ minHeight: '100vh', background: '#111', color: 'white', padding: '24px', paddingLeft: '216px', boxSizing: 'border-box' }}>
             <div style={{ maxWidth: '800px', margin: '0 auto' }}>
 
                 <AdminNav currentPath="/admin/categories" />

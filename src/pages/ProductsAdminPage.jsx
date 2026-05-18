@@ -304,6 +304,7 @@ function ProductsAdminPage() {
                 background: '#111',
                 color: 'white',
                 padding: '24px',
+                paddingLeft: '216px',
                 boxSizing: 'border-box',
             }}
         >

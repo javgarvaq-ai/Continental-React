@@ -93,7 +93,7 @@ function InventoryItemsAdminPage() {
     if (!isAdmin) return <div style={{ padding: 20 }}>Access denied</div>
 
     return (
-        <div style={{ padding: '24px', background: '#111', color: 'white', minHeight: '100vh', boxSizing: 'border-box' }}>
+        <div style={{ padding: '24px', paddingLeft: '216px', background: '#111', color: 'white', minHeight: '100vh', boxSizing: 'border-box' }}>
             <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
                 <AdminNav currentPath="/admin/inventory-items" />
                 <h1 style={{ marginTop: 0 }}>Inventory Items</h1>

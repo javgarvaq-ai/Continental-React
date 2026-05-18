@@ -211,7 +211,7 @@ function WeeklyReportPage() {
 
     // ── Render ────────────────────────────────────────────────────
     return (
-        <div style={{ padding: '20px', color: 'white', maxWidth: '900px' }}>
+        <div style={{ padding: '20px', paddingLeft: '216px', color: 'white', maxWidth: '900px' }}>
 
             <AdminNav currentPath={location.pathname} />
 

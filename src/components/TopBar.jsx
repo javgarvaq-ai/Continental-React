@@ -98,9 +98,11 @@ function TopBar({
                             Movimiento de caja
                         </button>
 
-                        <button type="button" onClick={onWeeklyReport} style={btn}>
-                            Reporte semanal
-                        </button>
+                        {isAdmin && (
+                            <button type="button" onClick={onWeeklyReport} style={btn}>
+                                Reporte semanal
+                            </button>
+                        )}
 
                         <button type="button" onClick={onInventory} style={btn}>
                             Inventario
