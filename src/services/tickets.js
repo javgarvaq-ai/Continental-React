@@ -56,6 +56,24 @@ export async function getReprintData({ comanda, tipo, userId }) {
     return { items: items || [], unit, payment }
 }
 
+// ── Tip adjustment ────────────────────────────────────────────
+export async function adjustPaymentTip({ paymentId, tipAmount }) {
+    const { data, error } = await supabase.rpc('adjust_payment_tip', {
+        p_payment_id: paymentId,
+        p_tip_amount: Number(tipAmount || 0),
+    })
+    if (error) return { error }
+    if (data && !data.ok) {
+        const msgs = {
+            tip_negative:     'La propina no puede ser negativa.',
+            payment_not_found:'No se encontró el registro de pago.',
+            comanda_not_paid: 'Solo se puede ajustar propina de comandas pagadas.',
+        }
+        return { error: new Error(msgs[data.error] || 'Error al ajustar propina.') }
+    }
+    return { error: null }
+}
+
 // ── Folio history browser ─────────────────────────────────────
 // Searches comandas by date range, optional folio number, customer name,
 // or status. Returns up to `limit` results newest-first.
@@ -104,7 +122,7 @@ export async function searchComandas({ startDate, endDate, search = '', status =
 export async function getComandaItems(comandaId) {
     const { data, error } = await supabase
         .from('comanda_items')
-        .select('id, quantity, unit_price, is_free_benefit, is_free_mixer, products ( name )')
+        .select('id, quantity, unit_price, is_free_benefit, is_free_mixer, products:products!comanda_items_product_id_fkey ( name )')
         .eq('comanda_id', comandaId)
         .eq('status', 'active')
         .order('created_at', { ascending: true })

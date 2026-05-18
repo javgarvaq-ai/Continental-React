@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import AdminNav from '../components/AdminNav'
 import { useAuthStore } from '../store/authStore'
 import { money } from '../utils/money'
-import { searchComandas, getComandaItems, getReprintData } from '../services/tickets'
+import { searchComandas, getComandaItems, getReprintData, adjustPaymentTip } from '../services/tickets'
 import { printTicket } from '../components/Ticket'
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -52,9 +52,15 @@ const STATUS_FILTERS = [
 ]
 
 // ── Expanded detail row ───────────────────────────────────────
-function DetailPanel({ comanda, currentUser, onClose }) {
-    const [items, setItems]     = useState(null)
-    const [printing, setPrinting] = useState(null) // 'cuenta' | 'pagado' | null
+function DetailPanel({ comanda, currentUser, onRefresh }) {
+    const [items,       setItems]       = useState(null)
+    const [printing,    setPrinting]    = useState(null)   // 'cuenta' | 'pagado' | null
+    const [tipEdit,     setTipEdit]     = useState(false)
+    const [tipValue,    setTipValue]    = useState('')
+    const [tipSaving,   setTipSaving]   = useState(false)
+    const [tipError,    setTipError]    = useState('')
+
+    const payment = Array.isArray(comanda.payments) ? comanda.payments[0] : comanda.payments
 
     useEffect(() => {
         getComandaItems(comanda.id).then(({ data }) => setItems(data))
@@ -62,14 +68,41 @@ function DetailPanel({ comanda, currentUser, onClose }) {
 
     async function handlePrint(tipo) {
         setPrinting(tipo)
-        const { items: printItems, unit, payment } = await getReprintData({
+        const { items: printItems, unit, payment: pmt } = await getReprintData({
             comanda, tipo, userId: currentUser?.id,
         })
-        printTicket({ tipo, comanda, items: printItems, unit, payment, onBlocked: () => {} })
+        printTicket({ tipo, comanda, items: printItems, unit, payment: pmt, onBlocked: () => {} })
         setPrinting(null)
     }
 
-    const payment = Array.isArray(comanda.payments) ? comanda.payments[0] : comanda.payments
+    function openTipEdit() {
+        setTipValue(String(payment?.tip_amount || 0))
+        setTipError('')
+        setTipEdit(true)
+    }
+
+    async function saveTip() {
+        const amount = Number(tipValue)
+        if (isNaN(amount) || amount < 0) {
+            setTipError('Valor inválido.')
+            return
+        }
+        if (!payment?.id) {
+            setTipError('No se encontró el pago.')
+            return
+        }
+        setTipSaving(true)
+        setTipError('')
+        const { error } = await adjustPaymentTip({ paymentId: payment.id, tipAmount: amount })
+        setTipSaving(false)
+        if (error) {
+            setTipError(error.message)
+            return
+        }
+        setTipEdit(false)
+        // Refresh the list so the row shows updated tip
+        if (onRefresh) onRefresh()
+    }
 
     return (
         <div style={{ background: '#0d1117', borderTop: '1px solid #1e293b', padding: '16px 20px 20px 20px' }}>
@@ -109,17 +142,66 @@ function DetailPanel({ comanda, currentUser, onClose }) {
                     {payment ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
                             {[
-                                { label: 'Efectivo',       value: payment.efectivo       },
-                                { label: 'Tarjeta',        value: payment.tarjeta        },
-                                { label: 'Transferencia',  value: payment.transferencia  },
-                                { label: 'Propina',        value: payment.tip_amount     },
-                                { label: 'Total cobrado',  value: payment.total_paid, bold: true },
+                                { label: 'Efectivo',      value: payment.efectivo      },
+                                { label: 'Tarjeta',       value: payment.tarjeta       },
+                                { label: 'Transferencia', value: payment.transferencia },
+                                { label: 'Total cobrado', value: payment.total_paid, bold: true },
                             ].filter(r => r.value > 0).map(r => (
                                 <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
                                     <span style={{ color: '#64748b' }}>{r.label}</span>
                                     <span style={{ color: r.bold ? '#4ade80' : '#94a3b8', fontWeight: r.bold ? 700 : 400 }}>{money(r.value)}</span>
                                 </div>
                             ))}
+
+                            {/* Propina — editable */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', marginTop: '2px' }}>
+                                <span style={{ color: '#64748b' }}>Propina</span>
+                                {comanda.status === 'paid' && !tipEdit ? (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <span style={{ color: '#a78bfa' }}>{money(payment.tip_amount || 0)}</span>
+                                        <button
+                                            type="button"
+                                            onClick={openTipEdit}
+                                            style={{ fontSize: '11px', padding: '2px 7px', borderRadius: '4px', border: '1px solid #334155', background: 'transparent', color: '#64748b', cursor: 'pointer' }}
+                                        >
+                                            editar
+                                        </button>
+                                    </div>
+                                ) : tipEdit ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="1"
+                                                value={tipValue}
+                                                onChange={e => setTipValue(e.target.value)}
+                                                onWheel={e => e.target.blur()}
+                                                style={{ width: '80px', background: '#111', border: '1px solid #475569', borderRadius: '4px', color: 'white', padding: '3px 7px', fontSize: '13px' }}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={saveTip}
+                                                disabled={tipSaving}
+                                                style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '4px', border: 'none', background: tipSaving ? '#333' : '#1d4ed8', color: 'white', cursor: tipSaving ? 'default' : 'pointer', fontWeight: 600 }}
+                                            >
+                                                {tipSaving ? '…' : 'Guardar'}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setTipEdit(false)}
+                                                disabled={tipSaving}
+                                                style={{ fontSize: '12px', padding: '3px 8px', borderRadius: '4px', border: '1px solid #334155', background: 'transparent', color: '#64748b', cursor: 'pointer' }}
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
+                                        {tipError && <div style={{ fontSize: '11px', color: '#f87171' }}>{tipError}</div>}
+                                    </div>
+                                ) : (
+                                    <span style={{ color: '#a78bfa' }}>{money(payment.tip_amount || 0)}</span>
+                                )}
+                            </div>
                         </div>
                     ) : (
                         <div style={{ color: '#475569', fontSize: '13px', marginBottom: '16px' }}>
@@ -356,7 +438,7 @@ function FolioHistoryPage() {
                                         <DetailPanel
                                             comanda={c}
                                             currentUser={currentUser}
-                                            onClose={() => setExpanded(null)}
+                                            onRefresh={runSearch}
                                         />
                                     )}
                                 </div>
