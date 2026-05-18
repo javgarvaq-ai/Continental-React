@@ -72,6 +72,7 @@ function PaymentPanel({
                         step="0.01"
                         value={paymentData.efectivo}
                         onChange={(e) => onPaymentFieldChange('efectivo', e.target.value)}
+                        onWheel={(e) => e.target.blur()}
                         style={inputStyle}
                     />
                 </div>
@@ -84,6 +85,7 @@ function PaymentPanel({
                         step="0.01"
                         value={paymentData.tarjeta}
                         onChange={(e) => onPaymentFieldChange('tarjeta', e.target.value)}
+                        onWheel={(e) => e.target.blur()}
                         style={inputStyle}
                     />
                 </div>
@@ -96,6 +98,7 @@ function PaymentPanel({
                         step="0.01"
                         value={paymentData.transferencia}
                         onChange={(e) => onPaymentFieldChange('transferencia', e.target.value)}
+                        onWheel={(e) => e.target.blur()}
                         style={inputStyle}
                     />
                 </div>
@@ -109,6 +112,7 @@ function PaymentPanel({
                             step="0.01"
                             value={propinaFieldValue}
                             onChange={(e) => onPaymentFieldChange('propina', e.target.value)}
+                            onWheel={(e) => e.target.blur()}
                             style={{ ...inputStyle, flex: 1 }}
                         />
                         <button
