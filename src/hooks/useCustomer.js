@@ -10,7 +10,7 @@ import {
 // addNormalProductToComanda + getProductById removed: now handled atomically inside activate_membership RPC
 import { getNextCustomerNumber } from '../services/customersAdmin'
 import { createCustomer } from '../services/customers'
-import { assignCustomerToComanda } from '../services/comandas'
+import { assignCustomerToComanda, removeCustomerFromComanda } from '../services/comandas'
 import { requireOnline } from '../utils/requireOnline'
 
 /**
@@ -124,6 +124,23 @@ export function useCustomer({ currentComanda, cartTotal, isOnline, setStatus, on
         })
         setIsProcessingMembership(false)
         setStatus(`Cliente asignado: ${customerData.customer.name}`)
+    }
+
+    async function handleUnlinkCustomer() {
+        if (!requireOnline(isOnline, setStatus)) return
+        if (!currentComanda?.id) return
+
+        const { error } = await removeCustomerFromComanda({ comandaId: currentComanda.id })
+
+        if (error) {
+            setStatus(`Error quitando cliente: ${error.message}`)
+            return
+        }
+
+        onUpdateComanda({ customer_id: null, customer_name: null })
+        setCurrentCustomer(null)
+        setCurrentMembership(null)
+        setStatus('Cliente desvinculado de la mesa.')
     }
 
     async function handleCreateAndAssignCustomer() {
@@ -292,6 +309,7 @@ export function useCustomer({ currentComanda, cartTotal, isOnline, setStatus, on
         resetCustomerState,
         handleSearchCustomer,
         handleAssignCustomer,
+        handleUnlinkCustomer,
         handleCreateAndAssignCustomer,
         handleOpenMembershipRenewal,
         handleActivateMembership,

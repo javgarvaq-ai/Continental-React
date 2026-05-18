@@ -101,6 +101,7 @@ function PosPage() {
         resetCustomerState,
         handleSearchCustomer,
         handleAssignCustomer,
+        handleUnlinkCustomer,
         handleCreateAndAssignCustomer,
         handleOpenMembershipRenewal,
         handleActivateMembership,
@@ -726,6 +727,13 @@ function PosPage() {
                                 {/* BENEFIT BUTTONS */}
                                 {currentComanda?.status === 'open' && (
                                     <div style={{ display: 'flex', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
+                                        <button
+                                            type="button"
+                                            onClick={handleUnlinkCustomer}
+                                            style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #444', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: '12px' }}
+                                        >
+                                            ✕ Quitar cliente
+                                        </button>
                                         {!currentMembership && (
                                             <button
                                                 type="button"
