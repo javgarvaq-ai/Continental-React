@@ -200,7 +200,7 @@ function InventoryDashboardPage() {
                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                                         <thead>
                                             <tr>
-                                                {['Ítem', 'Tipo', 'Cambio', 'Stock resultante', 'Fecha'].map(h => (
+                                                {['Ítem', 'Tipo', 'Cambio', 'Stock resultante', 'Nota', 'Fecha'].map(h => (
                                                     <th key={h} style={{ textAlign: 'left', padding: '8px 12px', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#64748b', borderBottom: '1px solid #2a2a2a' }}>{h}</th>
                                                 ))}
                                             </tr>
@@ -220,6 +220,9 @@ function InventoryDashboardPage() {
                                                             {Number(m.quantity_change) > 0 ? '+' : ''}{Number(m.quantity_change).toFixed(2)} {m.inventory_items?.unit_type || ''}
                                                         </td>
                                                         <td style={{ padding: '8px 12px', color: '#94a3b8' }}>{Number(m.resulting_stock).toFixed(2)}</td>
+                                                        <td style={{ padding: '8px 12px', color: '#64748b', fontStyle: m.note ? 'normal' : 'italic', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                            {m.note || '—'}
+                                                        </td>
                                                         <td style={{ padding: '8px 12px', color: '#64748b' }}>{formatTime(m.created_at)}</td>
                                                     </tr>
                                                 )

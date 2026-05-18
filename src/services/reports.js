@@ -237,7 +237,7 @@ export async function getAllInventoryItems() {
 export async function getRecentInventoryMovements(limit = 30) {
     const { data, error } = await supabase
         .from('inventory_movements')
-        .select('id, created_at, movement_type, quantity_change, resulting_stock, inventory_items(name, unit_type)')
+        .select('id, created_at, movement_type, quantity_change, resulting_stock, note, inventory_items(name, unit_type)')
         .order('created_at', { ascending: false })
         .limit(limit)
     return { data: data || [], error }
