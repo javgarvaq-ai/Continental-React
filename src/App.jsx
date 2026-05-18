@@ -161,9 +161,9 @@ function App() {
         <Route
           path="/weekly-report"
           element={
-            <ManagerRoute>
+            <AuthRoute>
               <WeeklyReportPage />
-            </ManagerRoute>
+            </AuthRoute>
           }
         />
       </Routes>

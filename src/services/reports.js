@@ -70,6 +70,26 @@ export async function getWeeklyReportData({ startDate, endDate }) {
     }
 }
 
+// Global balances — ALL TIME, no date filter.
+// Used for "Posición de dinero" in the financial report so the
+// register/safe/bank balances are always historically consistent
+// regardless of which period filter is selected.
+export async function getGlobalBalances() {
+    const [paymentsResult, cashMovementsResult] = await Promise.all([
+        supabase
+            .from('payments')
+            .select('efectivo, tarjeta, transferencia, tip_amount, total_paid'),
+        supabase
+            .from('cash_movements')
+            .select('amount, movement_nature, source_location, destination_location, category'),
+    ])
+    return {
+        payments:      paymentsResult.data      || [],
+        cashMovements: cashMovementsResult.data  || [],
+        error: paymentsResult.error || cashMovementsResult.error || null,
+    }
+}
+
 // ─────────────────────────────────────────────────────────────
 // Analytics & Trends
 // ─────────────────────────────────────────────────────────────
