@@ -178,3 +178,61 @@ CREATE TRIGGER your_table_set_updated_at
 - `verify_pin` rate limiting migration (then superseded by Supabase Auth)
 - Service layer refactor: `services/shifts.js`, `getUserById` + `checkUsersExist` in `users.js`
 - DB schema cleanup: orphaned columns dropped, payments NOT NULL, users.updated_at trigger, missing indexes added
+
+### Session 3 — QA (2026-05-16/17)
+- RLS audit: `payments` missing `TO authenticated` SELECT policy (silent empty returns everywhere), `finalize_comanda_payment` not SECURITY DEFINER (RLS blocked INSERT)
+- Browser color bleed: `color-scheme: light dark` in index.css lets OS apply white backgrounds; fix = `color-scheme: dark` + hardcoded backgrounds
+- Scroll wheel on number inputs: `onWheel={(e) => e.target.blur()}` prevents accidental value changes
+- Customer unlink from comanda: `UPDATE SET customer_id = null, customer_name = null` — distinct from `cancelMembershipOnComanda` which is destructive
+- Reporting architecture: period data (filterable) vs. global running balances (always all-time) must be loaded independently
+- FK ambiguity in PostgREST joins (see lesson below)
+- `adjust_payment_tip` RPC: post-payment tip correction updates both `payments.tip_amount` and `comandas.tip_total` to keep reports consistent
+
+---
+
+## PostgREST Ambiguous FK — Silent Empty Results
+
+When a table has **two foreign keys pointing to the same target table**, a PostgREST join without an explicit FK hint will fail silently. The query returns `error` (non-null), `data` is null. If the caller does `data || []`, it gets an empty array with no visible error.
+
+**Example:** `comanda_items` has two FKs to `products`:
+- `comanda_items_product_id_fkey` (on `product_id`)
+- `comanda_items_source_shot_product_id_fkey` (on `source_shot_product_id`)
+
+**Wrong (ambiguous):**
+```javascript
+.select('*, products ( name )')
+```
+
+**Correct (explicit FK hint):**
+```javascript
+.select('*, products:products!comanda_items_product_id_fkey ( name )')
+```
+
+**Rule:** Whenever a table has multiple FKs to the same target, always use the `!fk_name` hint. Check for this when "Sin productos" or similar empty joins appear with no network error in the browser.
+
+---
+
+## RLS Audit Checklist — Lessons from payments table
+
+The remote schema dump (`20260508191907_remote_schema.sql`) created many policies as `TO anon`. After the Supabase Auth migration (session 2), most tables were updated to `TO authenticated` via `20260511000005`. But `payments` was missed entirely — it had no SELECT policy for `authenticated` and the INSERT was `TO anon` only.
+
+**Symptoms of missing `TO authenticated` SELECT:** query returns 0 rows, no error, no network failure. Very hard to detect in QA without real data.
+
+**Symptoms of missing `TO authenticated` INSERT:** "new row violates row-level security policy" — visible error.
+
+**Checklist when adding a new table or RPC:**
+1. Does the table need SELECT for authenticated staff? → Add `TO authenticated` SELECT policy.
+2. Does the table get written by client code directly? → Add INSERT/UPDATE `TO authenticated`.
+3. Does the table get written by an RPC only? → Make the RPC `SECURITY DEFINER`, do NOT add an INSERT policy — this prevents clients bypassing the function's guards.
+
+---
+
+## Reporting: Period Data vs. Global Balances
+
+Running cash/bank/safe balances are **always historical and accumulative** — they should never be filtered by a date range. Only revenue and expense metrics belong inside a period filter.
+
+Pattern used in `WeeklyReportPage`:
+- `loadPeriod()` → `getWeeklyReportData({ startDate, endDate })` — ingresos, egresos, utilidad
+- `loadGlobal()` → `getGlobalBalances()` — no date filter, all-time — caja, resguardo, banco
+
+Both loads fire in parallel on mount. The "Posición de dinero" section always shows global data regardless of what period the user selects.

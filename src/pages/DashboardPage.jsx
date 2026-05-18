@@ -9,9 +9,19 @@ import {
     getTopProductsToday,
     getRecentPayments,
     getMembershipStatsToday,
+    getSalesVelocity,
 } from '../services/dashboard'
 
 const REFRESH_INTERVAL_MS = 60_000 // auto-refresh every 60s
+
+// ── Risk alert thresholds ─────────────────────────────────────
+const RISK_HOURS  = 3      // hours open
+const RISK_AMOUNT = 3000   // MXN on the tab
+
+function isAtRisk(table) {
+    const hoursOpen = (Date.now() - new Date(table.opened_at)) / (1000 * 60 * 60)
+    return hoursOpen >= RISK_HOURS && Number(table.final_total || 0) >= RISK_AMOUNT
+}
 
 // ── Helpers ───────────────────────────────────────────────────
 function timeAgo(isoString) {
@@ -109,12 +119,13 @@ function DashboardPage() {
     const [loading, setLoading] = useState(true)
     const [lastUpdated, setLastUpdated] = useState(null)
 
-    const [shift, setShift]           = useState(null)
-    const [stats, setStats]           = useState(null)
-    const [openTables, setOpenTables] = useState([])
+    const [shift, setShift]             = useState(null)
+    const [stats, setStats]             = useState(null)
+    const [openTables, setOpenTables]   = useState([])
     const [topProducts, setTopProducts] = useState([])
     const [recentPayments, setRecentPayments] = useState([])
     const [memberships, setMemberships] = useState(0)
+    const [velocity, setVelocity]       = useState(null)
 
     const fetchAll = useCallback(async () => {
         const [
@@ -124,6 +135,7 @@ function DashboardPage() {
             productsRes,
             paymentsRes,
             memberRes,
+            velocityRes,
         ] = await Promise.all([
             getCurrentShift(),
             getTodayPaymentStats(),
@@ -131,6 +143,7 @@ function DashboardPage() {
             getTopProductsToday(),
             getRecentPayments(),
             getMembershipStatsToday(),
+            getSalesVelocity(),
         ])
 
         setShift(shiftRes.data)
@@ -139,6 +152,7 @@ function DashboardPage() {
         setTopProducts(productsRes.data)
         setRecentPayments(paymentsRes.data)
         setMemberships(memberRes.data)
+        setVelocity(velocityRes.data)
         setLastUpdated(new Date())
         setLoading(false)
     }, [])
@@ -252,6 +266,35 @@ function DashboardPage() {
                                 sub="activadas hoy"
                                 accent="#f472b6"
                             />
+                            {/* ── Sales velocity ── */}
+                            {velocity && (() => {
+                                const curr = velocity.currentHour
+                                const prev = velocity.prevHour
+                                const trend = prev.revenue === 0
+                                    ? null
+                                    : curr.revenue >= prev.revenue ? 'up' : 'down'
+                                const trendColor = trend === 'up' ? '#4ade80' : trend === 'down' ? '#f87171' : '#94a3b8'
+                                const trendArrow = trend === 'up' ? '↑' : trend === 'down' ? '↓' : ''
+                                return (
+                                    <MetricCard
+                                        label={`⚡ Esta hora (${velocity.currentHourLabel})`}
+                                        value={
+                                            <span>
+                                                {money(curr.revenue)}
+                                                {trendArrow && (
+                                                    <span style={{ fontSize: '16px', color: trendColor, marginLeft: '6px' }}>{trendArrow}</span>
+                                                )}
+                                            </span>
+                                        }
+                                        sub={
+                                            curr.count === 0
+                                                ? 'Sin cobros esta hora'
+                                                : `${curr.count} cobro${curr.count !== 1 ? 's' : ''} · hora ant. ${money(prev.revenue)}`
+                                        }
+                                        accent={trendColor}
+                                    />
+                                )
+                            })()}
                         </div>
 
                         {/* ── Main content grid ── */}
@@ -293,23 +336,50 @@ function DashboardPage() {
 
                             {/* Open tables */}
                             <Card>
-                                <SectionTitle>Mesas abiertas ahora ({openTables.length})</SectionTitle>
+                                <SectionTitle>
+                                    Mesas abiertas ahora ({openTables.length})
+                                    {openTables.some(isAtRisk) && (
+                                        <span style={{ marginLeft: '8px', color: '#fbbf24', fontSize: '12px', fontWeight: 700 }}>
+                                            ⚠️ {openTables.filter(isAtRisk).length} en riesgo
+                                        </span>
+                                    )}
+                                </SectionTitle>
                                 {openTables.length === 0 ? (
                                     <div style={{ color: '#475569', fontSize: '13px', padding: '20px 0', textAlign: 'center' }}>Sin mesas activas</div>
                                 ) : (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                         {openTables.map(t => {
-                                            const s = statusLabel(t.status)
+                                            const s    = statusLabel(t.status)
+                                            const risk = isAtRisk(t)
                                             return (
-                                                <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#111', borderRadius: '6px', padding: '9px 12px' }}>
+                                                <div
+                                                    key={t.id}
+                                                    style={{
+                                                        display: 'flex',
+                                                        justifyContent: 'space-between',
+                                                        alignItems: 'center',
+                                                        background: risk ? '#1c1500' : '#111',
+                                                        border: risk ? '1px solid #854d0e' : '1px solid transparent',
+                                                        borderRadius: '6px',
+                                                        padding: '9px 12px',
+                                                    }}
+                                                >
                                                     <div>
-                                                        <span style={{ fontWeight: 600, fontSize: '14px' }}>{t.units?.name || '—'}</span>
+                                                        {risk && <span style={{ marginRight: '6px' }}>⚠️</span>}
+                                                        <span style={{ fontWeight: 600, fontSize: '14px', color: risk ? '#fcd34d' : '#e2e8f0' }}>
+                                                            {t.units?.name || '—'}
+                                                        </span>
                                                         {t.customers?.name && (
                                                             <span style={{ fontSize: '12px', color: '#64748b', marginLeft: '8px' }}>{t.customers.name}</span>
                                                         )}
+                                                        {Number(t.final_total) > 0 && (
+                                                            <span style={{ fontSize: '12px', color: risk ? '#fbbf24' : '#475569', marginLeft: '8px' }}>
+                                                                {money(t.final_total)}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                        <span style={{ fontSize: '12px', color: '#64748b' }}>{timeAgo(t.opened_at)}</span>
+                                                        <span style={{ fontSize: '12px', color: risk ? '#fbbf24' : '#64748b' }}>{timeAgo(t.opened_at)}</span>
                                                         <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: `${s.color}1a`, color: s.color, fontWeight: 600 }}>
                                                             {s.label}
                                                         </span>

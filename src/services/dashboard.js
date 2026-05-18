@@ -49,10 +49,51 @@ export async function getTodayPaymentStats() {
 export async function getOpenTables() {
     const { data, error } = await supabase
         .from('comandas')
-        .select('id, status, opened_at, folio, units(name), customers(name)')
+        .select('id, status, opened_at, folio, final_total, units(name), customers(name)')
         .not('status', 'in', '(paid,cancelled)')
         .order('opened_at', { ascending: true })
     return { data: data || [], error }
+}
+
+// ── Sales velocity — current hour vs previous hour ────────────
+// Returns: { currentHour: { revenue, count }, prevHour: { revenue, count } }
+export async function getSalesVelocity() {
+    const now = new Date()
+
+    const startCurrent = new Date(now)
+    startCurrent.setMinutes(0, 0, 0)
+
+    const startPrev = new Date(startCurrent)
+    startPrev.setHours(startPrev.getHours() - 1)
+
+    const [currentRes, prevRes] = await Promise.all([
+        supabase
+            .from('payments')
+            .select('total_paid')
+            .gte('created_at', startCurrent.toISOString()),
+        supabase
+            .from('payments')
+            .select('total_paid')
+            .gte('created_at', startPrev.toISOString())
+            .lt('created_at', startCurrent.toISOString()),
+    ])
+
+    function aggregate(rows) {
+        return (rows || []).reduce(
+            (acc, p) => ({ revenue: acc.revenue + Number(p.total_paid || 0), count: acc.count + 1 }),
+            { revenue: 0, count: 0 }
+        )
+    }
+
+    return {
+        data: {
+            currentHour: aggregate(currentRes.data),
+            prevHour:    aggregate(prevRes.data),
+            currentHourLabel: startCurrent.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }),
+            prevHourLabel:    startPrev.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }),
+        },
+        error: currentRes.error || prevRes.error || null,
+    }
 }
 
 // ── Top 5 products sold today ─────────────────────────────────
