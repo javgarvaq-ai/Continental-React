@@ -1,9 +1,15 @@
 import { supabase } from './supabase'
 
+// Returns the ISO string for midnight today in Mexico timezone (-06:00).
+// Uses explicit offset — matches the pattern used throughout reports.js and the rest of the codebase.
+// Do NOT use d.toISOString() here: it converts to UTC and shifts the boundary by 6 hours,
+// causing "today" to include late-night records from yesterday or miss early-morning ones.
 function startOfToday() {
     const d = new Date()
-    d.setHours(0, 0, 0, 0)
-    return d.toISOString()
+    const y   = d.getFullYear()
+    const m   = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}T00:00:00-06:00`
 }
 
 // ── Current open shift ────────────────────────────────────────

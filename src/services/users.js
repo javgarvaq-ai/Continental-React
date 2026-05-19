@@ -1,9 +1,12 @@
 import { supabase } from './supabase'
 
+// Note: intentionally omits `role` — this query runs before auth (TO anon policy)
+// and is used only to build the user selector on the login screen.
+// Exposing role pre-auth leaks the org structure to anyone who opens the URL.
 export async function getActiveUsers() {
     const { data, error } = await supabase
         .from('users')
-        .select('id, name, role, active')
+        .select('id, name, active')
         .eq('active', true)
         .order('name')
 

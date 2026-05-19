@@ -262,16 +262,18 @@ Señales de dirección humana: lógica de negocio específica y correcta para un
 
 ---
 
-## Checklist pre-apertura (estado actual)
+## Checklist pre-apertura (estado al 19 Mayo 2026)
 
-- [ ] **Correr `npx supabase db push`** (3 migraciones pendientes — ver arriba)
-- [ ] **Eliminar `SqlAdminPage`** y su ruta en `App.jsx`
-- [ ] **Eliminar `seed-auth-users` Edge Function** del proyecto de producción
-- [ ] **Fix `verifySession` race condition** (flag `isVerifying`)
-- [ ] **Fix `startOfToday()`** timezone en `dashboard.js`
-- [ ] **Fix `money()`** con `Intl.NumberFormat`
-- [ ] **Fix `role` expuesto en login** (`getActiveUsers` no debe retornar `role`)
-- [ ] **CORS en Edge Functions** restringir a dominio de producción
+- [x] **Correr `npx supabase db push`** — confirmado corrido (3 migraciones de RLS + adjust_payment_tip)
+- [x] **Eliminar `SqlAdminPage`** — archivo vaciado, ruta e import removidos de App.jsx, botón removido de AdminNav.jsx. Migración `20260519000001_drop_execute_sql.sql` creada para dropear el RPC.
+- [x] **Fix `verifySession` race condition** — `isVerifying: true` en authStore, `try/finally` garantiza reset. Los 3 route guards retornan `null` mientras `isVerifying === true`.
+- [x] **Fix `startOfToday()`** — timezone México explícita (`T00:00:00-06:00`) en `dashboard.js`.
+- [x] **Fix `money()`** — `Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' })` en `utils/money.js`.
+- [x] **Fix `role` expuesto en login** — `getActiveUsers` ya no retorna `role`. Display de role removido en LoginPage.jsx (botones de usuario y texto de confirmación).
+- [x] **CORS en Edge Functions** — patrón `Deno.env.get('ALLOWED_ORIGIN') || '*'` en las 3 funciones. Para activar: `supabase secrets set ALLOWED_ORIGIN=https://tu-dominio.vercel.app` y redesplegar.
+- [ ] **Correr `npx supabase db push`** para aplicar `20260519000001_drop_execute_sql.sql`
+- [ ] **Redesplegar Edge Functions** con CORS actualizado: `supabase functions deploy create-user reset-pin deactivate-user`
+- [ ] **Eliminar `seed-auth-users` Edge Function** del proyecto de producción (no desplegar)
 - [ ] Smoke test E2E completo con datos reales: login → turno → mesa → items → membresía → cobro → reimpresión → cierre de turno
 - [ ] Verificar impresora de tickets en Chrome con `--kiosk-printing` activo
 

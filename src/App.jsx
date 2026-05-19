@@ -19,7 +19,6 @@ import CustomersAdminPage from './pages/CustomersAdminPage'
 import UnitsAdminPage from './pages/UnitsAdminPage'
 import EmployeesAdminPage from './pages/EmployeesAdminPage'
 import ScheduleAdminPage from './pages/ScheduleAdminPage'
-import SqlAdminPage from './pages/SqlAdminPage' // DEV TOOL — remove after QA
 import DashboardPage from './pages/DashboardPage'
 import AnalyticsPage from './pages/AnalyticsPage'
 import CustomerIntelligencePage from './pages/CustomerIntelligencePage'
@@ -140,15 +139,6 @@ function App() {
         <Route path="/analytics" element={<AuthRoute><AnalyticsPage /></AuthRoute>} />
         <Route path="/customers/intelligence" element={<AuthRoute><CustomerIntelligencePage /></AuthRoute>} />
         <Route path="/inventory/dashboard" element={<AuthRoute><InventoryDashboardPage /></AuthRoute>} />
-        {/* DEV TOOL — remove after QA */}
-        <Route
-          path="/admin/sql"
-          element={
-            <AuthRoute>
-              <SqlAdminPage />
-            </AuthRoute>
-          }
-        />
         <Route
           path="/inventory"
           element={

@@ -28,7 +28,6 @@ const NAV_SECTIONS = [
             { label: 'Mesas/Unidades', path: '/admin/units'            },
             { label: 'Empleados',      path: '/admin/employees'        },
             { label: 'Horarios',       path: '/admin/schedule'         },
-            { label: '🛠 SQL',         path: '/admin/sql', dev: true   }, // DEV TOOL — remove after QA
         ],
     },
 ]

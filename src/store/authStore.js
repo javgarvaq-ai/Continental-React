@@ -4,8 +4,9 @@ import { getShiftById } from '../services/shifts'
 import { getUserById } from '../services/users'
 
 export const useAuthStore = create((set, get) => ({
-    user:    null,
-    shiftId: localStorage.getItem('continentalCurrentShiftId') || null,
+    user:        null,
+    shiftId:     localStorage.getItem('continentalCurrentShiftId') || null,
+    isVerifying: true, // true until verifySession resolves — route guards wait on this
 
     // Called on successful login + shift open
     setAuth: (user, shiftId) => {
@@ -34,36 +35,42 @@ export const useAuthStore = create((set, get) => ({
     //   3. A valid Supabase Auth session exists
     //   4. The session's user is still active in our users table
     // Clears auth and signs out if any check fails.
+    // Sets isVerifying: false in all paths so route guards never block indefinitely.
     verifySession: async () => {
-        const { shiftId } = get()
-        if (!shiftId) return
+        try {
+            const { shiftId } = get()
+            if (!shiftId) return
 
-        // Check shift is still open
-        const { data: shift, error: shiftError } = await getShiftById(shiftId)
-        if (shiftError || !shift || shift.status !== 'open') {
-            localStorage.removeItem('continentalCurrentShiftId')
-            set({ user: null, shiftId: null })
-            await supabase.auth.signOut()
-            return
+            // Check shift is still open
+            const { data: shift, error: shiftError } = await getShiftById(shiftId)
+            if (shiftError || !shift || shift.status !== 'open') {
+                localStorage.removeItem('continentalCurrentShiftId')
+                set({ user: null, shiftId: null })
+                await supabase.auth.signOut()
+                return
+            }
+
+            // Check Supabase Auth session is still valid
+            const { data: { session } } = await supabase.auth.getSession()
+            if (!session) {
+                localStorage.removeItem('continentalCurrentShiftId')
+                set({ user: null, shiftId: null })
+                return
+            }
+
+            // Get fresh user data — confirm still active and role unchanged
+            const { data: freshUser, error: userError } = await getUserById(session.user.id)
+            if (userError || !freshUser) {
+                localStorage.removeItem('continentalCurrentShiftId')
+                set({ user: null, shiftId: null })
+                await supabase.auth.signOut()
+                return
+            }
+
+            set({ user: freshUser })
+        } finally {
+            // Always clear the verifying flag regardless of outcome
+            set({ isVerifying: false })
         }
-
-        // Check Supabase Auth session is still valid
-        const { data: { session } } = await supabase.auth.getSession()
-        if (!session) {
-            localStorage.removeItem('continentalCurrentShiftId')
-            set({ user: null, shiftId: null })
-            return
-        }
-
-        // Get fresh user data — confirm still active and role unchanged
-        const { data: freshUser, error: userError } = await getUserById(session.user.id)
-        if (userError || !freshUser) {
-            localStorage.removeItem('continentalCurrentShiftId')
-            set({ user: null, shiftId: null })
-            await supabase.auth.signOut()
-            return
-        }
-
-        set({ user: freshUser })
     },
 }))

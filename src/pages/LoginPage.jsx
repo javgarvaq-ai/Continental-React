@@ -242,9 +242,6 @@ function LoginPage() {
                                         }}
                                     >
                                         {user.name}
-                                        <span style={{ opacity: 0.5, marginLeft: '6px', fontSize: '12px' }}>
-                                            {user.role}
-                                        </span>
                                     </button>
                                 ))}
                             </div>
@@ -264,7 +261,6 @@ function LoginPage() {
                             {selectedUser && (
                                 <p style={{ margin: '12px 0 0 0', fontSize: '12px', color: '#555', textAlign: 'center' }}>
                                     {selectedUser.name}
-                                    <span style={{ marginLeft: '6px', color: '#3d3d3d' }}>({selectedUser.role})</span>
                                 </p>
                             )}
 

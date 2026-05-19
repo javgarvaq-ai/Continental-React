@@ -1,8 +1,13 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+// ALLOWED_ORIGIN controls the CORS origin for this function.
+// Set it as a Supabase secret: supabase secrets set ALLOWED_ORIGIN=https://your-app.vercel.app
+// Falls back to '*' if the secret is not set (safe during development, restrict before going live).
+const allowedOrigin = Deno.env.get('ALLOWED_ORIGIN') || '*'
+
 const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': allowedOrigin,
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
