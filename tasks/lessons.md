@@ -179,6 +179,12 @@ CREATE TRIGGER your_table_set_updated_at
 - Service layer refactor: `services/shifts.js`, `getUserById` + `checkUsersExist` in `users.js`
 - DB schema cleanup: orphaned columns dropped, payments NOT NULL, users.updated_at trigger, missing indexes added
 
+### Session 4 — Dashboard features + AdminNav (2026-05-18)
+- Dashboard risk alerts: client-side classification using `opened_at` + `final_total` (≥3h AND ≥$3,000). No DB changes needed.
+- Sales velocity: two parallel queries on `payments` bucketed by current vs. previous hour using `HH:00` ISO strings
+- AdminNav sidebar: `position: fixed; width: 200px; height: 100vh`. All 16 admin pages just need `paddingLeft: '216px'` on their outer wrapper — no logic changes, no new components
+- TopBar role guard: always verify UI visibility matches route guard (`AuthRoute` vs `ManagerRoute`) — buttons visible to wrong roles leak intent even if the route is protected
+
 ### Session 3 — QA (2026-05-16/17)
 - RLS audit: `payments` missing `TO authenticated` SELECT policy (silent empty returns everywhere), `finalize_comanda_payment` not SECURITY DEFINER (RLS blocked INSERT)
 - Browser color bleed: `color-scheme: light dark` in index.css lets OS apply white backgrounds; fix = `color-scheme: dark` + hardcoded backgrounds

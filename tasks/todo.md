@@ -295,3 +295,38 @@ Aplica estas 3 migraciones nuevas:
 ### Diferidos para próxima sesión
 - Inventory unit types (kg, g, L, ml) — UI de selección de unidades en admin de inventario
 - Post-payment tip (Option C): agregar propina después de confirmar pago desde POS — frecuencia de uso a confirmar antes de implementar
+
+---
+
+## Session May 18th — Dashboard features + AdminNav redesign ✅
+
+### Dashboard risk alerts ✅
+- [x] `src/services/dashboard.js` → `getOpenTables()` — añadido `final_total` al SELECT
+- [x] `src/services/dashboard.js` → nueva función `getSalesVelocity()` — consultas paralelas: hora actual (HH:00 → ahora) y hora previa (HH-1:00 → HH:00). Retorna `{ currentHour, prevHour, currentHourLabel, prevHourLabel }`
+- [x] `src/pages/DashboardPage.jsx` — constantes `RISK_HOURS = 3` y `RISK_AMOUNT = 3000`, helper `isAtRisk(table)`, estado `velocity`, MetricCard de velocidad con flecha de tendencia, filas de mesa en riesgo con fondo ámbar + ⚠️ + texto amarillo
+- [x] **Reglas de riesgo:** mesa abierta ≥ 3 horas Y consumo ≥ $3,000
+
+### Inventory note en dashboard ✅
+- [x] `src/services/reports.js` → `getRecentInventoryMovements` — añadido `note` al SELECT
+- [x] `src/pages/InventoryDashboardPage.jsx` — columna "Nota" en tabla de movimientos (truncada con ellipsis a 180px)
+
+### TopBar fix ✅
+- [x] `src/components/TopBar.jsx` — botón "Reporte semanal" movido a bloque `{isAdmin && ...}` (antes visible para managers; ruta es admin-only)
+
+### AdminNav redesign ✅
+- [x] `src/components/AdminNav.jsx` — rediseñado de barra horizontal scrolleable a sidebar vertical fijo (200px), dos secciones: **Vistas** y **Configuración**, botones ancho uniforme, activo en azul, dev en ámbar, sin cambios de lógica ni rutas
+- [x] 16 páginas admin — añadido `paddingLeft: '216px'` al div exterior (solo el branch con AdminNav), offset para el sidebar
+
+### Pendientes de producción ⚠️
+```
+npx supabase db push
+```
+Aplica estas 3 migraciones (de la sesión anterior, aún pendientes):
+- `20260516000001_fix_payments_rls.sql`
+- `20260516000002_fix_payments_select_rls.sql`
+- `20260517000001_adjust_payment_tip.sql`
+
+### Diferidos
+- Inventory unit types (kg, g, L, ml) — UI de selección de unidades en admin de inventario
+- Post-payment tip (Option C): agregar propina post-pago desde POS
+- Ticket promedio por cajero (deferred por scope)
