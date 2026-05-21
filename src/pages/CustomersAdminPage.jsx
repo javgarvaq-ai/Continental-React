@@ -63,7 +63,7 @@ function CustomersAdminPage() {
 
     async function loadNextNumber() {
         const next = await getNextCustomerNumber()
-        setNewNumber(next)
+        setNewNumber(String(next))
     }
 
     async function handleCreate(e) {
@@ -211,12 +211,12 @@ function CustomersAdminPage() {
                         <h2 style={{ marginTop: 0 }}>New Customer</h2>
                         <form onSubmit={handleCreate}>
                             <div style={{ marginBottom: '12px' }}>
-                                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px' }}>Customer # (auto)</label>
+                                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px' }}>Customer # <span style={{ color: '#555', fontStyle: 'italic' }}>(automático)</span></label>
                                 <input
                                     type="text"
                                     value={newNumber}
-                                    onChange={(e) => setNewNumber(e.target.value)}
-                                    style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #444', background: '#111', color: 'white', boxSizing: 'border-box' }}
+                                    readOnly
+                                    style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #2a2a2a', background: '#0a0a0a', color: '#555', boxSizing: 'border-box', cursor: 'not-allowed' }}
                                 />
                             </div>
                             <div style={{ marginBottom: '12px' }}>
@@ -251,8 +251,8 @@ function CustomersAdminPage() {
                             </div>
                             <button
                                 type="submit"
-                                disabled={isSaving || !newName.trim() || !newNumber.trim()}
-                                style={{ width: '100%', padding: '12px', borderRadius: '10px', border: 'none', background: isSaving || !newName.trim() || !newNumber.trim() ? '#555' : '#2e7d32', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}
+                                disabled={isSaving || !newName.trim()}
+                                style={{ width: '100%', padding: '12px', borderRadius: '10px', border: 'none', background: isSaving || !newName.trim() ? '#555' : '#2e7d32', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}
                             >
                                 {isSaving ? 'Creating...' : 'Create Customer'}
                             </button>
