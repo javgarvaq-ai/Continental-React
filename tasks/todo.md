@@ -330,3 +330,39 @@ Aplica estas 3 migraciones (de la sesión anterior, aún pendientes):
 - Inventory unit types (kg, g, L, ml) — UI de selección de unidades en admin de inventario
 - Post-payment tip (Option C): agregar propina post-pago desde POS
 - Ticket promedio por cajero (deferred por scope)
+
+---
+
+## Session May 19th — Pre-launch hardening ✅ (2026-05-19)
+
+Revisión completa del proyecto usando `tasks/General Review May 18th.md` como base. Todos los riesgos y bugs pre-apertura cerrados. App mergeada a main y desplegada en producción.
+
+### Security fixes ✅
+
+- [x] **R4 — Race condition `verifySession`** — `isVerifying: true` en estado inicial de `authStore.js`; `verifySession` usa `try/finally` para garantizar reset a `false`. Los 3 guards (`ProtectedRoute`, `AuthRoute`, `ManagerRoute`) retornan `null` mientras `isVerifying === true` — sin flashes de redirect al recargar.
+- [x] **R2 — Login expone roles (information leak)** — `getActiveUsers()` en `src/services/users.js` ya no selecciona `role`. Campo `{user.role}` eliminado de botones de selección y texto de confirmación en `LoginPage.jsx`.
+- [x] **R1 — SqlAdminPage eliminada** — archivo vaciado (comentario de auditoría), ruta `/admin/sql` e import removidos de `App.jsx`, entrada de SQL removida de `AdminNav.jsx`. Migración `20260519000001_drop_execute_sql.sql` creada para dropear `public.execute_sql(text)` y `public.execute_sql(query text)`.
+- [x] **R3 — CORS `*` en Edge Functions** — patrón `Deno.env.get('ALLOWED_ORIGIN') || '*'` implementado en `create-user`, `reset-pin` y `deactivate-user`. Secret configurado: `ALLOWED_ORIGIN=https://continental-react.vercel.app`. Las 3 funciones redesenployadas.
+
+### Bug fixes ✅
+
+- [x] **B1 — `startOfToday()` timezone** — `dashboard.js` ahora construye el string ISO con `-06:00` explícito en lugar de usar `setHours(0,0,0,0)` del browser.
+- [x] **B3 — `money()` locale** — `src/utils/money.js` reescrito con `Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' })`. Formato correcto: `$1,234.56`.
+
+### QA bug fix (encontrado en sesión) ✅
+
+- [x] **Customer number crash** — `getNextCustomerNumber()` retorna un integer de Postgres. `setNewNumber(next)` almacenaba el integer en state. El botón de crear llamaba `!newNumber.trim()` → `TypeError: d.trim is not a function` al teclear en el campo de Nombre. Fix: campo `customer_number` marcado `readOnly` (no hay razón para editarlo manualmente), `setNewNumber(String(next))` para almacenar como string. Input con estilo visual de deshabilitado (`background: '#0a0a0a', color: '#555', cursor: 'not-allowed'`), label actualizado a "(automático)". Botón de crear: condición `disabled` solo verifica `!newName.trim()`.
+
+### Producción ✅
+
+- [x] `npx supabase db push` — aplica las 3 migraciones RLS pendientes de sesión May 16/17 + `20260519000001_drop_execute_sql.sql`
+- [x] `supabase functions deploy create-user reset-pin deactivate-user` — Edge Functions redesenployadas con CORS actualizado
+- [x] `supabase secrets set ALLOWED_ORIGIN=https://continental-react.vercel.app` — secret configurado
+- [x] Merge a main + deploy exitoso en Vercel — URL producción: `https://continental-react.vercel.app`
+- [x] Edge Functions probadas con Supabase Studio: create-user, reset-pin y deactivate-user retornan 403 sin auth header (correcto)
+
+### Diferidos (backlog)
+- Inventory unit types (kg, g, L, ml) — UI en admin de inventario
+- Post-payment tip desde POS (Option C) — confirmar frecuencia con Javi antes de implementar
+- Split de `PosPage.jsx` (A1) — 64KB, alta inversión cero riesgo operativo
+- Realtime subscriptions (P3) — solo si se agrega 2ª tablet

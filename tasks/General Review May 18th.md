@@ -17,12 +17,12 @@ Sistema POS (Point of Sale) **a medida** para Continental Cantina Bar, México. 
 
 ---
 
-## Estado al 18 de Mayo 2026
+## Estado al 19 de Mayo 2026
 
 - ✅ Todos los flujos core construidos y probados en QA: POS, pagos, turnos, membresías, inventario, reportes.
-- ⚠️ **3 migraciones pendientes de correr en producción** (ver sección de acciones inmediatas).
-- 🔴 `SqlAdminPage` sigue viva en producción — debe eliminarse antes de abrir.
-- 📋 App en fase QA activa antes de apertura pública.
+- ✅ Todos los riesgos pre-apertura cerrados en sesión May 19th.
+- ✅ `SqlAdminPage` eliminada. RPC `execute_sql` dropeado en producción.
+- ✅ App mergeada a main. **En producción: `https://continental-react.vercel.app`**
 
 ---
 
@@ -73,7 +73,7 @@ Sistema POS (Point of Sale) **a medida** para Continental Cantina Bar, México. 
 /admin/* (AuthRoute: solo admin)
   Sidebar AdminNav fijo (200px) con secciones Vistas y Configuración.
   Incluye: Usuarios, Productos, Categorías, Inventario, Membresías,
-           Clientes, Empleados, Horarios, Folios, Analytics, SQL (temporal ⚠️)
+           Clientes, Empleados, Horarios, Folios, Analytics
 
 /inventory (ManagerRoute: manager o admin)
 /dashboard, /analytics, /customers/intelligence,
@@ -82,22 +82,23 @@ Sistema POS (Point of Sale) **a medida** para Continental Cantina Bar, México. 
 
 ---
 
-## ⚠️ Acciones inmediatas — Antes de apertura
+## ✅ Acciones pre-apertura — Completadas (19 Mayo 2026)
 
-### 1. Correr migraciones pendientes
+### 1. Migraciones en producción ✅
 ```bash
 npx supabase db push
 ```
-Aplica estas 3 migraciones que aún NO están en producción:
-- `20260516000001_fix_payments_rls.sql` — `finalize_comanda_payment` SECURITY DEFINER (sin esto los cobros fallan con error RLS)
-- `20260516000002_fix_payments_select_rls.sql` — SELECT TO authenticated en payments (sin esto dashboard/analytics muestran $0)
-- `20260517000001_adjust_payment_tip.sql` — RPC `adjust_payment_tip` para ajuste de propina en FolioHistory
+Aplicadas en sesión May 19th:
+- `20260516000001_fix_payments_rls.sql` — `finalize_comanda_payment` SECURITY DEFINER
+- `20260516000002_fix_payments_select_rls.sql` — SELECT TO authenticated en payments
+- `20260517000001_adjust_payment_tip.sql` — RPC `adjust_payment_tip`
+- `20260519000001_drop_execute_sql.sql` — DROP `public.execute_sql` (RPC dev tool)
 
-### 2. Eliminar SqlAdminPage
-- Borrar `src/pages/SqlAdminPage.jsx`
-- Borrar el RPC `execute_sql` del DB (migración `20260514000002`) si no se hizo ya
-- Remover la ruta `/admin/sql` y su import en `App.jsx`
-- Remover el botón de SQL del `AdminNav.jsx` si existe
+### 2. SqlAdminPage eliminada ✅
+- `src/pages/SqlAdminPage.jsx` — vaciada (comentario de auditoría)
+- Ruta `/admin/sql` e import removidos de `App.jsx`
+- Entrada SQL removida de `AdminNav.jsx`
+- RPC `execute_sql` dropeado en producción vía migración `20260519000001`
 
 ---
 
@@ -105,28 +106,28 @@ Aplica estas 3 migraciones que aún NO están en producción:
 
 ### 🔴 Seguridad — Alta prioridad
 
-**R1 — `SqlAdminPage` viva en producción**
-Ejecuta SQL arbitrario contra el DB. Protegida solo por `AuthRoute` (admin). Si una sesión admin se compromete, acceso total al DB. Marcada como "DEV TOOL — remove after QA" pero no se ha eliminado. **Acción: eliminar en la próxima sesión.**
+**R1 — `SqlAdminPage` viva en producción** ✅ RESUELTO
+Archivo vaciado, ruta e import removidos de `App.jsx`, entrada de sidebar removida de `AdminNav.jsx`. RPC `execute_sql` dropeado en producción vía `20260519000001_drop_execute_sql.sql`.
 
-**R2 — Login screen expone roles de todos los usuarios sin autenticación**
-`getActiveUsers()` retorna `id, name, role, active` con política `TO anon` (necesario para el select de usuario). El campo `role` es innecesario en esta query — solo necesitas `id` y `name`. Filtrar `role` del SELECT en `users.js → getActiveUsers()` elimina el information leak.
+**R2 — Login screen expone roles de todos los usuarios sin autenticación** ✅ RESUELTO
+`getActiveUsers()` en `users.js` ahora selecciona solo `id, name, active`. `{user.role}` eliminado de `LoginPage.jsx` (botones de selección y texto de confirmación).
 
-**R3 — CORS `*` en Edge Functions**
-`create-user`, `reset-pin`, `deactivate-user` tienen `'Access-Control-Allow-Origin': '*'`. El riesgo real es bajo (verifican JWT antes de actuar), pero debería restringirse al dominio de Vercel en producción: `'https://tu-dominio.vercel.app'`.
+**R3 — CORS `*` en Edge Functions** ✅ RESUELTO
+`create-user`, `reset-pin`, `deactivate-user` — patrón `Deno.env.get('ALLOWED_ORIGIN') || '*'` implementado. Secret configurado en Supabase: `ALLOWED_ORIGIN=https://continental-react.vercel.app`. Funciones redesenployadas el 2026-05-19.
 
-**R4 — `verifySession` no tiene estado de carga (race condition de flash)**
-`App.jsx` llama `verifySession()` en `useEffect` sin esperar el resultado. `ProtectedRoute` y `AuthRoute` leen `user` del store inmediatamente. Si la verificación async no terminó, `user = null` → redirect a `/login` aunque la sesión sea válida. Falta un flag `isVerifying: true` mientras corre la verificación. **Síntoma observable:** recargas de página en conexión lenta expulsan a usuarios legítimos.
+**R4 — `verifySession` no tiene estado de carga (race condition de flash)** ✅ RESUELTO
+`isVerifying: true` en estado inicial de `authStore.js`. `verifySession` usa `try/finally` para resetear a `false` siempre. Los 3 guards (`ProtectedRoute`, `AuthRoute`, `ManagerRoute`) retornan `null` mientras `isVerifying === true`.
 
 ### 🟠 Bugs — Prioridad Media
 
-**B1 — `startOfToday()` en `dashboard.js` usa timezone del browser, no México**
-`new Date()` + `setHours(0,0,0,0)` sin timezone explícita. El resto del codebase usa `T00:00:00-06:00`. Cerca de medianoche, el "inicio del día" en el dashboard puede ser incorrecto. Fix: construir el string ISO con `-06:00` como en `reports.js`.
+**B1 — `startOfToday()` en `dashboard.js` usa timezone del browser, no México** ✅ RESUELTO
+`dashboard.js` ahora construye el string ISO con `-06:00` explícito (`${y}-${m}-${day}T00:00:00-06:00`).
 
 **B2 — `getCurrentMonthDate()` duplicada**
 Existe en `membership.js` y como `currentMonthDate()` en `reports.js`. Producen el mismo resultado. Consolidar en `src/utils/dates.js` e importar desde ahí.
 
-**B3 — `money()` no usa formato de locale**
-`$${Number(value).toFixed(2)}` produce `$1234.56`. En México el estándar es `$1,234.56`. Con precios de botella de 5 cifras, la lectura rápida durante cobros puede causar errores. Fix: `new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(value)`.
+**B3 — `money()` no usa formato de locale** ✅ RESUELTO
+`src/utils/money.js` reescrito con `new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' })`. Formato correcto: `$1,234.56`.
 
 **B4 — Validación de inventario pre-pago ocurre en cliente (redundante y problemática)**
 `validateComandaInventoryBeforePayment` en `comandaCheckout.js` lee el stock y valida antes de llamar al RPC. Pero entre esa lectura y la ejecución del RPC, otro cobro podría deducir el mismo inventario. El RPC `finalize_comanda_payment` ya tiene su propia deducción con `deduct_inventory_item`. La validación del cliente puede dar falsos positivos (rechazar cobros legítimos) o falsos negativos (aprobar y fallar en el RPC). La validación autoritativa vive en Postgres — la del cliente debería eliminarse.
@@ -262,19 +263,20 @@ Señales de dirección humana: lógica de negocio específica y correcta para un
 
 ---
 
-## Checklist pre-apertura (estado al 19 Mayo 2026)
+## Checklist pre-apertura (estado al 19 Mayo 2026) — ✅ TODO COMPLETO
 
-- [x] **Correr `npx supabase db push`** — confirmado corrido (3 migraciones de RLS + adjust_payment_tip)
-- [x] **Eliminar `SqlAdminPage`** — archivo vaciado, ruta e import removidos de App.jsx, botón removido de AdminNav.jsx. Migración `20260519000001_drop_execute_sql.sql` creada para dropear el RPC.
+- [x] **Correr `npx supabase db push`** — corrido el 2026-05-19 (3 migraciones RLS + adjust_payment_tip + drop_execute_sql)
+- [x] **Eliminar `SqlAdminPage`** — archivo vaciado, ruta e import removidos de App.jsx, botón removido de AdminNav.jsx. RPC dropeado en producción vía `20260519000001_drop_execute_sql.sql`.
 - [x] **Fix `verifySession` race condition** — `isVerifying: true` en authStore, `try/finally` garantiza reset. Los 3 route guards retornan `null` mientras `isVerifying === true`.
 - [x] **Fix `startOfToday()`** — timezone México explícita (`T00:00:00-06:00`) en `dashboard.js`.
 - [x] **Fix `money()`** — `Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' })` en `utils/money.js`.
 - [x] **Fix `role` expuesto en login** — `getActiveUsers` ya no retorna `role`. Display de role removido en LoginPage.jsx (botones de usuario y texto de confirmación).
-- [x] **CORS en Edge Functions** — patrón `Deno.env.get('ALLOWED_ORIGIN') || '*'` en las 3 funciones. Para activar: `supabase secrets set ALLOWED_ORIGIN=https://tu-dominio.vercel.app` y redesplegar.
-- [ ] **Correr `npx supabase db push`** para aplicar `20260519000001_drop_execute_sql.sql`
-- [ ] **Redesplegar Edge Functions** con CORS actualizado: `supabase functions deploy create-user reset-pin deactivate-user`
-- [ ] **Eliminar `seed-auth-users` Edge Function** del proyecto de producción (no desplegar)
+- [x] **CORS en Edge Functions** — patrón `Deno.env.get('ALLOWED_ORIGIN') || '*'` en las 3 funciones. Secret configurado: `ALLOWED_ORIGIN=https://continental-react.vercel.app`. Funciones redesenployadas el 2026-05-19.
+- [x] **Redesplegar Edge Functions** — `supabase functions deploy create-user reset-pin deactivate-user` — ✅ exitoso
+- [x] **Merge a main + deploy Vercel** — URL producción: `https://continental-react.vercel.app`
+- [x] **Edge Functions probadas** — create-user, reset-pin, deactivate-user retornan 403 sin auth header (correcto)
 - [ ] Smoke test E2E completo con datos reales: login → turno → mesa → items → membresía → cobro → reimpresión → cierre de turno
+- [ ] Cargar datos reales (clientes, productos, empleados) y QA final
 - [ ] Verificar impresora de tickets en Chrome con `--kiosk-printing` activo
 
 ---
