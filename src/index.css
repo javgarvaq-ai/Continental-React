@@ -53,6 +53,27 @@
 body {
   margin: 0;
   background: #0f0f0f;
+  color: #e2e8f0;
+}
+
+/* ── Dark-only enforcement ────────────────────────────────────────
+   This app is dark-only. Force dark defaults regardless of OS
+   color scheme to prevent white backgrounds on light-mode OSes.  */
+
+/* h1/h2 inherit from CSS vars that default to near-black on light OS */
+h1, h2, h3, h4, h5, h6 {
+  color: #e2e8f0;
+}
+
+/* Table cells get white UA backgrounds on light-mode browsers */
+th, td {
+  background-color: transparent;
+  color: inherit;
+}
+
+/* Form elements: force dark color-scheme so browser renders them dark */
+input, select, textarea {
+  color-scheme: dark;
 }
 
 #root {

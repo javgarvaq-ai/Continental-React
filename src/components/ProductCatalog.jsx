@@ -15,6 +15,8 @@ function ProductCatalog({
                 border: '1px solid #444',
                 borderRadius: '8px',
                 padding: '16px',
+                background: '#0f0f0f',
+                color: '#e2e8f0',
             }}
         >
             <h2>Productos</h2>
