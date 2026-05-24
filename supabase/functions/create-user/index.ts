@@ -79,7 +79,13 @@ serve(async (req) => {
         const realEmail = `${userId}@continental.bar`
 
         // Update to real UUID-based email
-        await adminClient.auth.admin.updateUserById(userId, { email: realEmail })
+        const { error: updateError } = await adminClient.auth.admin.updateUserById(userId, { email: realEmail })
+
+        if (updateError) {
+            // Rollback: remove the auth user created with the temp email
+            await adminClient.auth.admin.deleteUser(userId)
+            return json({ error: 'Error configurando cuenta de autenticación' }, 500)
+        }
 
         // ── Insert into users table ───────────────────────────
         const { data: newUser, error: insertError } = await adminClient
