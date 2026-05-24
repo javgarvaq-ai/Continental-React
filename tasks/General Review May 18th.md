@@ -17,11 +17,13 @@ Sistema POS (Point of Sale) **a medida** para Continental Cantina Bar, México. 
 
 ---
 
-## Estado al 19 de Mayo 2026
+## Estado al 20 de Mayo 2026
 
 - ✅ Todos los flujos core construidos y probados en QA: POS, pagos, turnos, membresías, inventario, reportes.
 - ✅ Todos los riesgos pre-apertura cerrados en sesión May 19th.
 - ✅ `SqlAdminPage` eliminada. RPC `execute_sql` dropeado en producción.
+- ✅ PWA instalable — ícono "C" serif, manifest completo, service worker.
+- ✅ Dark theme enforced en OS modo claro — `index.css` global rules.
 - ✅ App mergeada a main. **En producción: `https://continental-react.vercel.app`**
 
 ---
@@ -29,6 +31,8 @@ Sistema POS (Point of Sale) **a medida** para Continental Cantina Bar, México. 
 ## Capacidades del sistema
 
 **Operación de piso:** Apertura/cierre de turno con caja inicial, mesas (units), comandas, catálogo de productos por categoría, shots con mixers configurables, descuentos por membresía activa.
+
+**PWA:** Instalable como app nativa en tablet/PC desde Chrome. Ícono "C" serif en beige dorado. Funciona en `standalone` mode (sin chrome del browser). Requiere conexión — datos siempre van a Supabase.
 
 **Cobros:** Flujo de 4 pasos (`open → pending_payment → processing_payment → paid`), cobro mixto (efectivo + tarjeta + transferencia), propina manual/automática, ticket impreso via ventana emergente, ajuste de propina post-cobro desde FolioHistory.
 

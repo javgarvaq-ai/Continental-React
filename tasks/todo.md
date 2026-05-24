@@ -366,3 +366,39 @@ Revisión completa del proyecto usando `tasks/General Review May 18th.md` como b
 - Post-payment tip desde POS (Option C) — confirmar frecuencia con Javi antes de implementar
 - Split de `PosPage.jsx` (A1) — 64KB, alta inversión cero riesgo operativo
 - Realtime subscriptions (P3) — solo si se agrega 2ª tablet
+
+---
+
+## Session May 20th — PWA + dark theme enforcement ✅ (2026-05-20)
+
+### PWA (Progressive Web App) ✅
+
+- [x] `npm install vite-plugin-pwa -D` — plugin instalado
+- [x] `vite.config.js` — `VitePWA` configurado: manifest completo, `registerType: 'prompt'` (no auto-update mid-shift), workbox cachea solo el shell (JS/CSS/HTML/íconos), datos de Supabase siempre van a red
+- [x] **Manifest:** `name: 'Continental POS'`, `short_name: 'Continental'`, `display: 'standalone'`, `orientation: 'landscape'`, `start_url: '/login'`, `theme_color: '#0f0f0f'`
+- [x] **Íconos generados** con Python/Pillow — "C" serif en beige dorado (`#ddd0bc`) sobre fondo oscuro (`#0f0f0f`) con borde y sombra sutil, inspirado en el logotipo de Continental:
+  - `public/icon-192.png` — ícono PWA
+  - `public/icon-512.png` — ícono PWA (maskable)
+  - `public/apple-touch-icon.png` — iOS/iPadOS 180×180
+  - `public/favicon-32.png` — favicon browser
+- [x] `index.html` — título actualizado a "Continental POS", `lang="es"`, `theme-color`, `apple-touch-icon`, favicon
+- [x] Mergeado a main y desplegado en Vercel
+
+### Dark theme enforcement (cross-OS) ✅
+
+Fixes para que la app se vea correcta en PCs con OS en modo claro (light mode).
+
+- [x] **`src/components/ProductCatalog.jsx`** — `<section>` sin `background` explícito aparecía blanco en OS modo claro. Agregado `background: '#0f0f0f', color: '#e2e8f0'`.
+- [x] **`src/pages/WeeklyReportPage.jsx`** — root `<div>` sin `background` ni `minHeight`. Agregado `background: '#111', minHeight: '100vh', boxSizing: 'border-box'`.
+- [x] **`src/index.css`** — 4 reglas globales para enforcement de dark theme independiente del OS:
+  - `body { color: #e2e8f0 }` — texto base claro heredable
+  - `h1–h6 { color: #e2e8f0 }` — sobreescribe `var(--text-h)` que en OS claro vale `#08060d` (casi negro)
+  - `th, td { background-color: transparent; color: inherit }` — UA stylesheet del browser ponía fondo blanco a celdas de tabla en modo claro
+  - `input, select, textarea { color-scheme: dark }` — fuerza controles de formulario a renderizarse con defaults oscuros
+
+### Diferidos
+- Smoke test E2E con datos reales antes de apertura
+- Inventory unit types (kg, g, L, ml)
+- Post-payment tip desde POS (Option C)
+- Split de `PosPage.jsx` (A1)
+- Realtime subscriptions (P3)
