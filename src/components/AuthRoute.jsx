@@ -13,7 +13,7 @@ function AuthRoute({ children }) {
     }
 
     if (user.role !== 'admin') {
-        return <Navigate to="/pos" replace />
+        return <Navigate to="/pos" replace state={{ accessDenied: true }} />
     }
 
     return children

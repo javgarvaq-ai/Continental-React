@@ -99,16 +99,17 @@ export async function getShiftSummary(shiftId) {
 }
 
 /**
- * Returns up to 1 comanda that is still open/pending/processing.
- * Used to block shift close while tables are still active.
+ * Returns all comandas that are still open/pending/processing,
+ * with their unit name. Used to block shift close and report
+ * which tables need to be closed first.
  */
-export async function getOpenComandasCount() {
-    const { count, error } = await supabase
+export async function getOpenComandas() {
+    const { data, error } = await supabase
         .from('comandas')
-        .select('id', { count: 'exact', head: true })
+        .select('id, units(name)')
         .in('status', ['open', 'pending_payment', 'processing_payment'])
 
-    return { count, error }
+    return { data, error }
 }
 
 // ─── Write ─────────────────────────────────────────────────────────────────
