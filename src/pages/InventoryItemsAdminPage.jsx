@@ -115,8 +115,12 @@ function InventoryItemsAdminPage() {
                         <div>
                             <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px' }}>Unit Type</label>
                             <select value={newUnitType} onChange={(e) => setNewUnitType(e.target.value)} style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid #444', background: '#111', color: 'white' }}>
-                                <option value="unit">Unit</option>
-                                <option value="oz">OZ</option>
+                                <option value="unit">Unidad</option>
+                                <option value="oz">oz</option>
+                                <option value="L">L</option>
+                                <option value="ml">ml</option>
+                                <option value="kg">kg</option>
+                                <option value="g">g</option>
                             </select>
                         </div>
                         {newUnitType === 'oz' && (
@@ -140,8 +144,12 @@ function InventoryItemsAdminPage() {
                                     <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
                                         <input value={editForm.name} onChange={(e) => setEditForm(p => ({ ...p, name: e.target.value }))} style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #444', background: '#111', color: 'white', width: '180px' }} />
                                         <select value={editForm.unit_type} onChange={(e) => setEditForm(p => ({ ...p, unit_type: e.target.value }))} style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #444', background: '#111', color: 'white' }}>
-                                            <option value="unit">Unit</option>
-                                            <option value="oz">OZ</option>
+                                            <option value="unit">Unidad</option>
+                                            <option value="oz">oz</option>
+                                            <option value="L">L</option>
+                                            <option value="ml">ml</option>
+                                            <option value="kg">kg</option>
+                                            <option value="g">g</option>
                                         </select>
                                         {editForm.unit_type === 'oz' && (
                                             <input type="number" value={editForm.capacity_oz} onChange={(e) => setEditForm(p => ({ ...p, capacity_oz: e.target.value }))} placeholder="Capacity oz" style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #444', background: '#111', color: 'white', width: '120px' }} />
