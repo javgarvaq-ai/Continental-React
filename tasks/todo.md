@@ -378,3 +378,47 @@ Migraciones pendientes de sesiones anteriores + hoy:
 - B5: Propina edge case con pago mixto (medium risk)
 - `getCurrentMonthDate()` deduplicación (low risk)
 - QA smoke test pendiente: 2-shift simulation en curso — auditoría de números al terminar
+
+---
+
+## Session May 28th — Security audit + Audit pages ✅
+
+### OWASP Top 10 review ✅
+Full evaluation completed. Top findings:
+
+- **[CRITICAL - FIXED]** `seed-auth-users` Edge Function was deployed with `--no-verify-jwt` — no auth required, resets all PINs to `000000`. Deleted from Supabase dashboard and removed from repo.
+- **[FIXED]** CORS `ALLOWED_ORIGIN` secret confirmed set in Supabase Edge Function Secrets (`continental-react.vercel.app`). Fallback `*` is not active.
+- **[DEFERRED]** Priority 3: waiters can write directly to `comanda_items`, `comandas`, `customers`, `customer_memberships` via REST API bypassing RPCs. Moderate risk (requires insider with Supabase API knowledge). Option B (migrate all writes to RPCs + drop REST write policies) scheduled as post-launch hardening.
+
+Full OWASP breakdown in conversation history. Other findings: all migrations synced, no injection vectors, no SSRF, logging limited to app errors only (no security event log).
+
+### Edge Function redeploy ✅
+- [x] `supabase functions deploy create-user` — redeployed with S-8 rollback fix (had not been deployed since that fix was committed)
+
+### Audit pages — 3 new admin pages ✅
+
+#### 💵 Movimientos de Caja (`/admin/cash-movements`)
+- [x] `src/services/shifts.js` → `getCashMovements({ startDate, endDate })` — joins `cash_movements` + `users(name)`, date range filter
+- [x] `src/pages/CashMovementsAdminPage.jsx` — date range + type filter (todos/retiros/depósitos), running totals, human-readable category labels
+
+#### 🕐 Historial de Turnos (`/admin/shifts`)
+- [x] `src/services/shifts.js` → `getShifts({ startDate, endDate })` — joins `shifts` + `users!opened_by_user_id` + `users!closed_by_user_id`
+- [x] `src/pages/ShiftHistoryPage.jsx` — date range filter, expandable rows with full cash breakdown and difference amount (color-coded)
+
+#### 📋 Eventos de Comandas (`/admin/comanda-events`)
+- [x] `src/services/reports.js` → `getComandaEvents({ startDate, endDate, eventType })` — joins `comanda_events` + `users` + `comandas(folio, units(name))`, 500 row limit
+- [x] `src/pages/ComandaEventsPage.jsx` — date range + event type filter, useful for spotting suspicious reopens/cancellations
+- [x] `20260528000001_comanda_events_user_fk.sql` — added missing FK `comanda_events.user_id → users.id` (PostgREST requires FK for joins)
+
+#### Shared wiring ✅
+- [x] `src/components/AdminNav.jsx` — 3 new entries under Vistas section
+- [x] `src/App.jsx` — 3 new routes behind `AuthRoute`
+
+### Producción ✅
+- [x] `npx supabase db push` — migration `20260528000001` applied
+- [x] Deployed to Vercel — all 3 pages live and verified
+
+### Diferidos
+- Option B (RLS/RPC hardening): migrate all direct table writes to RPCs, drop REST write policies on transactional tables — schedule after bar is stable post-launch
+- Post-payment tip from POS (Option C)
+- PosPage.jsx split (A1) — 64KB, zero operational risk
