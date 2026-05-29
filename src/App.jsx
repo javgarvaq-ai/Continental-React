@@ -23,6 +23,9 @@ import DashboardPage from './pages/DashboardPage'
 import AnalyticsPage from './pages/AnalyticsPage'
 import CustomerIntelligencePage from './pages/CustomerIntelligencePage'
 import InventoryDashboardPage from './pages/InventoryDashboardPage'
+import CashMovementsAdminPage from './pages/CashMovementsAdminPage'
+import ShiftHistoryPage from './pages/ShiftHistoryPage'
+import ComandaEventsPage from './pages/ComandaEventsPage'
 import FolioHistoryPage from './pages/FolioHistoryPage'
 
 function App() {
@@ -136,6 +139,9 @@ function App() {
           }
         />
         <Route path="/admin/folios" element={<AuthRoute><FolioHistoryPage /></AuthRoute>} />
+        <Route path="/admin/cash-movements" element={<AuthRoute><CashMovementsAdminPage /></AuthRoute>} />
+        <Route path="/admin/shifts" element={<AuthRoute><ShiftHistoryPage /></AuthRoute>} />
+        <Route path="/admin/comanda-events" element={<AuthRoute><ComandaEventsPage /></AuthRoute>} />
         <Route path="/analytics" element={<AuthRoute><AnalyticsPage /></AuthRoute>} />
         <Route path="/customers/intelligence" element={<AuthRoute><CustomerIntelligencePage /></AuthRoute>} />
         <Route path="/inventory/dashboard" element={<AuthRoute><InventoryDashboardPage /></AuthRoute>} />

@@ -333,77 +333,6 @@ Aplica estas 3 migraciones (de la sesión anterior, aún pendientes):
 
 ---
 
-<<<<<<< HEAD
-## Session May 19th — Pre-launch hardening ✅ (2026-05-19)
-
-Revisión completa del proyecto usando `tasks/General Review May 18th.md` como base. Todos los riesgos y bugs pre-apertura cerrados. App mergeada a main y desplegada en producción.
-
-### Security fixes ✅
-
-- [x] **R4 — Race condition `verifySession`** — `isVerifying: true` en estado inicial de `authStore.js`; `verifySession` usa `try/finally` para garantizar reset a `false`. Los 3 guards (`ProtectedRoute`, `AuthRoute`, `ManagerRoute`) retornan `null` mientras `isVerifying === true` — sin flashes de redirect al recargar.
-- [x] **R2 — Login expone roles (information leak)** — `getActiveUsers()` en `src/services/users.js` ya no selecciona `role`. Campo `{user.role}` eliminado de botones de selección y texto de confirmación en `LoginPage.jsx`.
-- [x] **R1 — SqlAdminPage eliminada** — archivo vaciado (comentario de auditoría), ruta `/admin/sql` e import removidos de `App.jsx`, entrada de SQL removida de `AdminNav.jsx`. Migración `20260519000001_drop_execute_sql.sql` creada para dropear `public.execute_sql(text)` y `public.execute_sql(query text)`.
-- [x] **R3 — CORS `*` en Edge Functions** — patrón `Deno.env.get('ALLOWED_ORIGIN') || '*'` implementado en `create-user`, `reset-pin` y `deactivate-user`. Secret configurado: `ALLOWED_ORIGIN=https://continental-react.vercel.app`. Las 3 funciones redesenployadas.
-
-### Bug fixes ✅
-
-- [x] **B1 — `startOfToday()` timezone** — `dashboard.js` ahora construye el string ISO con `-06:00` explícito en lugar de usar `setHours(0,0,0,0)` del browser.
-- [x] **B3 — `money()` locale** — `src/utils/money.js` reescrito con `Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' })`. Formato correcto: `$1,234.56`.
-
-### QA bug fix (encontrado en sesión) ✅
-
-- [x] **Customer number crash** — `getNextCustomerNumber()` retorna un integer de Postgres. `setNewNumber(next)` almacenaba el integer en state. El botón de crear llamaba `!newNumber.trim()` → `TypeError: d.trim is not a function` al teclear en el campo de Nombre. Fix: campo `customer_number` marcado `readOnly` (no hay razón para editarlo manualmente), `setNewNumber(String(next))` para almacenar como string. Input con estilo visual de deshabilitado (`background: '#0a0a0a', color: '#555', cursor: 'not-allowed'`), label actualizado a "(automático)". Botón de crear: condición `disabled` solo verifica `!newName.trim()`.
-
-### Producción ✅
-
-- [x] `npx supabase db push` — aplica las 3 migraciones RLS pendientes de sesión May 16/17 + `20260519000001_drop_execute_sql.sql`
-- [x] `supabase functions deploy create-user reset-pin deactivate-user` — Edge Functions redesenployadas con CORS actualizado
-- [x] `supabase secrets set ALLOWED_ORIGIN=https://continental-react.vercel.app` — secret configurado
-- [x] Merge a main + deploy exitoso en Vercel — URL producción: `https://continental-react.vercel.app`
-- [x] Edge Functions probadas con Supabase Studio: create-user, reset-pin y deactivate-user retornan 403 sin auth header (correcto)
-
-### Diferidos (backlog)
-- Inventory unit types (kg, g, L, ml) — UI en admin de inventario
-- Post-payment tip desde POS (Option C) — confirmar frecuencia con Javi antes de implementar
-- Split de `PosPage.jsx` (A1) — 64KB, alta inversión cero riesgo operativo
-- Realtime subscriptions (P3) — solo si se agrega 2ª tablet
-
----
-
-## Session May 20th — PWA + dark theme enforcement ✅ (2026-05-20)
-
-### PWA (Progressive Web App) ✅
-
-- [x] `npm install vite-plugin-pwa -D` — plugin instalado
-- [x] `vite.config.js` — `VitePWA` configurado: manifest completo, `registerType: 'prompt'` (no auto-update mid-shift), workbox cachea solo el shell (JS/CSS/HTML/íconos), datos de Supabase siempre van a red
-- [x] **Manifest:** `name: 'Continental POS'`, `short_name: 'Continental'`, `display: 'standalone'`, `orientation: 'landscape'`, `start_url: '/login'`, `theme_color: '#0f0f0f'`
-- [x] **Íconos generados** con Python/Pillow — "C" serif en beige dorado (`#ddd0bc`) sobre fondo oscuro (`#0f0f0f`) con borde y sombra sutil, inspirado en el logotipo de Continental:
-  - `public/icon-192.png` — ícono PWA
-  - `public/icon-512.png` — ícono PWA (maskable)
-  - `public/apple-touch-icon.png` — iOS/iPadOS 180×180
-  - `public/favicon-32.png` — favicon browser
-- [x] `index.html` — título actualizado a "Continental POS", `lang="es"`, `theme-color`, `apple-touch-icon`, favicon
-- [x] Mergeado a main y desplegado en Vercel
-
-### Dark theme enforcement (cross-OS) ✅
-
-Fixes para que la app se vea correcta en PCs con OS en modo claro (light mode).
-
-- [x] **`src/components/ProductCatalog.jsx`** — `<section>` sin `background` explícito aparecía blanco en OS modo claro. Agregado `background: '#0f0f0f', color: '#e2e8f0'`.
-- [x] **`src/pages/WeeklyReportPage.jsx`** — root `<div>` sin `background` ni `minHeight`. Agregado `background: '#111', minHeight: '100vh', boxSizing: 'border-box'`.
-- [x] **`src/index.css`** — 4 reglas globales para enforcement de dark theme independiente del OS:
-  - `body { color: #e2e8f0 }` — texto base claro heredable
-  - `h1–h6 { color: #e2e8f0 }` — sobreescribe `var(--text-h)` que en OS claro vale `#08060d` (casi negro)
-  - `th, td { background-color: transparent; color: inherit }` — UA stylesheet del browser ponía fondo blanco a celdas de tabla en modo claro
-  - `input, select, textarea { color-scheme: dark }` — fuerza controles de formulario a renderizarse con defaults oscuros
-
-### Diferidos
-- Smoke test E2E con datos reales antes de apertura
-- Inventory unit types (kg, g, L, ml)
-- Post-payment tip desde POS (Option C)
-- Split de `PosPage.jsx` (A1)
-- Realtime subscriptions (P3)
-=======
 ## Session May 23rd — QA + Hardening ✅
 
 ### F2 — Open shift close shows table names ✅
@@ -449,4 +378,47 @@ Migraciones pendientes de sesiones anteriores + hoy:
 - B5: Propina edge case con pago mixto (medium risk)
 - `getCurrentMonthDate()` deduplicación (low risk)
 - QA smoke test pendiente: 2-shift simulation en curso — auditoría de números al terminar
->>>>>>> dev
+
+---
+
+## Session May 28th — Security audit + Audit pages ✅
+
+### OWASP Top 10 review ✅
+Full evaluation completed. Top findings:
+
+- **[CRITICAL - FIXED]** `seed-auth-users` Edge Function was deployed with `--no-verify-jwt` — no auth required, resets all PINs to `000000`. Deleted from Supabase dashboard and removed from repo.
+- **[FIXED]** CORS `ALLOWED_ORIGIN` secret confirmed set in Supabase Edge Function Secrets (`continental-react.vercel.app`). Fallback `*` is not active.
+- **[DEFERRED]** Priority 3: waiters can write directly to `comanda_items`, `comandas`, `customers`, `customer_memberships` via REST API bypassing RPCs. Moderate risk (requires insider with Supabase API knowledge). Option B (migrate all writes to RPCs + drop REST write policies) scheduled as post-launch hardening.
+
+Full OWASP breakdown in conversation history. Other findings: all migrations synced, no injection vectors, no SSRF, logging limited to app errors only (no security event log).
+
+### Edge Function redeploy ✅
+- [x] `supabase functions deploy create-user` — redeployed with S-8 rollback fix (had not been deployed since that fix was committed)
+
+### Audit pages — 3 new admin pages ✅
+
+#### 💵 Movimientos de Caja (`/admin/cash-movements`)
+- [x] `src/services/shifts.js` → `getCashMovements({ startDate, endDate })` — joins `cash_movements` + `users(name)`, date range filter
+- [x] `src/pages/CashMovementsAdminPage.jsx` — date range + type filter (todos/retiros/depósitos), running totals, human-readable category labels
+
+#### 🕐 Historial de Turnos (`/admin/shifts`)
+- [x] `src/services/shifts.js` → `getShifts({ startDate, endDate })` — joins `shifts` + `users!opened_by_user_id` + `users!closed_by_user_id`
+- [x] `src/pages/ShiftHistoryPage.jsx` — date range filter, expandable rows with full cash breakdown and difference amount (color-coded)
+
+#### 📋 Eventos de Comandas (`/admin/comanda-events`)
+- [x] `src/services/reports.js` → `getComandaEvents({ startDate, endDate, eventType })` — joins `comanda_events` + `users` + `comandas(folio, units(name))`, 500 row limit
+- [x] `src/pages/ComandaEventsPage.jsx` — date range + event type filter, useful for spotting suspicious reopens/cancellations
+- [x] `20260528000001_comanda_events_user_fk.sql` — added missing FK `comanda_events.user_id → users.id` (PostgREST requires FK for joins)
+
+#### Shared wiring ✅
+- [x] `src/components/AdminNav.jsx` — 3 new entries under Vistas section
+- [x] `src/App.jsx` — 3 new routes behind `AuthRoute`
+
+### Producción ✅
+- [x] `npx supabase db push` — migration `20260528000001` applied
+- [x] Deployed to Vercel — all 3 pages live and verified
+
+### Diferidos
+- Option B (RLS/RPC hardening): migrate all direct table writes to RPCs, drop REST write policies on transactional tables — schedule after bar is stable post-launch
+- Post-payment tip from POS (Option C)
+- PosPage.jsx split (A1) — 64KB, zero operational risk

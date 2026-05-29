@@ -264,3 +264,29 @@ export async function getTopConsumedItems(days = 7) {
         error: null,
     }
 }
+
+/**
+ * Returns comanda events for audit, joined with user name, folio, and unit name.
+ * Ordered by created_at descending. Hard limit of 500 rows.
+ */
+export async function getComandaEvents({ startDate, endDate, eventType } = {}) {
+    let query = supabase
+        .from('comanda_events')
+        .select(`
+            id,
+            created_at,
+            event_type,
+            users ( name ),
+            comandas ( folio, units ( name ) )
+        `)
+        .order('created_at', { ascending: false })
+        .limit(500)
+
+    if (startDate)  query = query.gte('created_at', `${startDate}T00:00:00-06:00`)
+    if (endDate)    query = query.lte('created_at', `${endDate}T23:59:59-06:00`)
+    if (eventType && eventType !== 'all') query = query.eq('event_type', eventType)
+
+    const { data, error } = await query
+    return { data, error }
+}
+

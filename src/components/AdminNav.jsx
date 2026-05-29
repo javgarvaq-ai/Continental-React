@@ -13,6 +13,9 @@ const NAV_SECTIONS = [
             { label: '💰 Reporte',   path: '/weekly-report'          },
             { label: '👥 Clientes',   path: '/customers/intelligence' },
             { label: '📦 Inventario', path: '/inventory/dashboard'    },
+            { label: '💵 Movimientos', path: '/admin/cash-movements'  },
+            { label: '🕐 Turnos',     path: '/admin/shifts'           },
+            { label: '📋 Eventos',    path: '/admin/comanda-events'   },
         ],
     },
     {
