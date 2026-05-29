@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useStatus } from '../hooks/useStatus';
 import logo from '../assets/logo.png';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useCustomer } from '../hooks/useCustomer';
 import { useComanda } from '../hooks/useComanda';
@@ -34,6 +34,7 @@ import { money } from '../utils/money';
 
 function PosPage() {
     const navigate = useNavigate();
+    const location = useLocation();
     const currentUser = useAuthStore(state => state.user);
     const currentShiftId = useAuthStore(state => state.shiftId);
     const clearAuth = useAuthStore(state => state.clearAuth);
@@ -206,6 +207,15 @@ function PosPage() {
     useEffect(() => {
         loadUnits();
     }, []);
+
+    // Show a message if redirected here due to insufficient role.
+    useEffect(() => {
+        if (location.state?.accessDenied) {
+            setStatus('No tienes acceso a esa sección.')
+            // Clear the state so a page refresh doesn't re-show the message.
+            navigate('/pos', { replace: true, state: {} })
+        }
+    }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
     // Load product catalog once per session — catalog doesn't change during a shift.
     useEffect(() => {

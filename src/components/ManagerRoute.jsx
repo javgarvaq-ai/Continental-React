@@ -13,7 +13,7 @@ function ManagerRoute({ children }) {
     }
 
     if (user.role !== 'admin' && user.role !== 'manager') {
-        return <Navigate to="/pos" replace />
+        return <Navigate to="/pos" replace state={{ accessDenied: true }} />
     }
 
     return children

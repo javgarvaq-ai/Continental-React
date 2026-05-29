@@ -233,6 +233,49 @@ The remote schema dump (`20260508191907_remote_schema.sql`) created many policie
 
 ---
 
+## RAISE EXCEPTION en RPC llega como rpcError, no rpcResult
+
+Cuando un RPC de Postgres usa `RAISE EXCEPTION '%', msg`, la excepción llega en el **branch `rpcError`** de `supabase.rpc(...)`, no como `rpcResult.ok = false`. Si el código solo maneja `rpcResult?.ok === false`, el error se pierde o muestra el string raw al usuario.
+
+**Patrón correcto:**
+```js
+const { data: rpcResult, error: rpcError } = await supabase.rpc('mi_funcion', params)
+
+if (rpcError) {
+    const msg = friendlyRpcError(rpcError.message, 'Error genérico.')
+    return { error: new Error(msg) }
+}
+
+if (rpcResult && !rpcResult.ok) {
+    return { error: new Error(friendlyRpcError(rpcResult.error, 'Error genérico.')) }
+}
+```
+
+Siempre manejar ambos branches. `RAISE EXCEPTION` → `rpcError`. `RETURN jsonb_build_object('ok', false, 'error', '...')` → `rpcResult`.
+
+---
+
+## product_recipes — Multi-ingrediente ya funciona en DB
+
+La tabla `product_recipes` soporta múltiples filas por `product_id`. El RPC `finalize_comanda_payment` itera **todas** las filas activas de cada producto y deduce inventario por cada una. No hay límite de un ingrediente por producto — la DB y el RPC ya lo manejan correctamente.
+
+Para recetas multi-ingrediente: simplemente agregar una fila en `product_recipes` por cada ingrediente, apuntando al `inventory_item_id` correspondiente.
+
+---
+
+## Ingredientes puros no deben ser products
+
+Si un ítem nunca se vende standalone (ej. Fanta Roja como ingrediente de Cubanito), debe existir **solo** como `inventory_item`, no como `product`. Crear productos innecesarios hace que aparezcan en el catálogo del POS.
+
+El modelo correcto:
+- `inventory_items` → stock físico (Fanta Roja, Boost, Tequila, etc.)
+- `products` → lo que se vende con precio (Cubanito, Margarita, Fanta Roja standalone si aplica)
+- `product_recipes` → linkea un `product_id` a uno o más `inventory_item_id`
+
+Si algo no se vende solo → solo `inventory_item`. No necesita ser `product`.
+
+---
+
 ## Reporting: Period Data vs. Global Balances
 
 Running cash/bank/safe balances are **always historical and accumulative** — they should never be filtered by a date range. Only revenue and expense metrics belong inside a period filter.

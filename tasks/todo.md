@@ -327,12 +327,13 @@ Aplica estas 3 migraciones (de la sesión anterior, aún pendientes):
 - `20260517000001_adjust_payment_tip.sql`
 
 ### Diferidos
-- Inventory unit types (kg, g, L, ml) — UI de selección de unidades en admin de inventario
+- ~~Inventory unit types (kg, g, L, ml)~~ → completado sesión 2026-05-23
 - Post-payment tip (Option C): agregar propina post-pago desde POS
 - Ticket promedio por cajero (deferred por scope)
 
 ---
 
+<<<<<<< HEAD
 ## Session May 19th — Pre-launch hardening ✅ (2026-05-19)
 
 Revisión completa del proyecto usando `tasks/General Review May 18th.md` como base. Todos los riesgos y bugs pre-apertura cerrados. App mergeada a main y desplegada en producción.
@@ -402,3 +403,50 @@ Fixes para que la app se vea correcta en PCs con OS en modo claro (light mode).
 - Post-payment tip desde POS (Option C)
 - Split de `PosPage.jsx` (A1)
 - Realtime subscriptions (P3)
+=======
+## Session May 23rd — QA + Hardening ✅
+
+### F2 — Open shift close shows table names ✅
+- [x] `src/services/shifts.js` → `getOpenComandas()` — reemplaza `getOpenComandasCount()`; retorna `id` + `units(name)` de comandas en estados `open/pending_payment/processing_payment`
+- [x] `src/hooks/useShift.js` → `handleConfirmCloseShift` — extrae nombres de unidades y muestra: `"Mesas abiertas: Mesa 1, Mesa 2. Ciérralas antes de cerrar el turno."`
+
+### F3 — Access denied redirect desde rutas protegidas ✅
+- [x] `src/components/AuthRoute.jsx` → `<Navigate to="/pos" replace state={{ accessDenied: true }} />`
+- [x] `src/components/ManagerRoute.jsx` → mismo patrón
+- [x] `src/pages/PosPage.jsx` → `useLocation` + `useEffect` detecta `location.state?.accessDenied` → muestra "No tienes acceso a esa sección.", limpia state con `navigate('/pos', { replace: true, state: {} })`
+
+### S-8 — Edge Function create-user rollback ✅
+- [x] `supabase/functions/create-user/index.ts` → captura error de `updateUserById`; si falla, hace rollback con `deleteUser` y retorna 500
+- [x] **Javi debe correr:** `supabase functions deploy create-user`
+
+### B-4 — Eliminada validación de inventario client-side + fix rpcError ✅
+- [x] `src/services/comandaCheckout.js` → removida función `validateComandaInventoryBeforePayment` (~130 líneas) y su llamada en `confirmPayment`
+- [x] Mismo archivo → rama `rpcError` ahora usa `friendlyRpcError(rpcError.message, ...)` en lugar de mensaje raw — `insufficient_stock` ahora muestra "Inventario insuficiente. Verifica el stock antes de continuar."
+
+### Inventory unit types expansion ✅
+- [x] `supabase/migrations/20260523000001_inventory_unit_types.sql` — DROP + recrear CHECK constraint con `['unit','oz','kg','g','L','ml']`
+- [x] `src/pages/InventoryItemsAdminPage.jsx` — ambos selects (crear + editar) tienen las 6 opciones
+- [x] **Javi debe correr:** `npx supabase db push`
+
+### Design gap — Multi-ingredient drinks (evaluación, sin código) ✅
+- Confirmado: `product_recipes` ya soporta múltiples rows por `product_id` → cobro deducta todos los ingredientes correctamente
+- Confirmado: ingredientes puros (Fanta Roja, Boost) deben ser solo `inventory_items`, NO `products` — así no aparecen en el catálogo del POS
+- No se requieren cambios de código ni migraciones
+
+### Pendientes de producción ⚠️
+```
+npx supabase db push
+supabase functions deploy create-user
+```
+Migraciones pendientes de sesiones anteriores + hoy:
+- `20260516000001_fix_payments_rls.sql`
+- `20260516000002_fix_payments_select_rls.sql`
+- `20260517000001_adjust_payment_tip.sql`
+- `20260523000001_inventory_unit_types.sql`
+
+### Diferidos
+- Post-payment tip (Option C): agregar propina post-pago desde POS
+- B5: Propina edge case con pago mixto (medium risk)
+- `getCurrentMonthDate()` deduplicación (low risk)
+- QA smoke test pendiente: 2-shift simulation en curso — auditoría de números al terminar
+>>>>>>> dev

@@ -3,7 +3,7 @@ import { getCashMovementConfig } from '../config/cashMovements'
 import { requireOnline } from '../utils/requireOnline'
 import {
     getShiftSummary,
-    getOpenComandasCount,
+    getOpenComandas,
     closeShift,
     addCashMovement,
 } from '../services/shifts'
@@ -37,12 +37,16 @@ export function useShift({ currentUser, currentShiftId, isOnline, setStatus, onS
 
         // Filter by status only — no date filter so ghost comandas
         // from before the shift can't slip past and block close.
-        const { count: openComandasCount } = await getOpenComandasCount()
+        const { data: openComandas } = await getOpenComandas()
+        const openUnitNames = (openComandas || [])
+            .map(c => c.units?.name)
+            .filter(Boolean)
 
         return {
             data: {
                 summary,
-                hasOpenComandas: !!(openComandasCount && openComandasCount > 0),
+                hasOpenComandas: openUnitNames.length > 0,
+                openUnitNames,
             },
             error: null,
         }
@@ -60,7 +64,8 @@ export function useShift({ currentUser, currentShiftId, isOnline, setStatus, onS
         }
 
         if (panelData.hasOpenComandas) {
-            return { error: new Error('Hay mesas abiertas. Ciérralas antes de cerrar el turno.') }
+            const names = panelData.openUnitNames.join(', ')
+            return { error: new Error(`Mesas abiertas: ${names}. Ciérralas antes de cerrar el turno.`) }
         }
 
         const { data: updatedShift, error: updateError } = await closeShift(
