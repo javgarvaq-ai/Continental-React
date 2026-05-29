@@ -112,6 +112,68 @@ export async function getOpenComandas() {
     return { data, error }
 }
 
+/**
+ * Returns all cash movements for audit, joined with user name.
+ * Ordered by created_at descending.
+ */
+export async function getCashMovements({ startDate, endDate } = {}) {
+    let query = supabase
+        .from('cash_movements')
+        .select(`
+            id,
+            created_at,
+            shift_id,
+            type,
+            amount,
+            note,
+            category,
+            movement_nature,
+            source_location,
+            destination_location,
+            users ( name )
+        `)
+        .order('created_at', { ascending: false })
+
+    if (startDate) query = query.gte('created_at', `${startDate}T00:00:00-06:00`)
+    if (endDate)   query = query.lte('created_at', `${endDate}T23:59:59-06:00`)
+
+    const { data, error } = await query
+    return { data, error }
+}
+
+/**
+ * Returns all shifts for audit, joined with opener and closer user names.
+ * Ordered by opened_at descending.
+ */
+export async function getShifts({ startDate, endDate } = {}) {
+    let query = supabase
+        .from('shifts')
+        .select(`
+            id,
+            status,
+            opened_at,
+            closed_at,
+            starting_cash,
+            expected_cash,
+            cash_counted,
+            difference,
+            total_efectivo,
+            total_tarjeta,
+            total_transferencia,
+            total_propinas,
+            total_retiros,
+            opener:users!opened_by_user_id ( name ),
+            closer:users!closed_by_user_id ( name )
+        `)
+        .order('opened_at', { ascending: false })
+
+    if (startDate) query = query.gte('opened_at', `${startDate}T00:00:00-06:00`)
+    if (endDate)   query = query.lte('opened_at', `${endDate}T23:59:59-06:00`)
+
+    const { data, error } = await query
+    return { data, error }
+}
+
 // ─── Write ─────────────────────────────────────────────────────────────────
 
 /**
