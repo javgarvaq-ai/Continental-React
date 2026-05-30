@@ -85,7 +85,7 @@ function buildTicketHtml({
         ${membershipInfo.discountAmount > 0 ? `<div class="row small"><span>Descuento ${membershipInfo.discountPct}%</span><span>-${money(membershipInfo.discountAmount)}</span></div>` : ''}
         <div class="row small"><span>Visitas este mes</span><span>${membershipInfo.newVisitCount || 0}</span></div>
         <div class="row small"><span>Créditos botella</span><span>${membershipInfo.bottleCredits || 0}</span></div>
-        ${membershipInfo.earnedBottleCredit ? `<div class="center small" style="color:#2e7d32;font-weight:bold">🍾 ¡Ganaste una botella gratis!</div>` : ''}
+        ${membershipInfo.earnedBottleCredit ? `<div class="center small" style="color:#000000;font-weight:bold">[GRATIS] ¡Ganaste una botella gratis!</div>` : ''}
       `;
   }
 
@@ -200,6 +200,9 @@ function buildTicketHtml({
 
             * {
               box-sizing: border-box;
+              -webkit-print-color-adjust: exact;
+              color-adjust: exact;
+              text-rendering: geometricPrecision;
             }
 
             html, body {
@@ -207,7 +210,7 @@ function buildTicketHtml({
               padding: 0;
               background: #fff;
               color: #000;
-              font-family: "Courier New", Courier, monospace;
+              font-family: monospace;
               width: 58mm;
             }
 

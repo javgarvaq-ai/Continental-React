@@ -422,3 +422,17 @@ Full OWASP breakdown in conversation history. Other findings: all migrations syn
 - Option B (RLS/RPC hardening): migrate all direct table writes to RPCs, drop REST write policies on transactional tables — schedule after bar is stable post-launch
 - Post-payment tip from POS (Option C)
 - PosPage.jsx split (A1) — 64KB, zero operational risk
+
+---
+
+## Session May 29th — Fix ticket borroso en impresora térmica
+
+Causa: `window.print()` rasteriza el ticket como bitmap. Emojis a color, texto verde y anti-aliasing de Courier New empeoran el borroso forzando modo gráfico.
+
+### Cambios quirúrgicos en `src/components/Ticket.jsx` → `buildTicketHtml()`
+- [ ] Quitar emoji 🍾 (línea ~88) → reemplazar por `[GRATIS]`
+- [ ] Cambiar `color:#2e7d32` (verde) → `color:#000000`
+- [ ] `font-family: "Courier New", Courier, monospace` → `font-family: monospace`
+- [ ] Añadir regla CSS global de impresión: `-webkit-print-color-adjust: exact; color-adjust: exact; text-rendering: geometricPrecision;`
+
+Nota: el emoji ⚠️ vive en el mensaje de pop-up bloqueado (línea ~380), NO en el ticket impreso. No se toca.
