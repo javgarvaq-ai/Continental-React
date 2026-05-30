@@ -211,6 +211,7 @@ function buildTicketHtml({
               background: #fff;
               color: #000;
               font-family: monospace;
+              font-weight: bold;
               width: 58mm;
             }
 
