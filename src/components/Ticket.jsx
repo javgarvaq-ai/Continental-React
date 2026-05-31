@@ -402,6 +402,11 @@ export function printTicket({ tipo = 'pagado', comanda, items, unit, payment = n
         printWindow.onafterprint = function () {
           printWindow.close();
         };
+        setTimeout(function () {
+          if (!printWindow.closed) {
+            printWindow.close();
+          }
+        }, 2000);
       } catch (error) {
         console.error('Error printing ticket:', error);
       }
