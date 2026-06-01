@@ -131,6 +131,9 @@ function TopBar({
                         Admin
                     </button>
                 )}
+                <span style={{ marginLeft: 'auto', fontSize: '11px', color: '#555', userSelect: 'none' }}>
+                    v{__APP_VERSION__}
+                </span>
             </div>
         </>
     )
