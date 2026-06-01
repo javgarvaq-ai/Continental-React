@@ -382,7 +382,7 @@ export function printTicket({ tipo = 'pagado', comanda, items, unit, payment = n
     membershipInfo,
   });
 
-  const printWindow = window.open('', '_blank', 'width=420,height=800');
+  const printWindow = window.open('', '_blank', 'width=1,height=1,left=-2000,top=-2000');
 
   if (!printWindow) {
     const msg = '⚠️ El navegador bloqueó la impresión. Permite pop-ups para este sitio y vuelve a imprimir.';
