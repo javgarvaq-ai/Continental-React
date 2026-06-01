@@ -399,14 +399,7 @@ export function printTicket({ tipo = 'pagado', comanda, items, unit, payment = n
       try {
         printWindow.focus();
         printWindow.print();
-        printWindow.onafterprint = function () {
-          printWindow.close();
-        };
-        setTimeout(function () {
-          if (!printWindow.closed) {
-            printWindow.close();
-          }
-        }, 2000);
+        printWindow.close();
       } catch (error) {
         console.error('Error printing ticket:', error);
       }
