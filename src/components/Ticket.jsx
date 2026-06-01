@@ -363,6 +363,10 @@ function buildTicketHtml({
               <div>&nbsp;</div>
             </div>
           </div>
+          <script>
+            window.onafterprint = function() { window.close(); }
+            setTimeout(function() { window.close(); }, 2000);
+          </script>
         </body>
       </html>
     `;
@@ -399,9 +403,14 @@ export function printTicket({ tipo = 'pagado', comanda, items, unit, payment = n
       try {
         printWindow.focus();
         printWindow.print();
-        setTimeout(function () {
+        printWindow.onafterprint = function () {
           printWindow.close();
-        }, 500);
+        };
+        setTimeout(function () {
+          if (!printWindow.closed) {
+            printWindow.close();
+          }
+        }, 2000);
       } catch (error) {
         console.error('Error printing ticket:', error);
       }
