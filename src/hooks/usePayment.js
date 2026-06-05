@@ -318,6 +318,12 @@ export function usePayment({
                 cambio:        paymentSummary.cambio,
             })
 
+            // Abre el cajón de dinero si el pago incluye efectivo.
+            // Fire-and-forget: si el script local no corre, el POS no falla.
+            if (netCashApplied > 0) {
+                fetch('http://127.0.0.1:6543/open-drawer', { method: 'POST' }).catch(() => {});
+            }
+
             let printBlocked = false
             printTicket({
                 tipo: 'pagado',

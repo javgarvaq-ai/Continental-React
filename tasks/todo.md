@@ -436,3 +436,17 @@ Causa: `window.print()` rasteriza el ticket como bitmap. Emojis a color, texto v
 - [ ] Añadir regla CSS global de impresión: `-webkit-print-color-adjust: exact; color-adjust: exact; text-rendering: geometricPrecision;`
 
 Nota: el emoji ⚠️ vive en el mensaje de pop-up bloqueado (línea ~380), NO en el ticket impreso. No se toca.
+
+---
+
+## Session June 3rd — Abrir cajón de dinero al cobrar efectivo
+
+Script local en `http://127.0.0.1:6543` abre el cajón al recibir `POST /open-drawer`. Llamarlo desde el POS al confirmar un pago que incluya efectivo.
+
+### Cambio único en `src/hooks/usePayment.js` → `handleConfirmPayment`
+- [x] Insertar fetch al cajón justo después del bloque `computePaymentBreakdown` y antes de `printTicket`
+- [x] Condición: solo dispara si `netCashApplied > 0` (pago con componente efectivo)
+- [x] `fetch(...).catch(() => {})` — fire-and-forget; si el script no corre, el POS no crashea ni muestra error
+- [x] No tocar nada más — aplicado, sin imports nuevos ni cambios en `printTicket`
+
+Aplicado 2026-06-03. Lint: sin errores nuevos (el error preexistente en `data` línea ~274 no se tocó).
