@@ -321,7 +321,7 @@ export function usePayment({
             // Abre el cajón de dinero si el pago incluye efectivo.
             // Fire-and-forget: si el script local no corre, el POS no falla.
             if (netCashApplied > 0) {
-                fetch('http://127.0.0.1:6543/open-drawer', { method: 'POST' }).catch(() => {});
+                fetch('http://localhost:6543/open-drawer', { method: 'POST' }).catch(() => {});
             }
 
             let printBlocked = false
