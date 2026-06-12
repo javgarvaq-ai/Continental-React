@@ -4,14 +4,24 @@ import { getCashMovements } from '../services/shifts'
 import { money } from '../utils/money'
 
 // ── Helpers ───────────────────────────────────────────────────
+// Local (Mexico) date string — toISOString() returns the UTC date, which is
+// already "tomorrow" during the evening (UTC-6), making "Hoy" point at the
+// wrong day during the bar's busiest hours.
+function toLocalDateString(date) {
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+}
+
 function today() {
-    return new Date().toISOString().split('T')[0]
+    return toLocalDateString(new Date())
 }
 
 function nDaysAgo(n) {
     const d = new Date()
     d.setDate(d.getDate() - n)
-    return d.toISOString().split('T')[0]
+    return toLocalDateString(d)
 }
 
 function formatDateTime(iso) {

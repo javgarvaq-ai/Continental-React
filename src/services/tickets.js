@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { addDaysToDateString } from './reports'
 
 export async function getComandaByFolio(folioNumero) {
     const { data: comanda, error } = await supabase
@@ -86,8 +87,11 @@ export async function searchComandas({ startDate, endDate, search = '', status =
             customers ( name, customer_number ),
             payments ( total_paid, efectivo, tarjeta, transferencia, tip_amount )
         `)
-        .gte('opened_at', `${startDate}T00:00:00`)
-        .lte('opened_at', `${endDate}T23:59:59`)
+        // Operational-day cutoff (06:00 local, -06:00) so a shift crossing
+        // midnight isn't split across two calendar days — same convention as
+        // buildDailyRevenue. Previously missing the -06:00 offset entirely.
+        .gte('opened_at', `${startDate}T06:00:00-06:00`)
+        .lt('opened_at', `${addDaysToDateString(endDate, 1)}T06:00:00-06:00`)
         .order('opened_at', { ascending: false })
         .limit(limit)
 

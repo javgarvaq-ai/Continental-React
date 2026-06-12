@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { addDaysToDateString } from './reports'
 
 // ─── Read ──────────────────────────────────────────────────────────────────
 
@@ -134,8 +135,10 @@ export async function getCashMovements({ startDate, endDate } = {}) {
         `)
         .order('created_at', { ascending: false })
 
-    if (startDate) query = query.gte('created_at', `${startDate}T00:00:00-06:00`)
-    if (endDate)   query = query.lte('created_at', `${endDate}T23:59:59-06:00`)
+    // Operational-day cutoff (06:00 local) so a shift crossing midnight isn't
+    // split across two calendar days — same convention as buildDailyRevenue.
+    if (startDate) query = query.gte('created_at', `${startDate}T06:00:00-06:00`)
+    if (endDate)   query = query.lt('created_at', `${addDaysToDateString(endDate, 1)}T06:00:00-06:00`)
 
     const { data, error } = await query
     return { data, error }
@@ -167,8 +170,10 @@ export async function getShifts({ startDate, endDate } = {}) {
         `)
         .order('opened_at', { ascending: false })
 
-    if (startDate) query = query.gte('opened_at', `${startDate}T00:00:00-06:00`)
-    if (endDate)   query = query.lte('opened_at', `${endDate}T23:59:59-06:00`)
+    // Operational-day cutoff (06:00 local) so a shift crossing midnight isn't
+    // split across two calendar days — same convention as buildDailyRevenue.
+    if (startDate) query = query.gte('opened_at', `${startDate}T06:00:00-06:00`)
+    if (endDate)   query = query.lt('opened_at', `${addDaysToDateString(endDate, 1)}T06:00:00-06:00`)
 
     const { data, error } = await query
     return { data, error }

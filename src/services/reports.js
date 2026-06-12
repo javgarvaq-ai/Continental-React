@@ -164,7 +164,7 @@ export function buildDayOfWeekStats(payments) {
 // Adds `days` calendar days to a 'YYYY-MM-DD' string using pure UTC date
 // arithmetic — avoids local-timezone drift when computing the exclusive
 // end bound of a date range.
-function addDaysToDateString(dateStr, days) {
+export function addDaysToDateString(dateStr, days) {
     const [y, m, d] = dateStr.split('-').map(Number)
     const date = new Date(Date.UTC(y, m - 1, d))
     date.setUTCDate(date.getUTCDate() + days)
@@ -385,8 +385,10 @@ export async function getComandaEvents({ startDate, endDate, eventType } = {}) {
         .order('created_at', { ascending: false })
         .limit(500)
 
-    if (startDate)  query = query.gte('created_at', `${startDate}T00:00:00-06:00`)
-    if (endDate)    query = query.lte('created_at', `${endDate}T23:59:59-06:00`)
+    // Operational-day cutoff (06:00 local) so a shift crossing midnight isn't
+    // split across two calendar days — same convention as buildDailyRevenue.
+    if (startDate)  query = query.gte('created_at', `${startDate}T06:00:00-06:00`)
+    if (endDate)    query = query.lt('created_at', `${addDaysToDateString(endDate, 1)}T06:00:00-06:00`)
     if (eventType && eventType !== 'all') query = query.eq('event_type', eventType)
 
     const { data, error } = await query

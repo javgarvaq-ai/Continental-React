@@ -14,6 +14,14 @@
 - Lint: mismos patrones preexistentes (useCallback/useEffect) que `AnalyticsPage`/`WeeklyReportPage`, sin issues nuevos. Build falla en sandbox por binding nativo de rolldown faltante — no relacionado a estos cambios.
 - [x] **Fix FK ambigua**: `comanda_items` tiene 2 FKs a `products` (ya documentado en lessons.md). `getProductSalesForPeriod` y `getTopCategoriesRevenue` usaban `products(...)` sin hint → error "more than one relationship was found". Ambas ahora usan `products:products!comanda_items_product_id_fkey(...)`. Esto también arregla silenciosamente la sección "Categorías" de Analytics, que probablemente devolvía vacío.
 
+## Fix corte de día (medianoche → operacional 06:00) en Folios/Movimientos/Turnos/Eventos ✅ (2026-06-12)
+
+- [x] `src/services/reports.js` → `addDaysToDateString` ahora exportada; `getComandaEvents` usa corte operacional (06:00-06:00, `lt` exclusivo) en vez de `T00:00:00`/`T23:59:59`.
+- [x] `src/services/shifts.js` → `getCashMovements` y `getShifts`: mismo cambio de corte operacional.
+- [x] `src/services/tickets.js` → `searchComandas`: mismo cambio + corrige bug adicional (faltaba el offset `-06:00`, las fechas se interpretaban sin timezone).
+- [x] `CashMovementsAdminPage.jsx`, `ComandaEventsPage.jsx`, `FolioHistoryPage.jsx`, `ShiftHistoryPage.jsx` → helpers `today()`/`nDaysAgo()` cambiados de `toISOString().split('T')[0]` (fecha UTC) a fecha local México (`toLocalDateString`), igual que `ProductSalesReportPage`/`WeeklyReportPage`. Antes, entre 18:00-23:59 hora local "Hoy" apuntaba al día siguiente.
+- Sin cambios de esquema/RLS. No se tocó nada más.
+
 ## Fix unidades de combos (3x2/Cubeta) en "Ventas por producto" ✅ (2026-06-12)
 
 - [x] `getProductSalesForPeriod`: ya no filtra `is_free_mixer=false` en la query — trae también las filas mixer (cervezas seleccionadas para 3x2/Cubeta) junto con `product_id`, `source_shot_product_id` y categoría.
