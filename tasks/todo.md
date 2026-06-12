@@ -1,3 +1,10 @@
+## Session June 12th — Operational day cutoff ✅
+
+- [x] `src/services/dashboard.js` → `startOfToday()`: corte ahora a las 06:00 local (-06:00) en vez de 00:00. Antes de las 6am, "hoy" sigue siendo la fecha de ayer. Afecta `getTodayPaymentStats`, `getTopProductsToday`, `getMembershipStatsToday` — ya no se pierden ventas nocturnas de un turno que cruza medianoche.
+- [x] `src/services/reports.js` → nueva `operationalDateKey(timestamp)`: agrupa por "día operativo" (corte 06:00 local) en vez de día calendario UTC. `buildDailyRevenue` ahora usa esta función tanto para generar los buckets como para clasificar cada pago — corrige el bug de timezone (UTC vs -06:00) y evita que un turno nocturno se divida entre dos días en Analytics.
+- [x] `src/services/reports.js` → `buildDayOfWeekStats`: mismo fix — usa `operationalDateKey()` (parseado en UTC) en lugar de `new Date(p.created_at).getDay()`. Corrige inconsistencia: "Día de la semana" mostraba ventas en Viernes que "Ingresos diarios" ya atribuía correctamente a Jueves (turno nocturno).
+- Sin cambios de esquema ni RLS. `isoDate()` queda exportada pero sin uso (no se removió para no ampliar el alcance).
+
 # Project Tasks (TODO)
 
 ## Fase 1 — Completada ✅

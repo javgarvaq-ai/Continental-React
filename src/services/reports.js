@@ -19,6 +19,18 @@ export function isoDate(date) {
     return date.toISOString().split('T')[0]
 }
 
+// ── Operational day helper ────────────────────────────────────
+// Mexico (-06:00). The bar's "day" runs past midnight (shifts often close
+// around 2am), so the cutover is 06:00 local instead of 00:00 — a sale at
+// 1am still belongs to the previous day's bucket. Used to bucket payments
+// for Analytics so a single overnight shift isn't split across two days.
+const OPERATIONAL_DAY_SHIFT_MS = (6 + 6) * 60 * 60 * 1000 // -06:00 offset + 6h cutover
+
+export function operationalDateKey(timestamp) {
+    const ms = new Date(timestamp).getTime() - OPERATIONAL_DAY_SHIFT_MS
+    return new Date(ms).toISOString().split('T')[0]
+}
+
 export function currentMonthDate() {
     const d = new Date()
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
@@ -105,14 +117,15 @@ export async function getPaymentsForPeriod(days = 14) {
 
 export function buildDailyRevenue(payments, days = 14) {
     const buckets = {}
+    const now = Date.now()
     for (let i = days - 1; i >= 0; i--) {
-        const d = new Date()
-        d.setDate(d.getDate() - i)
-        const key = isoDate(d)
-        buckets[key] = { date: key, label: d.toLocaleDateString('es-MX', { month: 'short', day: 'numeric' }), revenue: 0, comandas: 0, tips: 0 }
+        const ts = now - i * 24 * 60 * 60 * 1000
+        const key = operationalDateKey(ts)
+        const label = new Date(ts).toLocaleDateString('es-MX', { month: 'short', day: 'numeric', timeZone: 'America/Mexico_City' })
+        buckets[key] = { date: key, label, revenue: 0, comandas: 0, tips: 0 }
     }
     payments.forEach(p => {
-        const key = p.created_at.split('T')[0]
+        const key = operationalDateKey(p.created_at)
         if (buckets[key]) {
             buckets[key].revenue  += Number(p.total_paid  || 0)
             buckets[key].tips     += Number(p.tip_amount  || 0)
@@ -136,7 +149,12 @@ export function buildDayOfWeekStats(payments) {
     const LABELS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
     const days = LABELS.map((label, i) => ({ label, dow: i, revenue: 0, count: 0 }))
     payments.forEach(p => {
-        const dow = new Date(p.created_at).getDay()
+        // Use the same operational-day key as buildDailyRevenue so a late-night
+        // sale is counted on the day its shift started, not the calendar day
+        // it landed on. Parse as UTC to avoid the browser's local timezone
+        // shifting the weekday of a date-only string.
+        const [y, m, d] = operationalDateKey(p.created_at).split('-').map(Number)
+        const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay()
         days[dow].revenue += Number(p.total_paid || 0)
         days[dow].count   += 1
     })
