@@ -14,6 +14,15 @@
 - Lint: mismos patrones preexistentes (useCallback/useEffect) que `AnalyticsPage`/`WeeklyReportPage`, sin issues nuevos. Build falla en sandbox por binding nativo de rolldown faltante — no relacionado a estos cambios.
 - [x] **Fix FK ambigua**: `comanda_items` tiene 2 FKs a `products` (ya documentado en lessons.md). `getProductSalesForPeriod` y `getTopCategoriesRevenue` usaban `products(...)` sin hint → error "more than one relationship was found". Ambas ahora usan `products:products!comanda_items_product_id_fkey(...)`. Esto también arregla silenciosamente la sección "Categorías" de Analytics, que probablemente devolvía vacío.
 
+## Fix unidades de combos (3x2/Cubeta) en "Ventas por producto" ✅ (2026-06-12)
+
+- [x] `getProductSalesForPeriod`: ya no filtra `is_free_mixer=false` en la query — trae también las filas mixer (cervezas seleccionadas para 3x2/Cubeta) junto con `product_id`, `source_shot_product_id` y categoría.
+- [x] Calcula, por `source_shot_product_id`, cuántas filas mixer tienen la MISMA categoría que el combo (ej. "A. Cerveza" == "A. Cerveza" → cuenta; "N. Bebidas sin alcohol" != "J. Shots" → no cuenta).
+- [x] Para la fila del combo (`is_free_mixer=false`), si existe ese conteo, lo usa como `units` en vez de la cantidad sumada. Ingresos sin cambio.
+- [x] Filas mixer en sí (is_free_mixer=true) nunca generan su propia fila en el reporte — solo se usan para el conteo.
+- Alcance: solo `getProductSalesForPeriod`. No toca Analytics/Dashboard/`getTopCategoriesRevenue`.
+- Pendiente: validar en el reporte real que "Cerveza 3x2" pase de 3→9 y "Cubeta Especial 6" de 1→6, manteniendo el mismo $.
+
 ## Plan — Reporte "Ventas por producto" (pendiente de aprobación)
 
 ### Objetivo

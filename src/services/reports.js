@@ -192,15 +192,38 @@ export async function getProductSalesForPeriod({ startDate, endDate }) {
 
     const { data: items, error } = await supabase
         .from('comanda_items')
-        .select('quantity, unit_price, is_free_benefit, products:products!comanda_items_product_id_fkey(name, categories(name))')
+        .select('quantity, unit_price, is_free_benefit, is_free_mixer, product_id, source_shot_product_id, products:products!comanda_items_product_id_fkey(name, categories(name))')
         .in('comanda_id', comandas.map(c => c.id))
         .eq('status', 'active')
-        .eq('is_free_mixer', false)
 
     if (error || !items) return { data: [], error }
 
+    // Category lookup by product_id — needed to compare a combo's category
+    // against its selected "mixer" items (e.g. the beers chosen for a
+    // "Cerveza 3x2" / "Cubeta" pack, added via the same shot+free-mixer flow).
+    const categoryByProductId = {}
+    items.forEach(item => {
+        categoryByProductId[item.product_id] = item.products?.categories?.name || 'Sin categoría'
+    })
+
+    // For combos where the chosen mixers are the SAME category as the combo
+    // itself (beer packs), the real unit count is the number of mixer rows,
+    // not the combo's own quantity. Mixers of a different category (e.g. a
+    // shot's free soda) keep the combo's own quantity untouched.
+    const mixerUnitCounts = {} // source_shot_product_id -> total mixer units of same category
+    items.forEach(item => {
+        if (!item.is_free_mixer || !item.source_shot_product_id) return
+        const comboCategory = categoryByProductId[item.source_shot_product_id]
+        const mixerCategory = item.products?.categories?.name || 'Sin categoría'
+        if (comboCategory && mixerCategory === comboCategory) {
+            mixerUnitCounts[item.source_shot_product_id] =
+                (mixerUnitCounts[item.source_shot_product_id] || 0) + Number(item.quantity || 1)
+        }
+    })
+
     const products = {}
     items.forEach(item => {
+        if (item.is_free_mixer) return // mixer rows never get their own line
         if (item.is_free_benefit) return
         const productName  = item.products?.name || 'Desconocido'
         const categoryName = item.products?.categories?.name || 'Sin categoría'
@@ -208,9 +231,16 @@ export async function getProductSalesForPeriod({ startDate, endDate }) {
         const revenue = Number(item.unit_price || 0) * units
 
         const key = productName
-        if (!products[key]) products[key] = { productName, categoryName, units: 0, revenue: 0 }
+        if (!products[key]) products[key] = { productName, categoryName, units: 0, revenue: 0, productId: item.product_id }
         products[key].units   += units
         products[key].revenue += revenue
+    })
+
+    // Override unit counts for same-category combos with the real mixer count.
+    Object.values(products).forEach(p => {
+        const override = mixerUnitCounts[p.productId]
+        if (override !== undefined) p.units = override
+        delete p.productId
     })
 
     return { data: Object.values(products).sort((a, b) => b.revenue - a.revenue), error: null }
