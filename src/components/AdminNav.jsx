@@ -9,6 +9,7 @@ const NAV_SECTIONS = [
             { label: 'POS',           path: '/pos'                    },
             { label: '📊 Dashboard',  path: '/dashboard'              },
             { label: '🧾 Folios',     path: '/admin/folios'           },
+            { label: '🛒 Ventas',     path: '/admin/product-sales'    },
             { label: '📈 Analytics',  path: '/analytics'              },
             { label: '💰 Reporte',   path: '/weekly-report'          },
             { label: '👥 Clientes',   path: '/customers/intelligence' },

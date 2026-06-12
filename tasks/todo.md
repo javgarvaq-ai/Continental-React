@@ -5,6 +5,41 @@
 - [x] `src/services/reports.js` → `buildDayOfWeekStats`: mismo fix — usa `operationalDateKey()` (parseado en UTC) en lugar de `new Date(p.created_at).getDay()`. Corrige inconsistencia: "Día de la semana" mostraba ventas en Viernes que "Ingresos diarios" ya atribuía correctamente a Jueves (turno nocturno).
 - Sin cambios de esquema ni RLS. `isoDate()` queda exportada pero sin uso (no se removió para no ampliar el alcance).
 
+## Reporte "Ventas por producto" ✅ (2026-06-12)
+
+- [x] `src/services/reports.js` → `getProductSalesForPeriod({ startDate, endDate })` + helper `addDaysToDateString`
+- [x] `src/pages/ProductSalesReportPage.jsx` (nuevo) — filtros (rango fechas default ayer, búsqueda texto libre, categoría), tabla ordenable, toggle agrupar por categoría, totales, export CSV
+- [x] `src/App.jsx` → ruta `/admin/product-sales`, admin-only (`AuthRoute`)
+- [x] `src/components/AdminNav.jsx` → botón "🛒 Ventas"
+- Lint: mismos patrones preexistentes (useCallback/useEffect) que `AnalyticsPage`/`WeeklyReportPage`, sin issues nuevos. Build falla en sandbox por binding nativo de rolldown faltante — no relacionado a estos cambios.
+- [x] **Fix FK ambigua**: `comanda_items` tiene 2 FKs a `products` (ya documentado en lessons.md). `getProductSalesForPeriod` y `getTopCategoriesRevenue` usaban `products(...)` sin hint → error "more than one relationship was found". Ambas ahora usan `products:products!comanda_items_product_id_fkey(...)`. Esto también arregla silenciosamente la sección "Categorías" de Analytics, que probablemente devolvía vacío.
+
+## Plan — Reporte "Ventas por producto" (pendiente de aprobación)
+
+### Objetivo
+Página admin-only para ver, en un rango de fechas custom, unidades vendidas e ingresos por producto y/o categoría, con búsqueda de texto libre para agrupar por palabra clave (ej. "trago", "caguama") sin importar categoría.
+
+### Pasos
+- [ ] `src/services/reports.js` → nueva `getProductSalesForPeriod({ startDate, endDate })`
+  - Mismo patrón que `getTopCategoriesRevenue`: `comandas` (status `paid`, `cobrado_at` en rango, corte 6am operacional) → `comanda_items` (active, `is_free_mixer=false`, `is_free_benefit=false`) → `products(name, categories(name))`
+  - Retorna array `{ productName, categoryName, units, revenue }` agregado por producto
+- [ ] `src/pages/ProductSalesReportPage.jsx` (nuevo)
+  - Filtros: rango de fechas (default = ayer), buscador de texto libre, selector opcional de categoría
+  - Tabla: Producto · Categoría · Unidades · Ingresos, ordenable por click en encabezado
+  - Toggle "Agrupar por categoría"
+  - Fila de totales (respeta filtros activos)
+  - Botón exportar CSV (client-side, blob, sin librerías nuevas)
+- [ ] `src/App.jsx` → nueva ruta, `AuthRoute` (admin-only, igual que Reporte semanal — managers no entran)
+- [ ] `src/components/AdminNav.jsx` → botón nuevo en sección "Vistas"
+
+### Acceso
+Admin-only (AuthRoute), igual que Reporte semanal.
+
+### Default
+Rango de fechas inicial = "ayer" (día operativo, corte 6am).
+
+---
+
 # Project Tasks (TODO)
 
 ## Fase 1 — Completada ✅

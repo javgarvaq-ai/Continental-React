@@ -27,6 +27,7 @@ import CashMovementsAdminPage from './pages/CashMovementsAdminPage'
 import ShiftHistoryPage from './pages/ShiftHistoryPage'
 import ComandaEventsPage from './pages/ComandaEventsPage'
 import FolioHistoryPage from './pages/FolioHistoryPage'
+import ProductSalesReportPage from './pages/ProductSalesReportPage'
 
 function App() {
   const verifySession = useAuthStore(state => state.verifySession)
@@ -139,6 +140,7 @@ function App() {
           }
         />
         <Route path="/admin/folios" element={<AuthRoute><FolioHistoryPage /></AuthRoute>} />
+        <Route path="/admin/product-sales" element={<AuthRoute><ProductSalesReportPage /></AuthRoute>} />
         <Route path="/admin/cash-movements" element={<AuthRoute><CashMovementsAdminPage /></AuthRoute>} />
         <Route path="/admin/shifts" element={<AuthRoute><ShiftHistoryPage /></AuthRoute>} />
         <Route path="/admin/comanda-events" element={<AuthRoute><ComandaEventsPage /></AuthRoute>} />

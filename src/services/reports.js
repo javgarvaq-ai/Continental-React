@@ -161,6 +161,61 @@ export function buildDayOfWeekStats(payments) {
     return days
 }
 
+// Adds `days` calendar days to a 'YYYY-MM-DD' string using pure UTC date
+// arithmetic — avoids local-timezone drift when computing the exclusive
+// end bound of a date range.
+function addDaysToDateString(dateStr, days) {
+    const [y, m, d] = dateStr.split('-').map(Number)
+    const date = new Date(Date.UTC(y, m - 1, d))
+    date.setUTCDate(date.getUTCDate() + days)
+    return date.toISOString().split('T')[0]
+}
+
+// ── Product sales report ────────────────────────────────────
+// Returns per-product unit/revenue totals for a custom date range.
+// Range bounds use the operational-day cutoff (06:00 local) so a shift that
+// crosses midnight on `endDate` is fully included.
+// Returns: { data: [{ productName, categoryName, units, revenue }], error }
+export async function getProductSalesForPeriod({ startDate, endDate }) {
+    const startIso = `${startDate}T06:00:00-06:00`
+    const endIso   = `${addDaysToDateString(endDate, 1)}T06:00:00-06:00`
+
+    const { data: comandas, error: comandasError } = await supabase
+        .from('comandas')
+        .select('id')
+        .eq('status', 'paid')
+        .gte('cobrado_at', startIso)
+        .lt('cobrado_at', endIso)
+
+    if (comandasError) return { data: [], error: comandasError }
+    if (!comandas || comandas.length === 0) return { data: [], error: null }
+
+    const { data: items, error } = await supabase
+        .from('comanda_items')
+        .select('quantity, unit_price, is_free_benefit, products:products!comanda_items_product_id_fkey(name, categories(name))')
+        .in('comanda_id', comandas.map(c => c.id))
+        .eq('status', 'active')
+        .eq('is_free_mixer', false)
+
+    if (error || !items) return { data: [], error }
+
+    const products = {}
+    items.forEach(item => {
+        if (item.is_free_benefit) return
+        const productName  = item.products?.name || 'Desconocido'
+        const categoryName = item.products?.categories?.name || 'Sin categoría'
+        const units  = Number(item.quantity || 1)
+        const revenue = Number(item.unit_price || 0) * units
+
+        const key = productName
+        if (!products[key]) products[key] = { productName, categoryName, units: 0, revenue: 0 }
+        products[key].units   += units
+        products[key].revenue += revenue
+    })
+
+    return { data: Object.values(products).sort((a, b) => b.revenue - a.revenue), error: null }
+}
+
 export async function getTopCategoriesRevenue(days = 14) {
     const { data: comandas } = await supabase
         .from('comandas')
@@ -172,7 +227,7 @@ export async function getTopCategoriesRevenue(days = 14) {
 
     const { data: items, error } = await supabase
         .from('comanda_items')
-        .select('quantity, unit_price, is_free_benefit, products(categories(name))')
+        .select('quantity, unit_price, is_free_benefit, products:products!comanda_items_product_id_fkey(categories(name))')
         .in('comanda_id', comandas.map(c => c.id))
         .eq('status', 'active')
         .eq('is_free_mixer', false)
