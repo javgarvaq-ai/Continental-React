@@ -1,7 +1,7 @@
 {
   "name": "continental-react",
   "private": true,
-  "version": "2.6.11",
+  "version": "2.7.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
