@@ -1,3 +1,176 @@
+## Cierre de día — 2026-06-13 ✅
+
+Sesión tras 3 días de operación real. Todo lo de hoy es **solo lectura/UI, sin cambios de esquema ni RLS**.
+
+Entregado:
+1. **Scripts de verificación de conteo** → `tasks/verificacion_conteo_2026-06-13.sql` (12 bloques SELECT para reconciliar el POS contra los reportes del admin; corte operacional 06:00). NO es migración, no se pushea — se corre a mano en el SQL Editor.
+2. **Diagnóstico Analytics vs Reporte** ($19,804 vs $18,014 = propinas): Analytics suma `total_paid` (incluye propina); Reporte suma `final_total` (sin propina). Es de definición, no de conteo. Decidido: "ventas sin propina" en todo (pendiente de implementar — backlog).
+3. **Vista Ledger** (`/admin/ledger`, admin-only): feed cronológico folios + movimientos con saldo corrido por ubicación (cajón anclado por turno; banco/caja fuerte acumulados). Archivos: `utils/ledger.js`, `services/ledger.js`, `pages/LedgerPage.jsx`, ruta en `App.jsx`, botón en `AdminNav.jsx`.
+4. **Banco neto estimado** (comisión MP): línea bajo el saldo de Banco = bruto − (tarjeta × 3.5% × 1.16). Solo display.
+5. **POS — navegación de categorías**: barra sticky con scroll-spy + scroll-to-top al agregar (con fix para combos `is_shot` vía efecto, por el scroll anchoring).
+
+Backlog / pendiente:
+- Implementar "ventas sin propina" en Analytics/Dashboard/horas/día-semana (decidido, no hecho).
+- Smoke test en tablet de: Ledger (cuadre banco/caja fuerte vs Reporte; cajón vs cierre), barra de categorías, scroll-to-top normales y combos.
+- `STICKY_BAR_OFFSET=64` — ajustar si la barra hace wrap y tapa el header.
+
+Lecciones capturadas en `lessons.md`: ShotMixerSelector inline + scroll anchoring · comisiones MP Point/Tap ≠ Checkout · sandbox bash mount stale (verificar con @babel/parser) · convención starting_cash del Ledger.
+
+---
+
+## Plan — Navegación de categorías + subir al agregar (POS) — 2026-06-13 (pendiente de aprobación)
+
+### Contexto (verificado en código)
+- `components/ProductCatalog.jsx`: render de categorías (orden alfabético) con header + grid de botones de producto. Componente sin hooks hoy.
+- `pages/PosPage.jsx`: rejilla 2 columnas `1.3fr 1fr` (catálogo | comanda). **No hay contenedor con scroll propio: scrollea la ventana** (carrito sube/baja con la página).
+- `handleAddProduct` (hook) es el handler de agregar. Shots abren modal de mixers (`shotSelectorState.open`).
+
+### Decisiones (Javi, 2026-06-13)
+- Barra de categorías **sticky** (pegada arriba al hacer scroll) con **resaltado de la categoría actual**.
+- Al agregar un producto: **subir al inicio siempre**.
+
+### Pasos
+- [ ] `components/ProductCatalog.jsx`:
+    - Importar `useRef` (+ `useEffect` si se hace scroll-spy).
+    - Mapa de refs por categoría (`sectionRefs`) en cada `<div>` de sección.
+    - **Barra sticky** arriba de la lista: `position: sticky; top: 0; z-index`, fondo sólido (cubre productos al pasar), `flex-wrap`. Un botón por categoría (mismo orden alfabético, color de `getCategoryColor`). Click → `sectionRefs[cat].scrollIntoView({ behavior:'smooth', block:'start' })`.
+    - `scrollMarginTop` en cada header de categoría = alto de la barra, para que no quede tapado por la barra al saltar.
+    - **Resaltado de categoría activa**: `IntersectionObserver` ligero que marca cuál sección está visible y resalta su botón. (Si añade demasiada complejidad al implementar, lo dejo como mejora aparte — la navegación funciona sin esto.)
+    - La barra y la navegación quedan **siempre activas**, aunque la comanda no esté `open` (los botones de producto sí siguen deshabilitados como hoy).
+- [ ] `pages/PosPage.jsx`:
+    - Envolver el `onAddProduct` que recibe `ProductCatalog`: nuevo handler que llama `handleAddProduct(product)` y luego `window.scrollTo({ top: 0, behavior: 'smooth' })`. Mantiene `ProductCatalog` sin acoplarse a `window`.
+
+### Alcance / no-objetivos
+- **Solo UI/navegación.** No toca lógica de carrito, cobro, ni datos. Sin esquema/RLS.
+- No cambio el scroll de ventana a contenedor propio (fuera de alcance; sería más invasivo).
+
+### Edge cases a cuidar
+- Barra sticky tapando el header al saltar → `scrollMarginTop`.
+- Shots: el tap abre modal; el scroll-to-top igual ocurre (inofensivo, el modal es overlay fijo).
+- Muchas categorías → la barra hace wrap (revisar en ancho de tablet).
+- Comanda no `open`: navegación de categorías funciona; agregar sigue deshabilitado (no dispara scroll).
+
+### Verificación
+- [ ] Lint de los 2 archivos (sin issues nuevos vs patrón existente).
+- [ ] Smoke test manual (Javi en la tablet/navegador): saltar a categorías, confirmar que el header no queda tapado, y que al agregar desde el fondo sube al inicio.
+
+### Resultado / Review (2026-06-13) ✅
+- [x] `components/ProductCatalog.jsx` reescrito: `useRef`/`useState`/`useEffect`; barra **sticky** (`top:0`, `flex-wrap`) con botón por categoría (color + resaltado activo); `IntersectionObserver` para scroll-spy; `sectionRefs` + `scrollIntoView` al hacer click; `scrollMarginTop = 64px` en cada sección para que la barra no tape el header. Botones de producto sin cambios (mismo `disabled`).
+- [x] `pages/PosPage.jsx`: `onAddProduct` ahora envuelve `handleAddProduct` + `window.scrollTo({top:0,behavior:'smooth'})`. 3 líneas, sin tocar el hook.
+- [x] **Sintaxis validada con `@babel/parser`** (JSX/ESM): ProductCatalog.jsx OK. Edit de PosPage es un handler inline trivial, confirmado por lectura.
+- ⚠️ **Entorno:** igual que antes, el mount de bash tiene copias stale → `eslint` por consola da "Unterminated JSX" falso. Archivos reales completos y válidos.
+- [ ] **Pendiente smoke test (Javi):** (1) la barra se queda pegada al hacer scroll; (2) al picar una categoría salta y el título no queda tapado; (3) `STICKY_BAR_OFFSET=64` se ve bien — si la barra hace wrap a 2 líneas y tapa el header, subir ese valor; (4) al agregar desde el fondo, sube al inicio.
+
+### Fix scroll-to-top en combos (2026-06-13) ✅ (corregido 2x)
+**Bug:** al picar un combo del fondo no subía al inicio.
+**Causa raíz real:** `ShotMixerSelector` NO es modal — es una sección **inline arriba del catálogo** (PosPage línea ~949, antes del grid). Al tocar un combo, el selector aparece arriba y hay que subir para elegir mixers. El `window.scrollTo` en el tap no funcionaba porque al insertarse la sección arriba, el **scroll anchoring** del navegador lo contrarresta.
+**Fix definitivo (`PosPage.jsx`, solo UI):**
+- [x] Wrapper de `onAddProduct`: scroll-to-top en el tap **solo para productos normales** (`!product.is_shot`) — ahí no se inserta nada arriba, funciona directo.
+- [x] **`useEffect` que observa `shotSelectorState.open`**: cuando se abre el selector, hace `window.scrollTo(top)` **después del render** (post-commit), así no pelea con el scroll anchoring y sube de forma confiable hasta el selector.
+- [x] Revertido el scroll en `onConfirm` (innecesario: tras confirmar ya estás arriba).
+- [x] Sintaxis validada con `@babel/parser`.
+
+---
+
+## Plan — Banco neto estimado (comisión Mercado Pago) — 2026-06-13 (pendiente de aprobación)
+
+### Objetivo
+En la tarjeta de **Banco** del Ledger, mostrar debajo del saldo bruto una línea más chica con el **dinero real estimado** después de descontar la comisión de la terminal sobre los cobros con tarjeta.
+
+### Fórmula (decidida y verificada en fuente oficial MP)
+`banco_real = saldoBanco − (ventasTarjetaAcumuladas × RATE × (1 + IVA))`
+- Mercado Pago **Point / Tap** (cobro presencial directo): **3.5% + 16% IVA, SIN cargo fijo**. (El cargo fijo de $4/transacción es solo de Link de pago y Checkout — confirmado con Javi y página oficial.)
+- Tasa efectiva ≈ **4.06%**.
+- **Solo aplica a tarjeta** (`payments.tarjeta`). Transferencias (SPEI) y depósitos de efectivo al banco entran completos.
+- Sobre el **acumulado** de ventas con tarjeta que forma el saldo, no solo el rango visible.
+- El % depende del plazo de disposición en MP (al instante 3.5% / 14 días ~3.2%). Se deja como constante editable.
+
+### Pasos
+- [ ] `src/utils/ledger.js` → constantes `CARD_COMMISSION_RATE = 0.035`, `CARD_COMMISSION_IVA = 0.16`; trackear `cardSalesCumulative` en `computeRunningBalances` (sumar `payment.tarjeta`) y exponerlo en cada fila + en `closing`/`opening`. Helper `estimateBankNet(bankBalance, cardSalesCumulative)`.
+- [ ] `src/pages/LedgerPage.jsx` → en la `BalanceCard` de Banco, línea secundaria "Real estimado (− comisión MP): $X" usando `closing.bankBalance` y `closing.cardSalesCumulative`.
+- [ ] Test puro: verificar que `estimateBankNet` descuenta correctamente y que solo afecta tarjeta (no transferencia).
+
+### Alcance
+- **Solo display.** No cambia el saldo principal del banco ni ninguna lógica de cobro/movimientos. Sin esquema/RLS.
+- Es un **estimado**; la comisión exacta la define el estado de cuenta de MP.
+
+### Resultado / Review (2026-06-13) ✅
+- [x] `src/utils/ledger.js` → constantes `CARD_COMMISSION_RATE = 0.035`, `CARD_COMMISSION_IVA = 0.16`; helper `estimateBankNet(bank, cardSales)`; `computeRunningBalances` acumula `cardSalesCumulative` (suma `payment.tarjeta`); `sliceWithOpening` expone `cardSalesCumulative` en opening/closing.
+- [x] `src/pages/LedgerPage.jsx` → `BalanceCard` acepta prop `sub`; tarjeta de Banco muestra "Real estimado (− comisión MP): $X" cuando hay ventas con tarjeta.
+- [x] **Test:** 7/7 OK (tasa, IVA, `estimateBankNet` descuenta 4.06%, solo tarjeta — transferencia NO se descuenta, banco real = bruto − tarjeta×4.06%). Core invariantes del ledger siguen 15/15.
+- ⚠️ **Nota de entorno:** el mount de bash quedó con copias truncadas/stale de los 2 archivos editados (problema de sync del sandbox), por lo que `eslint` por bash reporta errores de parseo FALSOS. Los archivos reales (vistos por la herramienta de archivo) están completos y válidos; la lógica se verificó con una copia byte-idéntica. **Javi: confirma el build/run en tu máquina** (lo estás probando ya).
+
+---
+
+## Plan — Vista Ledger multi-ubicación (pendiente de aprobación) — 2026-06-13
+
+### Objetivo
+Pantalla admin "Ledger": vista cronológica unificada de **folios cobrados + movimientos de caja**, con **saldo corrido por ubicación** (cajón / caja fuerte / banco). Responde de un vistazo "¿cuánto dinero hay y cómo fue quedando?". Filtrable por ubicación → al filtrar "cajón" se convierte en el cuadre de caja de la noche.
+
+### Principio rector
+**Reusar EXACTAMENTE el modelo de saldos que ya existe en `WeeklyReportPage.calcGlobal`** para que los saldos del ledger cuadren al peso con la sección "Posición de dinero" que ya tienes. No inventar un modelo nuevo. Signos por ubicación:
+- **drawer (cajón)**: `+ payments.efectivo`, `+ movs destino=drawer`, `− movs origen=drawer`
+- **house_safe (caja fuerte)**: `+ movs destino=house_safe`, `− movs origen=house_safe`
+- **bank (banco)**: `+ payments.tarjeta + payments.transferencia`, `+ movs destino=bank`, `− movs origen=bank` (incluye gastos de banco)
+
+### Modelo de eventos
+Cada evento se normaliza a un delta por ubicación `{ drawerΔ, houseΔ, bankΔ }`:
+- **Folio cobrado (payment)**: `drawerΔ = +efectivo`, `bankΔ = +(tarjeta+transferencia)`. Un folio puede tocar dos ubicaciones (parte en cash, parte en tarjeta) → en el feed es UNA línea que sube dos saldos.
+- **Movimiento (cash_movement)**: aplica `source_location`/`destination_location` de `config/cashMovements.js`. Una transferencia (ej. `resguardo_casa`) es UNA línea: `drawerΔ=−monto`, `houseΔ=+monto`. Los gastos (`expense`) y `propinas_entregadas` salen de su ubicación hacia un sumidero (no tienen saldo propio).
+
+### Saldo inicial (opening balance) — clave para que el saldo corrido sea REAL
+Para que el "saldo corrido" sea absoluto y no relativo al rango:
+- v1: traer todos los eventos **hasta el fin del rango**, computar saldos cronológicamente, **mostrar solo las filas dentro del rango**, y el "saldo inicial" mostrado = saldo de cada ubicación justo antes de la primera fila del rango. Exacto y sin queries extra.
+- Nota de performance (NO implementar ahora): hoy hay pocos datos; a futuro, si crece, optimizar con una query server-side de saldo inicial o snapshot. Mantener simple por ahora (CLAUDE.md: simplicity first).
+
+### DECISIÓN RESUELTA — fondo inicial (2026-06-13)
+**Hallazgo (código):** `services/auth.js → createShift` solo inserta `starting_cash` en `shifts`; **NO** genera ningún `cash_movement` por el fondo. El fondo vive solo en el turno.
+**Implicación:** `calcGlobal` (Posición de dinero) NO incluye `starting_cash` → su saldo de **cajón está subestimado por el monto del fondo**. (Bug menor preexistente del reporte viejo; NO lo arreglamos en este alcance, solo se documenta.)
+**Decisión:** el ledger **ancla el saldo del cajón por turno**: cada turno abre el cajón en su `starting_cash`, el saldo corre con los eventos de ESE turno, y al cierre se ve esperado vs contado (`expected_cash` / `cash_counted` / `difference`, que ya existen). **Banco y caja fuerte corren acumulados** entre turnos (no se resetean).
+**Pendiente menor (confirmar al ver datos reales, no bloqueante):** cómo se traspasa el cajón entre turnos (¿el fondo/efectivo se deja, se retira, o se deposita al cerrar?). Afecta solo la continuidad visual cajón entre segmentos de turno, no la correctitud dentro de cada turno.
+
+### Pasos (archivos)
+- [ ] `src/utils/ledger.js` (nuevo) — funciones **puras** (testeables, sin side effects):
+    - `buildLedgerEvents(payments, cashMovements)` → eventos `{ ts, kind, label, folio?, category?, drawerDelta, houseDelta, bankDelta, note, user }` ordenados por `ts`.
+    - `computeRunningBalances(events)` → agrega saldos corridos por ubicación.
+    - `sliceWithOpening(events, startIso, endIso)` → `{ opening:{drawer,house,bank}, rows, closing:{...} }`.
+    - Replicar signos de `calcGlobal` con cuidado (idealmente, en un paso posterior, refactorizar `calcGlobal` para que ambos compartan estas funciones y no diverjan).
+- [ ] `src/services/ledger.js` (nuevo) — `getLedgerData({ startDate, endDate })`: trae `payments` (created_at, efectivo, tarjeta, transferencia, tip_amount, comanda_id, comandas(folio)) y `cash_movements` (campos completos + users(name)) **hasta endDate**, con corte operacional 06:00-06:00 (igual que el resto de servicios).
+- [ ] `src/pages/LedgerPage.jsx` (nuevo) — patrón de `WeeklyReportPage`/`CashMovementsAdminPage`: `AdminNav`, presets de rango (Este turno / Hoy / Esta semana / custom), 3 tarjetas de saldo arriba (inicial → final por ubicación), filtro por ubicación, tabla cronológica (fecha, descripción/folio, ±cajón, ±caja fuerte, ±banco, saldo corrido, usuario/nota), export CSV. Reusar `money()`, estilos `sectionCard`.
+- [ ] `src/App.jsx` → ruta `/admin/ledger` con `AuthRoute` (**admin-only**, confirmado: `AuthRoute` redirige a `/pos` si `role !== 'admin'`).
+- [ ] `src/components/AdminNav.jsx` → botón "📒 Ledger" en sección Vistas (junto a Reporte/Movimientos). El menú admin solo lo ven admins.
+
+**Requisito de acceso (Javi, 2026-06-13):** vista NUEVA de reporte, **solo admin** — NO va dentro de Movimientos. Movimientos (`CashMovementPanel` en POS) lo usan también managers; por eso el ledger va aparte con `AuthRoute`, no `ManagerRoute`. Reevaluar dar acceso a manager más adelante si se decide.
+
+### Verificación (no marcar done sin probar)
+- [ ] **Invariante 1 (banco + caja fuerte)**: saldo final del ledger (all-time) para `house_safe` y `bank` == `calcGlobal` (houseBalance / bankBalance). Idéntico. (El **cajón** NO debe cuadrar con calcGlobal: diferirá por el fondo — eso es lo esperado, ver decisión resuelta.)
+- [ ] **Invariante 2 (cajón, lo importante)**: para cada turno, saldo final del cajón del ledger == `expected_cash` de ese turno (`getShiftSummary`). Este es el cuadre real.
+- [ ] Test unitario de `utils/ledger.js` con datos sintéticos: pago mixto (efectivo+tarjeta), transfer cajón→caja fuerte, `propinas_entregadas`, `aportacion_socio`. Verificar deltas y saldos corridos.
+- [ ] Cuadrar contra los 3 días reales y comparar saldos vs "Posición de dinero" del Reporte.
+
+### Alcance
+- **Sin cambios de esquema ni RLS.** Toda la data ya existe (`payments`, `cash_movements`, `config/cashMovements.js`).
+- Solo lectura. No toca el flujo de cobro ni el de movimientos.
+
+### Resultado / Review (2026-06-13) ✅
+Implementado. Archivos:
+- [x] `src/utils/ledger.js` (nuevo) — puro: `buildLedgerEvents`, `sortEvents`, `computeRunningBalances` (cajón anclado por turno: resetea a `starting_cash` en cada `shift_open`; house/bank acumulan), `sliceWithOpening`, `buildLedger`.
+- [x] `src/services/ledger.js` (nuevo) — `getLedgerData`: trae payments + cash_movements + shifts **sin cota inferior** (toda la historia hasta `endIso`, corte operacional 06:00) para que el saldo inicial y el seeding del cajón sean exactos. **Nota:** `payments.paid_by_user` NO tiene FK a `users` → no se hace ese join (habría dado "no relationship"); las filas de folio no muestran usuario.
+- [x] `src/pages/LedgerPage.jsx` (nuevo) — presets (Este turno / Hoy / Semana), 3 tarjetas de saldo (inicial→final), filtro por ubicación, tabla con saldo corrido, export CSV, marcadores de apertura/cierre de turno.
+- [x] `src/App.jsx` — ruta `/admin/ledger` con `AuthRoute` (admin-only).
+- [x] `src/components/AdminNav.jsx` — botón "📒 Ledger" (entre Movimientos y Turnos).
+
+**Verificación:**
+- [x] Test puro (`/tmp/ledger.test.mjs`, no versionado): 15/15 OK. Escenario: turno fondo $2000, folio mixto (efectivo+tarjeta), `resguardo_casa`, `aportacion_socio`, `propinas_entregadas`.
+- [x] **Invariante 2 (cajón == expected_cash):** cierre cajón = $1650 = `starting_cash + efectivo + depósitos − retiros`. ✓
+- [x] **Invariante 1 (house/bank == calcGlobal):** house $1000 y banco $300 idénticos a la fórmula de `calcGlobal`. ✓ (El cajón difiere de `calcGlobal` por el fondo, como se documentó — el ledger es el correcto.)
+- [x] Slice a media historia: saldos iniciales correctos (cajón $2500, banco $300). ✓
+- [x] Lint: el único error (`set-state-in-effect` en `useEffect(()=>{load()},[load])`) es **preexistente e idéntico** al de `CashMovementsAdminPage`/`ProductSalesReportPage`; se mantiene el patrón por consistencia. No introduce categorías nuevas de issues. Build no se corre en sandbox (falla por binding nativo de rolldown, no relacionado).
+
+**Pendiente de validación con datos reales (Javi):** abrir `/admin/ledger`, rango de los 3 días, y confirmar que banco + caja fuerte cuadran con "Posición de dinero" del Reporte, y que el cajón de cada turno cuadra con su cierre.
+
+---
+
 ## Session June 12th — Operational day cutoff ✅
 
 - [x] `src/services/dashboard.js` → `startOfToday()`: corte ahora a las 06:00 local (-06:00) en vez de 00:00. Antes de las 6am, "hoy" sigue siendo la fecha de ayer. Afecta `getTodayPaymentStats`, `getTopProductsToday`, `getMembershipStatsToday` — ya no se pierden ventas nocturnas de un turno que cruza medianoche.

@@ -208,6 +208,16 @@ function PosPage() {
         loadUnits();
     }, []);
 
+    // Combos/shots open the mixer selector inline ABOVE the catalog. Scroll to
+    // the top once it has mounted so the user reaches the selector — done in an
+    // effect (not on tap) so it runs after render and isn't fought by the
+    // browser's scroll anchoring when the selector is inserted above.
+    useEffect(() => {
+        if (shotSelectorState.open) {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    }, [shotSelectorState.open]);
+
     // Show a message if redirected here due to insufficient role.
     useEffect(() => {
         if (location.state?.accessDenied) {
@@ -971,7 +981,14 @@ function PosPage() {
                             isChangingCart={isChangingCart}
                             isUpdatingComandaStatus={isUpdatingComandaStatus}
                             shotSelectorState={shotSelectorState}
-                            onAddProduct={handleAddProduct}
+                            onAddProduct={(product) => {
+                                handleAddProduct(product);
+                                // Shots/combos open the mixer modal first — they scroll
+                                // to top on confirm (see ShotMixerSelector below), not now.
+                                if (!product.is_shot) {
+                                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                                }
+                            }}
                             getCategoryColor={getCategoryColor}
                             money={money}
                         />

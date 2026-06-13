@@ -15,6 +15,7 @@ const NAV_SECTIONS = [
             { label: '👥 Clientes',   path: '/customers/intelligence' },
             { label: '📦 Inventario', path: '/inventory/dashboard'    },
             { label: '💵 Movimientos', path: '/admin/cash-movements'  },
+            { label: '📒 Ledger',     path: '/admin/ledger'           },
             { label: '🕐 Turnos',     path: '/admin/shifts'           },
             { label: '📋 Eventos',    path: '/admin/comanda-events'   },
         ],

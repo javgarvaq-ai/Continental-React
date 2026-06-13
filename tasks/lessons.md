@@ -285,3 +285,33 @@ Pattern used in `WeeklyReportPage`:
 - `loadGlobal()` → `getGlobalBalances()` — no date filter, all-time — caja, resguardo, banco
 
 Both loads fire in parallel on mount. The "Posición de dinero" section always shows global data regardless of what period the user selects.
+
+---
+
+## ShotMixerSelector es inline (NO modal) y vive ARRIBA del catálogo
+
+Al tocar un producto `is_shot` (combos: Cerveza 3x2, Cubeta), `handleAddProduct` NO agrega: llama `openShotMixerSelector` y abre `ShotMixerSelector`, que es una `<section>` **inline renderizada antes del grid de productos** en `PosPage` (no un overlay `position:fixed`). El alta real ocurre en `handleConfirmShotMixers`.
+
+Implicaciones para cualquier feature de scroll/foco en el POS:
+- Cualquier lógica de "al agregar producto" debe contemplar los DOS caminos: alta directa (`handleAddProduct`, no-shot) y alta vía confirmación de mixers (`handleConfirmShotMixers`, shot).
+- **Scroll anchoring:** al insertar el selector arriba del contenido visible, el navegador reajusta `scrollTop` para mantener fija la parte visible, lo que **cancela un `window.scrollTo` llamado en el mismo tap**. Solución: disparar el scroll en un `useEffect` que observe `shotSelectorState.open` (post-render), no en el handler del click.
+
+## Mercado Pago: comisiones Point/Tap ≠ Checkout/Link
+
+Verificado en fuente oficial (2026): la terminal **Point** y **Tap** (cobro presencial) cobran **% + IVA, SIN cargo fijo** por transacción (al instante 3.5%, 14 días ~3.2%). El **cargo fijo de $4 MXN/transacción es solo de Link de Pago y Checkout** (cobro online). Los blogs de terceros mezclan ambos — siempre verificar en `mercadopago.com.mx/ayuda` y confirmar el plazo de disposición configurado. Constantes del estimado en `utils/ledger.js`: `CARD_COMMISSION_RATE`, `CARD_COMMISSION_IVA`. Solo aplica a tarjeta; SPEI y depósitos de efectivo entran completos.
+
+## Verificación en el sandbox: el mount de bash puede quedar STALE
+
+Tras editar archivos con las file-tools, el mount de bash (`/sessions/.../mnt/...`) a veces queda con una **copia truncada/desactualizada** del archivo. Síntomas: `wc -l` da menos líneas de las reales, `node`/`eslint` reportan errores FALSOS de "Unexpected end of input" / "Unterminated JSX contents". La herramienta `Read` SÍ ve el archivo real y completo.
+
+Para verificar sintaxis sin depender del mount stale:
+- Copiar el contenido autoritativo a `outputs/` (mount fresco) y parsear con `@babel/parser` (`{sourceType:'module',plugins:['jsx']}`) — disponible en node_modules. `esbuild`/`typescript` NO están instalados; `@babel/parser`, `@babel/core`, `acorn-jsx` sí.
+- Para lógica pura (no-JSX), importar la copia `.mjs` desde `outputs/` y correr asserts con `node`.
+- NO confiar en `eslint`/`node` corridos sobre el path del proyecto cuando el mount está stale.
+
+## Ledger view — convención del fondo de caja (starting_cash)
+
+`createShift` (`services/auth.js`) solo escribe `shifts.starting_cash`; **no** crea un `cash_movement` por el fondo. Por eso:
+- `calcGlobal` (Posición de dinero) NO incluye `starting_cash` → su saldo de cajón está subestimado por el fondo (bug menor preexistente, no corregido).
+- El **Ledger** (`/admin/ledger`, `utils/ledger.js`) **ancla el cajón por turno**: resetea a `starting_cash` en cada apertura. Así el cierre del cajón == `expected_cash` del turno. Banco y caja fuerte corren acumulados y cuadran con `calcGlobal`.
+- Modelo de ubicaciones reusa los signos de `calcGlobal`: drawer/house_safe/bank con `source_location`/`destination_location` de `config/cashMovements.js`.
