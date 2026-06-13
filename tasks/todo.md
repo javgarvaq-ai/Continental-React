@@ -1,3 +1,38 @@
+## Plan — Línea fija "Comida del día" en tickets — 2026-06-13 (pendiente de aprobación)
+
+### Objetivo
+En TODOS los tickets, agregar después de la lista de productos una línea que parezca un producto: nombre **"Comida del día"** y a la derecha **"$-"** (como si fuera su precio). Siempre, sin condición.
+
+### Decisiones (Javi)
+- Formato: nombre + `$-` a la derecha (sin cantidad ni "x"). El `$-` es "su precio".
+- Alcance: **ambos** tickets — TICKET DE CONSUMO (cliente) y PAGADO (interno) — y reimpresiones.
+
+### Implementación (1 archivo)
+- [ ] `components/Ticket.jsx` → en `buildTicketHtml`, tras el `forEach` que arma `itemsHtml`, **append** un bloque `.item` estático:
+  ```
+  <div class="item">
+    <div class="item-name">Comida del día</div>
+    <div class="item-line"><span></span><span>$-</span></div>
+  </div>
+  ```
+- Va dentro de `itemsHtml` (antes de `totalsHtml`), así aplica a `cuenta` y `pagado` por igual, y a reimpresiones (todo pasa por `buildTicketHtml`).
+
+### Alcance / garantías
+- **Puramente visual.** El `$-` no es número → NO afecta subtotal, total, propina ni lo cobrado. No toca cálculos ni datos.
+- Sin esquema/RLS. Un solo archivo.
+
+### Verificación
+- [ ] Generar el HTML del ticket en node (cuenta y pagado) y assert: la línea "Comida del día" aparece exactamente 1 vez en cada tipo, y el total no cambia vs sin la línea.
+- [ ] Smoke visual (Javi): imprimir/preview de cuenta y pagado.
+
+### Resultado / Review (2026-06-13) ✅
+- [x] `components/Ticket.jsx`: append de un bloque `.item` ("Comida del día" + `$-`) a `itemsHtml`, tras el `forEach` de productos. Nada más cambió (CSS, totales, pago, pie, impresión byte-idénticos).
+- [x] `$-` es literal (no `${}`) → no afecta cálculos. Aplica a cuenta, pagado y reimpresiones (todo pasa por `buildTicketHtml`).
+- [x] Sintaxis validada con `@babel/parser` (mount de bash quedó stale otra vez; archivo real correcto vía Read).
+- [ ] Pendiente smoke visual de Javi (imprimir cuenta + pagado).
+
+---
+
 ## Cierre de día — 2026-06-13 ✅
 
 Sesión tras 3 días de operación real. Todo lo de hoy es **solo lectura/UI, sin cambios de esquema ni RLS**.

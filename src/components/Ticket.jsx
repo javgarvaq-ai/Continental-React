@@ -71,6 +71,19 @@ function buildTicketHtml({
         `;
   });
 
+  // Línea fija "Comida del día" — aparece en TODOS los tickets (cuenta, pagado
+  // y reimpresiones), después de los productos. Es solo visual: el "$-" no es un
+  // número, no afecta subtotal/total/propina ni lo cobrado.
+  itemsHtml += `
+          <div class="item">
+            <div class="item-name">Comida del día</div>
+            <div class="item-line">
+              <span></span>
+              <span>$-</span>
+            </div>
+          </div>
+        `;
+
   let ticketLabelHtml = '';
   let totalsHtml = '';
   let paymentHtml = '';
