@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { money } from '../utils/money'
+import CashCounter from './CashCounter'
 
 function SummaryRow({ label, value, muted, accent, bold }) {
     return (
@@ -17,7 +18,7 @@ function SummaryRow({ label, value, muted, accent, bold }) {
     )
 }
 
-function ShiftPanel({ open, onClose, currentUser, onFetchData, onConfirmClose, onOpenCashMovement }) {
+function ShiftPanel({ open, onClose, currentUser, onFetchData, onConfirmClose, onOpenCashMovement, shiftId }) {
     const [step, setStep] = useState('review')
     const [summary, setSummary] = useState(null)
     const [hasOpenComandas, setHasOpenComandas] = useState(false)
@@ -99,7 +100,7 @@ function ShiftPanel({ open, onClose, currentUser, onFetchData, onConfirmClose, o
                 {/* Header */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                     <h2 style={{ margin: 0, fontSize: '18px' }}>
-                        {step === 'review' ? '📊 Corte de turno' : '🔒 Cerrar turno'}
+                        {step === 'review' ? '📊 Corte de turno' : step === 'count' ? '🧮 Contar efectivo' : '🔒 Cerrar turno'}
                     </h2>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                         {step === 'review' && (
@@ -162,6 +163,14 @@ function ShiftPanel({ open, onClose, currentUser, onFetchData, onConfirmClose, o
 
                         {/* Step: Review */}
                         {step === 'review' && (
+                            <>
+                            <button
+                                type="button"
+                                onClick={() => { setStep('count'); setErrorMsg(null) }}
+                                style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #444', background: '#222', color: 'white', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', marginBottom: '8px' }}
+                            >
+                                🧮 Contar efectivo
+                            </button>
                             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                 <button
                                     type="button"
@@ -201,6 +210,21 @@ function ShiftPanel({ open, onClose, currentUser, onFetchData, onConfirmClose, o
                                         🔒 Proceder al cierre
                                     </button>
                                 )}
+                            </div>
+                            </>
+                        )}
+
+                        {/* Step: Count (calculadora de denominaciones) */}
+                        {step === 'count' && (
+                            <div>
+                                <CashCounter shiftId={shiftId} />
+                                <button
+                                    type="button"
+                                    onClick={() => { setStep('review'); setErrorMsg(null) }}
+                                    style={{ marginTop: '14px', padding: '10px 16px', borderRadius: '8px', border: '1px solid #444', background: '#222', color: 'white', cursor: 'pointer' }}
+                                >
+                                    ← Volver
+                                </button>
                             </div>
                         )}
 

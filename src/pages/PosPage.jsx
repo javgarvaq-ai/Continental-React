@@ -544,6 +544,7 @@ function PosPage() {
                 onFetchData={fetchShiftPanelData}
                 onConfirmClose={handleConfirmCloseShift}
                 onOpenCashMovement={() => setCashPanelOpen(true)}
+                shiftId={currentShiftId}
             />
 
             {!selectedUnit ? (

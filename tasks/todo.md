@@ -33,6 +33,46 @@ En TODOS los tickets, agregar después de la lista de productos una línea que p
 
 ---
 
+## Plan — Calculadora de conteo de efectivo (modal de turno) — 2026-06-14 (pendiente de aprobación)
+
+### Objetivo
+Tablita tipo Excel dentro del modal de turno (`ShiftPanel`) para contar efectivo: por cada denominación anotas cuántos billetes/monedas hay y te da subtotal por fila + total. Pura ayuda visual.
+
+### Decisiones (Javi)
+- **Una sola tabla editable** por turno (no apertura/cierre separados).
+- **Solo localStorage**, asociada al turno (sin BD, sin migración). "Como una tablita de Excel."
+- **Sin auto-llenar** el campo de cierre — es solo referencia para contar, no se integra con el cierre.
+
+### Implementación
+- [ ] `components/CashCounter.jsx` (nuevo): recibe `shiftId`. Filas de denominaciones MX (billetes 1000/500/200/100/50/20, monedas 10/5/2/1/0.50), input de cantidad por fila, subtotal por fila y **total** abajo. Estado en `localStorage` key `cash-counter-<shiftId>` (carga al montar, guarda en cada cambio). Botón "Limpiar".
+- [ ] `components/ShiftPanel.jsx`: botón "🧮 Contar efectivo" en el step `review` (junto a "+ Movimiento de caja"); nuevo step `count` que muestra `<CashCounter shiftId={shiftId}/>` + "← Volver". Nueva prop `shiftId`.
+- [ ] `pages/PosPage.jsx`: pasar `shiftId={currentShiftId}` a `<ShiftPanel>` (ya existe `currentShiftId`).
+
+### Persistencia (clave del pedido)
+- Key por `shiftId`: en la mañana la llenas → persiste; en la noche reabres y siguen los valores; al abrir un turno nuevo (otro id) arranca vacía.
+- Nota: si se limpia el caché del navegador se pierde (aceptado — es solo ayuda). Atado a la tablet.
+- (Opcional) limpiar la key al cerrar el turno; si no, queda huérfana e inofensiva (id único).
+
+### Alcance / no-objetivos
+- **Solo UI + localStorage.** No toca BD/RLS, ni el cierre, ni cobro, ni movimientos. No auto-llena "Efectivo contado".
+
+### Edge cases
+- Sin `shiftId` (raro, el modal se abre con turno abierto): usar fallback no persistente o deshabilitar guardado.
+- Inputs: enteros ≥ 0; vacío = 0.
+
+### Verificación
+- [ ] Lint.
+- [ ] Smoke (Javi): llenar → cerrar modal → reabrir = valores siguen; total correcto; recargar página = siguen; turno nuevo = vacía.
+
+### Resultado / Review (2026-06-14) ✅
+- [x] `components/CashCounter.jsx` (nuevo): denominaciones MX, cantidad por fila, subtotal, total; persiste en `localStorage` key `cash-counter-<shiftId>`; botón "Limpiar".
+- [x] `components/ShiftPanel.jsx`: botón "🧮 Contar efectivo" en step `review`, nuevo step `count` con `<CashCounter shiftId={shiftId}/>` + "← Volver", título maneja el step, recibe prop `shiftId`.
+- [x] `pages/PosPage.jsx`: `shiftId={currentShiftId}` pasado a `<ShiftPanel>` (línea 547).
+- [x] Sintaxis: CashCounter y ShiftPanel parsean OK con `@babel/parser`. PosPage = cambio trivial de 1 prop (parse por bash da falso "Unterminated JSX" por mount stale).
+- Solo UI + localStorage. No toca BD/RLS, cierre, cobro ni movimientos. Sin auto-llenar.
+
+---
+
 ## Fix — Ledger no mostraba movimientos recientes — 2026-06-14 ✅
 **Bug (Javi):** el Ledger no agarraba nada después del ~10-11 jun; esos movimientos sí salían en Movimientos de Caja.
 **Causa:** `getLedgerData` traía toda la historia ordenada **ascendente**; Supabase corta respuestas grandes por tope de filas → descartaba lo más **reciente**. (Movimientos sí los mostraba porque ordena descendente dentro de un rango.)
