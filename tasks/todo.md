@@ -33,6 +33,14 @@ En TODOS los tickets, agregar después de la lista de productos una línea que p
 
 ---
 
+## Fix — Ledger no mostraba movimientos recientes — 2026-06-14 ✅
+**Bug (Javi):** el Ledger no agarraba nada después del ~10-11 jun; esos movimientos sí salían en Movimientos de Caja.
+**Causa:** `getLedgerData` traía toda la historia ordenada **ascendente**; Supabase corta respuestas grandes por tope de filas → descartaba lo más **reciente**. (Movimientos sí los mostraba porque ordena descendente dentro de un rango.)
+**Fix:** `services/ledger.js` → las 3 consultas (payments, cash_movements, shifts) ahora `order(..., { ascending: false })`. `sortEvents` reordena cronológicamente, el saldo corrido no cambia. Solo lectura, sin esquema. (Detalle/lección en `lessons.md`.)
+**Verificar (Javi):** recargar `/admin/ledger` → deben aparecer los movimientos del 12-14 jun y el banco/cajón reflejar los gastos recientes.
+
+---
+
 ## Cierre de día — 2026-06-13 ✅
 
 Sesión tras 3 días de operación real. Todo lo de hoy es **solo lectura/UI, sin cambios de esquema ni RLS**.

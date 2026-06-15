@@ -134,6 +134,11 @@ function LedgerPage() {
         })
     }, [ledger, locFilter])
 
+    // Mostrar más nuevo primero (lo de hoy arriba, como Movimientos). Los saldos
+    // corridos se calcularon cronológicamente, así que el saldo de cada renglón
+    // sigue siendo correcto; solo se invierte el orden de despliegue.
+    const displayRows = useMemo(() => [...rows].reverse(), [rows])
+
     function exportCsv() {
         if (!ledger) return
         const head = ['Fecha', 'Concepto', 'Cajon', 'Caja fuerte', 'Banco', 'Saldo cajon', 'Saldo caja fuerte', 'Saldo banco', 'Nota']
@@ -232,7 +237,7 @@ function LedgerPage() {
                         </div>
 
                         {/* Rows */}
-                        {rows.map((e) => {
+                        {displayRows.map((e) => {
                             const isMarker = e.kind === 'shift_open' || e.kind === 'shift_close'
                             return (
                                 <div key={e.id} style={{ display: 'grid', gridTemplateColumns: gridCols, padding: '10px 16px', borderBottom: '1px solid #1a1a1a', alignItems: 'center', background: isMarker ? '#14141c' : 'transparent' }}>

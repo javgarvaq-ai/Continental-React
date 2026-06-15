@@ -309,6 +309,14 @@ Para verificar sintaxis sin depender del mount stale:
 - Para lógica pura (no-JSX), importar la copia `.mjs` desde `outputs/` y correr asserts con `node`.
 - NO confiar en `eslint`/`node` corridos sobre el path del proyecto cuando el mount está stale.
 
+## Supabase corta respuestas grandes → ordenar DESCENDENTE al traer "toda la historia"
+
+`getLedgerData` traía payments/cash_movements/shifts **sin cota inferior** (toda la historia, para el saldo inicial) y ordenados **ascendente**. Supabase aplica un tope de filas por respuesta; con orden ascendente, lo que se descarta es **lo más reciente** → el Ledger se quedaba en los primeros días y no mostraba movimientos nuevos (que en `Movimientos de Caja` sí salían, porque esa consulta pide **descendente** dentro de un rango).
+
+**Regla:** cuando una consulta pueda traer muchas filas y te importa lo reciente, **ordena `ascending: false`** (y reordena en cliente si necesitas cronológico — `sortEvents` ya lo hace). Para datos verdaderamente grandes, paginar con `.range()`. Nunca asumas que un `.select()` sin límite trae todas las filas.
+
+Síntoma diagnóstico: una vista muestra datos viejos y "se corta" en una fecha fija sin importar el rango seleccionado → casi siempre es el tope de filas + orden ascendente.
+
 ## Ledger view — convención del fondo de caja (starting_cash)
 
 `createShift` (`services/auth.js`) solo escribe `shifts.starting_cash`; **no** crea un `cash_movement` por el fondo. Por eso:
