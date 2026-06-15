@@ -12,12 +12,15 @@ export async function createInventoryItem({
     name,
     unitType,
     capacityOz,
+    unitCost,
 }) {
     const { data, error } = await supabase.from('inventory_items').insert([
         {
             name: name.trim(),
             unit_type: unitType,
             capacity_oz: unitType === 'oz' ? Number(capacityOz || 0) : null,
+            // NULL preserva "sin capturar" (distinto de 0 real)
+            unit_cost: unitCost === '' || unitCost == null ? null : Number(unitCost),
             active: true,
         },
     ])
@@ -29,6 +32,7 @@ export async function updateInventoryItem({
     name,
     unitType,
     capacityOz,
+    unitCost,
     active,
 }) {
     const { data, error } = await supabase
@@ -37,6 +41,8 @@ export async function updateInventoryItem({
             name: name.trim(),
             unit_type: unitType,
             capacity_oz: unitType === 'oz' ? Number(capacityOz || 0) : null,
+            // NULL preserva "sin capturar" (distinto de 0 real)
+            unit_cost: unitCost === '' || unitCost == null ? null : Number(unitCost),
             active: Boolean(active),
         })
         .eq('id', id)

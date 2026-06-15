@@ -28,9 +28,10 @@ function InventoryItemsAdminPage() {
     const [newName, setNewName] = useState('')
     const [newUnitType, setNewUnitType] = useState('unit')
     const [newCapacityOz, setNewCapacityOz] = useState('')
+    const [newUnitCost, setNewUnitCost] = useState('')
 
     const [editingId, setEditingId] = useState('')
-    const [editForm, setEditForm] = useState({ name: '', unit_type: 'unit', capacity_oz: '', active: true })
+    const [editForm, setEditForm] = useState({ name: '', unit_type: 'unit', capacity_oz: '', unit_cost: '', active: true })
 
     const [adjustingId, setAdjustingId] = useState(null)
     const [adjustForm, setAdjustForm] = useState({ amount: '', type: 'entry', note: '' })
@@ -53,10 +54,11 @@ function InventoryItemsAdminPage() {
         e.preventDefault()
         if (!newName.trim()) { setStatus('Name required'); return }
         setIsSaving(true)
-        const { error } = await createInventoryItem({ name: newName, unitType: newUnitType, capacityOz: newCapacityOz })
+        const { error } = await createInventoryItem({ name: newName, unitType: newUnitType, capacityOz: newCapacityOz, unitCost: newUnitCost })
         if (error) { setStatus(error.message); setIsSaving(false); return }
         setNewName('')
         setNewCapacityOz('')
+        setNewUnitCost('')
         setStatus('Item created.')
         setIsSaving(false)
         await loadItems()
@@ -64,7 +66,7 @@ function InventoryItemsAdminPage() {
 
     async function saveEdit(id) {
         setIsSaving(true)
-        const { error } = await updateInventoryItem({ id, name: editForm.name, unitType: editForm.unit_type, capacityOz: editForm.capacity_oz, active: editForm.active })
+        const { error } = await updateInventoryItem({ id, name: editForm.name, unitType: editForm.unit_type, capacityOz: editForm.capacity_oz, unitCost: editForm.unit_cost, active: editForm.active })
         if (error) { setStatus(error.message); setIsSaving(false); return }
         setEditingId('')
         setStatus('Item updated.')
@@ -129,6 +131,10 @@ function InventoryItemsAdminPage() {
                                 <input type="number" placeholder="e.g. 25" value={newCapacityOz} onChange={(e) => setNewCapacityOz(e.target.value)} style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid #444', background: '#111', color: 'white', width: '120px' }} />
                             </div>
                         )}
+                        <div>
+                            <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px' }}>Costo (por {newUnitType})</label>
+                            <input type="number" step="0.0001" min="0" placeholder="opcional" value={newUnitCost} onChange={(e) => setNewUnitCost(e.target.value)} style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid #444', background: '#111', color: 'white', width: '120px' }} />
+                        </div>
                         <button type="submit" disabled={isSaving || !newName.trim()} style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', background: isSaving || !newName.trim() ? '#555' : '#2e7d32', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>
                             {isSaving ? 'Creating...' : 'Create'}
                         </button>
@@ -154,6 +160,7 @@ function InventoryItemsAdminPage() {
                                         {editForm.unit_type === 'oz' && (
                                             <input type="number" value={editForm.capacity_oz} onChange={(e) => setEditForm(p => ({ ...p, capacity_oz: e.target.value }))} placeholder="Capacity oz" style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #444', background: '#111', color: 'white', width: '120px' }} />
                                         )}
+                                        <input type="number" step="0.0001" min="0" value={editForm.unit_cost} onChange={(e) => setEditForm(p => ({ ...p, unit_cost: e.target.value }))} placeholder={`Costo/${editForm.unit_type}`} style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #444', background: '#111', color: 'white', width: '120px' }} />
                                         <button onClick={() => saveEdit(item.id)} disabled={isSaving} style={{ padding: '8px 14px', borderRadius: '8px', border: 'none', background: '#2e7d32', color: 'white', cursor: 'pointer', fontWeight: 'bold' }}>Save</button>
                                         <button onClick={() => setEditingId('')} style={{ padding: '8px 14px', borderRadius: '8px', border: 'none', background: '#555', color: 'white', cursor: 'pointer' }}>Cancel</button>
                                     </div>
@@ -194,6 +201,9 @@ function InventoryItemsAdminPage() {
                                                 <span style={{ fontSize: '13px', fontWeight: 'bold', color: STATUS_COLOR(item.current_stock, item.unit_type) }}>
                                                     Stock: {Number(item.current_stock || 0).toFixed(item.unit_type === 'oz' ? 2 : 0)} {item.unit_type}
                                                 </span>
+                                                {item.unit_cost != null
+                                                    ? <span style={{ fontSize: '13px', color: '#9ccc65' }}>Costo: ${Number(item.unit_cost).toFixed(2)}/{item.unit_type}</span>
+                                                    : <span style={{ fontSize: '12px', color: '#777' }}>sin costo</span>}
                                                 {!item.active && <span style={{ fontSize: '11px', color: '#888' }}>Inactivo</span>}
                                             </div>
                                         </div>
@@ -201,7 +211,7 @@ function InventoryItemsAdminPage() {
                                             <button onClick={() => { setAdjustingId(item.id); setAdjustForm({ amount: '', type: 'entry', note: '' }) }} style={{ padding: '7px 12px', borderRadius: '8px', border: 'none', background: '#1565c0', color: 'white', cursor: 'pointer', fontSize: '13px' }}>
                                                 Ajustar stock
                                             </button>
-                                            <button onClick={() => { setEditingId(item.id); setEditForm({ name: item.name, unit_type: item.unit_type, capacity_oz: item.capacity_oz || '', active: item.active }) }} style={{ padding: '7px 12px', borderRadius: '8px', border: 'none', background: '#333', color: 'white', cursor: 'pointer', fontSize: '13px' }}>
+                                            <button onClick={() => { setEditingId(item.id); setEditForm({ name: item.name, unit_type: item.unit_type, capacity_oz: item.capacity_oz || '', unit_cost: item.unit_cost ?? '', active: item.active }) }} style={{ padding: '7px 12px', borderRadius: '8px', border: 'none', background: '#333', color: 'white', cursor: 'pointer', fontSize: '13px' }}>
                                                 Edit
                                             </button>
                                             <button onClick={() => toggleInventoryItemActive({ id: item.id, active: !item.active }).then(loadItems)} style={{ padding: '7px 12px', borderRadius: '8px', border: 'none', background: item.active ? '#b71c1c' : '#2e7d32', color: 'white', cursor: 'pointer', fontSize: '13px' }}>

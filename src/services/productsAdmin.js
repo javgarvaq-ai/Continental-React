@@ -12,6 +12,7 @@ export async function getAllProductsAdmin() {
             is_mixer,
             free_mixers_qty,
             requires_inventory,
+            manual_cost,
             active,
             created_at
         `)
@@ -47,6 +48,7 @@ export async function createProductAdmin({
     isMixer,
     freeMixersQty,
     requiresInventory,
+    manualCost,
 }) {
     return await supabase.from('products').insert([
         {
@@ -57,6 +59,8 @@ export async function createProductAdmin({
             is_mixer: Boolean(isMixer),
             free_mixers_qty: Number(freeMixersQty || 0),
             requires_inventory: Boolean(requiresInventory),
+            // NULL preserva "sin capturar" (distinto de 0 real)
+            manual_cost: manualCost === '' || manualCost == null ? null : Number(manualCost),
             active: true,
         },
     ])
@@ -71,6 +75,7 @@ export async function updateProductAdmin({
     isMixer,
     freeMixersQty,
     requiresInventory,
+    manualCost,
     active,
 }) {
     return await supabase
@@ -83,6 +88,8 @@ export async function updateProductAdmin({
             is_mixer: Boolean(isMixer),
             free_mixers_qty: Number(freeMixersQty || 0),
             requires_inventory: Boolean(requiresInventory),
+            // NULL preserva "sin capturar" (distinto de 0 real)
+            manual_cost: manualCost === '' || manualCost == null ? null : Number(manualCost),
             active: Boolean(active),
         })
         .eq('id', productId)

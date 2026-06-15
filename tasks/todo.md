@@ -1,3 +1,107 @@
+## Plan — Costeo de productos y margen real (COGS snapshot) — 2026-06-15 (PENDIENTE DE APROBACIÓN)
+
+### Objetivo
+Capturar el costo de cada producto y compararlo contra las ventas para ver el margen real ($ y %) por producto, por periodo y por ticket. El costo se **congela al momento de la venta** (snapshot): cambiar un costo solo afecta ventas nuevas, no las pasadas.
+
+### Decisiones (Javi, 2026-06-15)
+- **Fuente de costo:** manual. Capturado por Javi en las pantallas admin.
+- **Nivel (híbrido):** costo por **insumo** (`inventory_items.unit_cost`) como motor vía recetas (actualizas la botella → todos sus shots se recostean) + costo manual por **producto** (`products.manual_cost`) como fallback para productos SIN receta.
+- **Exactitud histórica:** **snapshot al vender** (COGS congelado por línea). Si la venta se hizo sin costo cargado, se guarda NULL y el reporte usa costo actual como estimación (fallback en vivo) hasta congelarla.
+- **Entregables:** 3 reportes, por fases (por producto → total ventas vs costo → por ticket).
+
+### Modelo de datos (1 migración a mano, 3 columnas)
+- `inventory_items.unit_cost numeric(12,4)` NULL — costo por unidad del insumo (por oz / por unit). NULL = "no capturado" (distinto de 0 real).
+- `products.manual_cost numeric(12,2)` NULL — costo directo para productos sin receta.
+- `comanda_items.unit_cost_at_sale numeric(12,4)` NULL — **snapshot**: costo de UNA unidad del producto al momento de la venta. Reporte: costo de línea = `quantity × unit_cost_at_sale`.
+
+### Lógica de costo (regla de precedencia)
+`computeProductCost(product, recetasActivas, insumosPorId)`:
+1. ¿Tiene recetas activas y TODOS sus insumos tienen `unit_cost`? → costo = Σ(`deduct_amount × insumo.unit_cost`), `complete=true`.
+2. ¿Sin receta pero con `manual_cost`? → costo = `manual_cost`, `complete=true`.
+3. ¿Receta con algún insumo sin costo, o nada capturado? → `complete=false` (se trata como "sin costo" → snapshot NULL).
+Va en `utils/cost.js` (función pura, testeable sin BD, patrón de `utils/payments.js`).
+
+### Cambio en el RPC de cobro `finalize_comanda_payment` (la pieza delicada)
+- Ese RPC YA recorre `comanda_items` y sus `product_recipes` para descontar inventario. **Enganchar ahí**: por cada item, acumular el costo de la receta (`deduct_amount × inventory_items.unit_cost`); si no hay receta, usar `products.manual_cost`.
+- Si el costo queda **completo** → `UPDATE comanda_items SET unit_cost_at_sale = <costo unitario>`. Si **incompleto** (algún insumo sin costo) → dejar NULL.
+- Garantía: NO cambia nada de lo que se cobra (efectivo/tarjeta/total/propina). Solo agrega un dato de costo. El cobro funciona idéntico aunque no haya costos cargados.
+
+### Captura de costos (UI admin)
+- `pages/InventoryItemsAdminPage.jsx` + `services/inventoryAdmin.js`: campo `unit_cost`. Helper opcional: capturar "precio de botella" y derivar costo/oz (precio ÷ `capacity_oz`).
+- `pages/ProductsAdminPage.jsx` + `services/productsAdmin.js`: campo `manual_cost` (visible/relevante para productos sin receta).
+
+### Reportes (por fases)
+- **Fase 1 — Margen por producto** (`ProductSalesReportPage` + `services/reports.js`): extender `getProductSalesForPeriod` para conservar `productId` y traer `unit_cost_at_sale`. Costo de línea = `qty × (unit_cost_at_sale ?? costoEnVivo(product))`. Por producto: precio, costo, margen $ y %, unidades, revenue, costo total, utilidad total. Marcar "sin costo" donde aplique.
+- **Fase 2 — Total ventas vs costo:** sumar lo de Fase 1 → ventas (sin propina) − COGS = utilidad bruta + %.
+- **Fase 3 — Por ticket:** margen por folio cruzando sus `comanda_items` (usa snapshot).
+
+### Casos especiales contemplados
+- **Mixers/benefits gratis:** `unit_price=0` (revenue 0) pero costo real → margen negativo visible, no oculto.
+- **Override de unidades de mixer para display** (`reports.js:213-243`): el costo debe usar unidades REALMENTE consumidas, no las ajustadas para display. Manejar explícito.
+- **Líneas sin costo (snapshot NULL):** fallback a costo en vivo; opción futura de "congelar" con un backfill.
+- **Descuentos:** se usa el `unit_price` real cobrado (ya está en `comanda_items`).
+
+### Workflow Supabase (según CLAUDE.md)
+- ANTES de tocar nada de Supabase: leer `.agents/skills/supabase/SKILL.md` y `.agents/skills/supabase-postgres-best-practices/SKILL.md`.
+- Migración escrita a mano en `supabase/migrations/AAAAMMDDHHMMSS_add_cost_tracking.sql`. **Javi** corre `npx supabase db push` en su terminal (yo NO en el sandbox).
+- RLS: agregar columnas no cambia políticas. Verificar que las políticas de UPDATE de `inventory_items`/`products` permitan al admin; `comanda_items.unit_cost_at_sale` se escribe dentro del RPC (SECURITY DEFINER) → ok.
+
+### Orden de ejecución
+- **Fase 0 (cimientos):** migración (3 columnas) + `utils/cost.js` + captura UI (insumos + productos) + modificar RPC para snapshot. Resultado: ya puedes cargar costos y cada venta nueva guarda su costo.
+- **Fase 1:** reporte margen por producto.
+- **Fase 2:** agregado ventas vs costo.
+- **Fase 3:** por ticket.
+(Una fase a la vez, con su verificación, y check-in antes de la siguiente.)
+
+### Verificación (antes de marcar cada fase)
+- `utils/cost.js`: pruebas en node con casos (receta completa, receta con insumo sin costo, sin receta con manual_cost, nada) → assert costos y `complete`.
+- Migración: parsea SQL; revisar que las columnas son NULL y no rompen inserts existentes.
+- RPC: smoke en staging — una venta con costos cargados escribe `unit_cost_at_sale`; una sin costo deja NULL; el cobro (efectivo/tarjeta/total/propina) es idéntico antes vs después.
+- Reportes: cuadrar utilidad = ventas − COGS; revisar caso de producto gratis (margen negativo).
+
+### Mensajes de commit sugeridos (por fase)
+- F0: `feat(costing): unit_cost/manual_cost + snapshot COGS en cobro + captura admin`
+- F1: `feat(reports): margen por producto`
+- F2: `feat(reports): utilidad bruta ventas vs costo`
+- F3: `feat(reports): margen por ticket`
+
+---
+
+### Estrategia de pruebas en prod (sin staging) — parche acordado (2026-06-15)
+Contexto: una sola DB (prod); preview de Vercel apunta a prod. Aceptable AHORA porque **el inventario aún no está cargado** → las ventas de prueba no descuentan stock real. Son <10 escenarios y se borran.
+
+**Cómo aislar lo de prueba (etiquetado):**
+- Crear una **mesa de prueba** dedicada (ej. "TEST"). Toda comanda de prueba se abre ahí → `comandas.unit_id = <TEST>`. (comandas NO tiene shift_id; se filtran por mesa.)
+- Hacer todas las pruebas dentro de un **turno conocido** (anotar su `shift_id`). `payments` y `cash_movements` se filtran por ese turno.
+- Si se crean productos/insumos desechables, nombrarlos con prefijo `TEST_` para borrarlos por nombre.
+
+**Script de limpieza (SELECT primero, luego DELETE; lo entrego probado).** Orden por FKs:
+1. `ids = SELECT id FROM comandas WHERE unit_id = <TEST>`
+2. `DELETE FROM comanda_items WHERE comanda_id IN (ids)`  (sin cascade)
+3. `DELETE FROM comandas WHERE id IN (ids)`  → cascada borra `payments` y `comanda_events`; `inventory_movements.comanda_item_id` queda SET NULL
+4. `DELETE FROM cash_movements WHERE shift_id = <TEST_SHIFT>`
+5. `DELETE FROM shifts WHERE id = <TEST_SHIFT>`
+6. (Opcional) limpiar `inventory_movements` huérfanos de la prueba y productos/insumos `TEST_`.
+Javi corre el script en el SQL Editor de Supabase (no en el sandbox).
+
+**Riesgo que SIGUE en pie (sin staging):** la migración y el cambio del RPC van directo a prod. Mitigaciones:
+- Columnas **nullable y aditivas** → no rompen inserts/lecturas existentes.
+- Costo en el RPC **no-fatal**: si el cálculo del costo falla o falta dato, guarda NULL y NUNCA aborta el cobro (el dinero real nunca se bloquea por el costeo). Distinto del descuento de inventario, que sí es fatal a propósito.
+- Probar inmediato con las ventas etiquetadas; tener lista una migración de rollback del RPC a su versión previa.
+
+
+### Resultado Entrega 1 (2026-06-15) ✅ — listo, falta que Javi aplique la migración
+- [x] Migración `supabase/migrations/20260615000001_add_product_costing.sql`: `inventory_items.unit_cost` + `products.manual_cost` (nullable, aditivas). **Javi corre `npx supabase db push`.**
+- [x] `utils/cost.js`: `computeProductCost` (híbrido, defensivo). 6 casos probados en node ✓.
+- [x] `services/inventoryAdmin.js` + `InventoryItemsAdminPage.jsx`: captura/edición/display de `unit_cost`.
+- [x] `services/productsAdmin.js` + `ProductsAdminPage.jsx`: captura/edición/display de `manual_cost`.
+- [x] Verificación: transform esbuild OK (5 archivos); eslint sin issues NUEVOS (los 2-3 errores por página son preexistentes: navigate sin usar, loadProducts/useEffect — ya estaban en HEAD); cobro NO tocado.
+- [ ] Pendiente Entrega 2: snapshot de costo en el RPC `finalize_comanda_payment` + pruebas en mesa TEST.
+- NOTA: los campos de costo en la UI solo funcionan DESPUÉS de aplicar la migración (las columnas deben existir).
+
+
+---
+
 ## Plan — Calculadora de denominaciones en apertura de turno + conexión con corte — 2026-06-14 (PENDIENTE DE APROBACIÓN)
 
 ### Objetivo

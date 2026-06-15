@@ -33,6 +33,7 @@ function ProductsAdminPage() {
     const [newIsMixer, setNewIsMixer] = useState(false)
     const [newFreeMixersQty, setNewFreeMixersQty] = useState('0')
     const [newRequiresInventory, setNewRequiresInventory] = useState(true)
+    const [newManualCost, setNewManualCost] = useState('')
 
     const [editingProductId, setEditingProductId] = useState('')
     const [editForm, setEditForm] = useState({
@@ -43,6 +44,7 @@ function ProductsAdminPage() {
         is_mixer: false,
         free_mixers_qty: '0',
         requires_inventory: true,
+        manual_cost: '',
         active: true,
     })
 
@@ -114,6 +116,7 @@ function ProductsAdminPage() {
             isMixer: newIsMixer,
             freeMixersQty: newIsShot ? Number(newFreeMixersQty || 0) : 0,
             requiresInventory: newRequiresInventory,
+            manualCost: newManualCost,
         })
 
         if (error) {
@@ -128,6 +131,7 @@ function ProductsAdminPage() {
         setNewIsMixer(false)
         setNewFreeMixersQty('0')
         setNewRequiresInventory(true)
+        setNewManualCost('')
         setStatus('Product created successfully.')
         setIsSaving(false)
 
@@ -144,6 +148,7 @@ function ProductsAdminPage() {
             is_mixer: Boolean(product.is_mixer),
             free_mixers_qty: String(product.free_mixers_qty ?? 0),
             requires_inventory: Boolean(product.requires_inventory),
+            manual_cost: product.manual_cost ?? '',
             active: Boolean(product.active),
         })
     }
@@ -158,6 +163,7 @@ function ProductsAdminPage() {
             is_mixer: false,
             free_mixers_qty: '0',
             requires_inventory: true,
+            manual_cost: '',
             active: true,
         })
     }
@@ -198,6 +204,7 @@ function ProductsAdminPage() {
             isMixer: editForm.is_mixer,
             freeMixersQty: editForm.is_shot ? Number(editForm.free_mixers_qty || 0) : 0,
             requiresInventory: editForm.requires_inventory,
+            manualCost: editForm.manual_cost,
             active: editForm.active,
         })
 
@@ -413,6 +420,21 @@ function ProductsAdminPage() {
                                 />
                             </div>
 
+                            <div style={{ marginBottom: '14px' }}>
+                                <label style={{ display: 'block', marginBottom: '8px' }}>
+                                    Costo manual (solo si NO tiene receta)
+                                </label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={newManualCost}
+                                    onChange={(event) => setNewManualCost(event.target.value)}
+                                    placeholder="opcional"
+                                    style={inputStyle}
+                                />
+                            </div>
+
                             <button
                                 type="submit"
                                 disabled={isSaving}
@@ -569,6 +591,21 @@ function ProductsAdminPage() {
                                                         style={inputStyle}
                                                     />
 
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        value={editForm.manual_cost}
+                                                        onChange={(event) =>
+                                                            setEditForm((prev) => ({
+                                                                ...prev,
+                                                                manual_cost: event.target.value,
+                                                            }))
+                                                        }
+                                                        placeholder="Costo manual (sin receta)"
+                                                        style={inputStyle}
+                                                    />
+
                                                     <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                                                         <button
                                                             type="button"
@@ -610,6 +647,11 @@ function ProductsAdminPage() {
                                                 <div style={{ opacity: 0.85 }}>
                                                     Free mixers: {Number(product.free_mixers_qty || 0)} | Requires inventory: {product.requires_inventory ? 'Yes' : 'No'}
                                                 </div>
+                                                {product.manual_cost != null && (
+                                                    <div style={{ opacity: 0.85, color: '#9ccc65' }}>
+                                                        Costo manual: ${Number(product.manual_cost).toFixed(2)}
+                                                    </div>
+                                                )}
                                                 <div style={{ opacity: 0.85 }}>
                                                     Status: {product.active ? 'Active' : 'Inactive'}
                                                 </div>
