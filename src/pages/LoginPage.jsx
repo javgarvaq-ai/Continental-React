@@ -210,6 +210,9 @@ function LoginPage() {
                     <p style={{ margin: 0, fontSize: '11px', color: '#444', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
                         Sistema de punto de venta
                     </p>
+                    <p style={{ margin: '6px 0 0 0', fontSize: '11px', color: '#555', userSelect: 'none' }}>
+                        v{__APP_VERSION__}
+                    </p>
                 </div>
 
                 {/* Error / status */}
