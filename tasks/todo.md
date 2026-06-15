@@ -1,3 +1,58 @@
+## Plan — Calculadora de denominaciones en apertura de turno + conexión con corte — 2026-06-14 (PENDIENTE DE APROBACIÓN)
+
+### Objetivo
+Agregar la misma calculadora de denominaciones (`CashCounter`) en la pantalla de fondo inicial (`LoginPage`, fase `new_shift`), y "conectarla" con la del corte/cierre: el conteo hecho al abrir viaja al turno y la calculadora del corte carga esa misma info como referencia.
+
+### Decisiones (Javi, 2026-06-14)
+- **Fondo inicial:** el total contado **autorrellena** el campo "Efectivo inicial de caja" (solo informativo, editable). Nada se guarda en BD hasta dar clic en "Abrir turno".
+- **Conexión:** la calculadora del corte/cierre **carga la misma información** del conteo de apertura. Es solo una calculadora de referencia (no cambia la matemática del cierre, que sigue usando el campo "efectivo contado" tecleado).
+
+### Restricción técnica (clave)
+`CashCounter` persiste en `localStorage` con llave `cash-counter-${shiftId}` (`CashCounter.jsx:19`). En apertura **aún no existe `shiftId`**. Solución: usar llave temporal `cash-counter-opening` en apertura y **migrarla** a `cash-counter-${newShift.id}` al crear el turno. Así el corte (que lee `cash-counter-${shiftId}`) carga el mismo conteo.
+
+### Implementación (2-3 archivos, solo UI/cliente — sin esquema, sin RLS, sin BD)
+
+**1. `components/CashCounter.jsx` — generalizar (sin romper el uso actual)**
+- [ ] Aceptar prop opcional `storageId` (fallback a `shiftId` para compatibilidad). La llave pasa a `cash-counter-${storageId ?? shiftId}`.
+- [ ] Aceptar prop opcional `onTotalChange(total)` y llamarla cuando cambie el total (vía `useEffect` sobre `total`).
+- [ ] Sin cambios para el caller actual (ShiftPanel sigue pasando `shiftId`): comportamiento idéntico.
+
+**2. `pages/LoginPage.jsx` — fase `new_shift`**
+- [ ] Botón "🧮 Contar efectivo" que abre la calculadora (modal overlay con el mismo estilo del corte, o sección expandible — a confirmar abajo).
+- [ ] Montar `<CashCounter storageId="opening" onTotalChange={...} />`.
+- [ ] Autollenado con flag de override manual (patrón `propinaManual` ya usado en `usePayment`): mientras el usuario no edite a mano, `startingCash` = total contado. Si teclea manualmente (`handleCashChange`), `startingCashManual = true` y deja de sobrescribirse. (Evita pisar un monto escrito a mano.)
+- [ ] En `handleShiftSubmit`, tras `createShift` exitoso y antes de navegar: copiar `localStorage['cash-counter-opening']` → `localStorage['cash-counter-${newShift.id}']` y borrar la llave `opening`.
+- [ ] Ajustar el texto guía ("Cuenta el efectivo… e ingresa el total antes de abrir").
+
+**3. (Posible) `components/ShiftPanel.jsx`**
+- [ ] Ninguno esperado: ya pasa `shiftId` a `CashCounter` (`ShiftPanel.jsx:220`) y leerá la llave migrada automáticamente. Verificar nada más.
+
+### A confirmar contigo antes de codear
+- **Formato de la calculadora en apertura:** ¿modal overlay (igual look del corte) o sección que se expande dentro de la tarjeta de login? (Yo recomiendo modal overlay para que se sienta "el mismo modal" que pediste.)
+
+### Alcance / garantías
+- **Puramente cliente/UI.** No toca `createShift`, `finalize_comanda_payment`, RLS ni esquema. El `starting_cash` que se guarda sigue siendo el número del campo al dar "Abrir turno".
+- La calculadora es un **asistente de conteo**; no altera `expectedCash` ni `difference`.
+- Backward-compatible: el uso actual de `CashCounter` en el corte no cambia.
+
+### Verificación (antes de marcar done)
+- [ ] Build/lint sin errores (`npm run build` / eslint en sandbox — solo compila, no toca BD).
+- [ ] Prueba manual del flujo (Javi en tablet): contar en apertura → ver autollenado del fondo → editar a mano (no se pisa) → abrir turno → abrir corte → la calculadora del corte muestra el mismo conteo.
+- [ ] Confirmar que `cash-counter-opening` se borra tras migrar (no queda basura para el siguiente turno).
+- [ ] Caso borde: abrir turno SIN usar la calculadora (teclear fondo directo) sigue funcionando igual.
+
+### Mensaje de commit sugerido (al terminar)
+`feat(shift): calculadora de denominaciones en apertura + conexión con corte`
+
+### Resultado / Review (2026-06-14) ✅ — aprobado (modal overlay)
+- [x] `components/CashCounter.jsx`: props `storageId` (prioridad sobre `shiftId`) y `onTotalChange(total)` vía `useEffect([total])`. Backward-compatible: el corte sigue pasando `shiftId` y funciona igual.
+- [x] `pages/LoginPage.jsx`: import de `CashCounter` + const `OPENING_COUNT_ID='opening'`; estado `startingCashManual` y `counterOpen`; `handleCashChange` marca manual; `handleCounterTotal` autollena el fondo solo si no es manual; migración `cash-counter-opening` → `cash-counter-${newShift.id}` (y borrado del temporal) tras `createShift` exitoso; botón "🧮 Contar efectivo" + **modal overlay** (mismo look del corte) con `<CashCounter storageId="opening" onTotalChange={handleCounterTotal} />`.
+- [x] Sin cambios en `ShiftPanel.jsx`: ya pasa `shiftId`, lee la llave migrada automáticamente.
+- [x] **Verificación:** eslint sin errores (solo 1 warning preexistente ajeno al cambio); transform esbuild de ambos archivos OK. `vite build` no corre en el sandbox (binario nativo rolldown) — no es problema de código.
+- [ ] Pendiente smoke en tablet (Javi): contar en apertura → autollenado → editar a mano no se pisa → abrir turno → corte carga el mismo conteo → llave `opening` borrada.
+
+---
+
 ## Plan — Línea fija "Comida del día" en tickets — 2026-06-13 (pendiente de aprobación)
 
 ### Objetivo

@@ -4,7 +4,12 @@ import { Link, useNavigate } from 'react-router-dom'
 import { getActiveUsers } from '../services/users'
 import { loginWithPin, getOpenShift, createShift } from '../services/auth'
 import { useAuthStore } from '../store/authStore'
+import CashCounter from '../components/CashCounter'
 import logo from '../assets/logo.png'
+
+// Llave temporal del conteo de apertura (aún no hay shiftId). Se migra a
+// `cash-counter-${shiftId}` al crear el turno para que el corte muestre lo mismo.
+const OPENING_COUNT_ID = 'opening'
 
 const inputStyle = {
     width: '100%',
@@ -42,6 +47,9 @@ function LoginPage() {
     // Held after PIN validates while we wait for shift creation
     const [validatedUser, setValidatedUser] = useState(null)
     const [startingCash, setStartingCash] = useState('')
+    // true = el usuario tecleó el fondo a mano → la calculadora deja de autollenar.
+    const [startingCashManual, setStartingCashManual] = useState(false)
+    const [counterOpen, setCounterOpen] = useState(false)
 
     useEffect(() => {
         async function loadUsers() {
@@ -75,6 +83,14 @@ function LoginPage() {
         // Allow digits and one decimal point
         const val = e.target.value.replace(/[^0-9.]/g, '')
         setStartingCash(val)
+        setStartingCashManual(true) // edición manual: la calculadora ya no sobrescribe
+    }
+
+    // Total en vivo de la calculadora de apertura. Autollena el fondo solo si el
+    // usuario no lo ha escrito a mano (patrón override manual).
+    function handleCounterTotal(total) {
+        if (startingCashManual) return
+        setStartingCash(total > 0 ? String(total) : '')
     }
 
     // Step 1: validate PIN and check for existing shift
@@ -145,6 +161,16 @@ function LoginPage() {
             setIsSubmitting(false)
             return
         }
+
+        // Migrar el conteo de apertura al turno recién creado, para que la
+        // calculadora del corte/cierre cargue la misma información de referencia.
+        try {
+            const opening = localStorage.getItem(`cash-counter-${OPENING_COUNT_ID}`)
+            if (opening != null) {
+                localStorage.setItem(`cash-counter-${newShift.id}`, opening)
+                localStorage.removeItem(`cash-counter-${OPENING_COUNT_ID}`)
+            }
+        } catch { /* localStorage no disponible: no bloquea la apertura */ }
 
         setAuth(validatedUser, newShift.id)
         navigate('/pos')
@@ -312,8 +338,27 @@ function LoginPage() {
                             style={{ ...inputStyle, fontSize: '22px', fontWeight: '600' }}
                         />
                         <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#444' }}>
-                            Cuenta el efectivo en caja e ingresa el total antes de abrir.
+                            Cuenta el efectivo en caja. Usa la calculadora para sumar por denominación; el total llena el fondo.
                         </p>
+
+                        <button
+                            type="button"
+                            onClick={() => setCounterOpen(true)}
+                            style={{
+                                width: '100%',
+                                marginTop: '12px',
+                                padding: '11px',
+                                borderRadius: '7px',
+                                border: '1px solid #2a3a4a',
+                                background: '#16202c',
+                                color: '#93c5fd',
+                                fontWeight: '600',
+                                fontSize: '13px',
+                                cursor: 'pointer',
+                            }}
+                        >
+                            🧮 Contar efectivo
+                        </button>
 
                         <button
                             type="submit"
@@ -356,6 +401,48 @@ function LoginPage() {
                 )}
 
             </div>
+
+            {/* ── Modal: calculadora de denominaciones (apertura) ── */}
+            {phase === 'new_shift' && counterOpen && (
+                <div
+                    onClick={() => setCounterOpen(false)}
+                    style={{
+                        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        zIndex: 1000, padding: '20px',
+                    }}
+                >
+                    <div
+                        onClick={e => e.stopPropagation()}
+                        style={{
+                            background: '#1a1a1a', border: '1px solid #333', borderRadius: '16px',
+                            padding: '24px', width: '100%', maxWidth: '500px',
+                            maxHeight: '90vh', overflowY: 'auto',
+                        }}
+                    >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                            <h2 style={{ margin: 0, fontSize: '18px' }}>🧮 Contar efectivo de caja</h2>
+                            <button
+                                type="button"
+                                onClick={() => setCounterOpen(false)}
+                                style={{ background: 'none', border: 'none', color: '#aaa', fontSize: '20px', cursor: 'pointer', lineHeight: 1 }}
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <CashCounter storageId={OPENING_COUNT_ID} onTotalChange={handleCounterTotal} />
+
+                        <button
+                            type="button"
+                            onClick={() => setCounterOpen(false)}
+                            style={{ width: '100%', marginTop: '16px', padding: '11px', borderRadius: '8px', border: '1px solid #2a5a3a', background: '#1a3a2a', color: '#4ade80', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}
+                        >
+                            Usar total y volver
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

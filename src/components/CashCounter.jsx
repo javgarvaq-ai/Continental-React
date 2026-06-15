@@ -16,10 +16,10 @@ const DENOMINATIONS = [
     { value: 0.5,  label: '$0.50' },
 ]
 
-const storageKey = (shiftId) => (shiftId ? `cash-counter-${shiftId}` : null)
+const storageKey = (id) => (id ? `cash-counter-${id}` : null)
 
-function loadCounts(shiftId) {
-    const key = storageKey(shiftId)
+function loadCounts(id) {
+    const key = storageKey(id)
     if (!key) return {}
     try {
         const raw = localStorage.getItem(key)
@@ -30,19 +30,24 @@ function loadCounts(shiftId) {
 }
 
 // Calculadora de conteo de efectivo. Solo ayuda visual; persiste en localStorage
-// asociada al turno (shiftId) para que dure todo el turno. No toca BD ni el cierre.
-function CashCounter({ shiftId }) {
-    const [counts, setCounts] = useState(() => loadCounts(shiftId))
+// asociada a un id (shiftId en el corte, "opening" en la apertura) para que dure
+// toda la etapa. No toca BD ni el cierre.
+// Props:
+//   - shiftId / storageId: llave de persistencia (storageId tiene prioridad).
+//   - onTotalChange(total): callback opcional con el total contado en vivo.
+function CashCounter({ shiftId, storageId, onTotalChange }) {
+    const persistId = storageId ?? shiftId
+    const [counts, setCounts] = useState(() => loadCounts(persistId))
 
-    // Recargar si cambia el turno mientras está montado.
-    useEffect(() => { setCounts(loadCounts(shiftId)) }, [shiftId])
+    // Recargar si cambia la llave mientras está montado.
+    useEffect(() => { setCounts(loadCounts(persistId)) }, [persistId])
 
     // Guardar en cada cambio (localStorage es barato).
     useEffect(() => {
-        const key = storageKey(shiftId)
+        const key = storageKey(persistId)
         if (!key) return
         try { localStorage.setItem(key, JSON.stringify(counts)) } catch { /* ignore */ }
-    }, [counts, shiftId])
+    }, [counts, persistId])
 
     function setCount(value, raw) {
         const n = Math.max(0, Math.floor(Number(raw) || 0))
@@ -56,6 +61,12 @@ function CashCounter({ shiftId }) {
     }
 
     const total = DENOMINATIONS.reduce((s, d) => s + d.value * (Number(counts[d.value]) || 0), 0)
+
+    // Reportar el total en vivo al padre (apertura: autollena el fondo).
+    useEffect(() => {
+        if (onTotalChange) onTotalChange(total)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [total])
 
     const rowStyle = { display: 'grid', gridTemplateColumns: '70px 1fr 110px', alignItems: 'center', gap: '8px', padding: '4px 0' }
     const inputStyle = { width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #444', background: '#111', color: 'white', fontSize: '15px', boxSizing: 'border-box', textAlign: 'center' }
