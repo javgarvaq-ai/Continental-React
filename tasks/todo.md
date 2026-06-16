@@ -1,4 +1,18 @@
-## Plan — Costeo de productos y margen real (COGS snapshot) — 2026-06-15 (PENDIENTE DE APROBACIÓN)
+## Plan — Costeo de productos y margen real (COGS snapshot) — 2026-06-15 (Entrega 1 HECHA · Entrega 2 APROBADA → ejecutar 2026-06-16 con bar cerrado)
+
+> ### ESTADO — Entrega 2 ESCRITA 2026-06-16 (aplicar + probar)
+> Archivos listos: `supabase/migrations/20260616000001_cogs_snapshot_on_payment.sql` (columna + RPC), `tasks/rollback_cogs_snapshot_2026-06-16.sql` (manual, fuera de migrations), `tasks/verificacion_costeo_2026-06-16.sql`. Confirmado: RPC vigente es SECURITY DEFINER → bypassa RLS, snapshot escribe sin cambios de políticas. Falta: Javi corre `db push`, prueba en mesa TEST con las queries, limpia.
+>
+> ### ESTADO — cierre 2026-06-15 (retomar aquí mañana)
+> - ✅ **Entrega 1 HECHA y migración aplicada en prod** (`db push` corrido por Javi). Probada en preview: flujo normal (login/POS/cobro/corte) sin romper + captura de costos (unit_cost / manual_cost, NULL = "sin costo") OK. Datos de prueba borrados con `tasks/limpieza_pruebas_2026-06-15.sql`.
+> - 🔜 **Entrega 2 (snapshot de costo en el RPC de cobro): REVISADA y APROBADA. Ejecutar MAÑANA 2026-06-16 con el bar cerrado** (toca el camino del cobro).
+>   - **Sin cambio de RLS** (confirmado): `comanda_items_update TO authenticated USING(true) WITH CHECK(true)` ya existe; el RPC sigue SECURITY INVOKER.
+>   - Diseño: columna `comanda_items.unit_cost_at_sale numeric(12,4)` (nullable) + costeo dentro del loop de items que YA existe en `finalize_comanda_payment`, envuelto en `BEGIN .. EXCEPTION WHEN OTHERS THEN NULL` → **NO-FATAL, nunca rompe el cobro**. Precedencia: receta (todos los insumos con `unit_cost`) → `manual_cost` → NULL. **Cero cambios de frontend.** Incluir **migración de rollback** del RPC.
+>   - Guarda costo de UNA unidad; el reporte hará `cantidad × unit_cost_at_sale`.
+>   - Probar en **mesa TEST** (no hay staging; parche acordado). Verificar: receta=suma, manual=manual_cost, insumo sin costo=NULL, cobro pasa en todos, y que cambiar un costo DESPUÉS no altera el snapshot. Limpiar con el script.
+> - **Nota inventario:** Javi puede cargar inventario real hoy; la Fase 2 NO lo afecta (solo lee costos y agrega columna a comanda_items). Las ventas de HOY quedarán con snapshot NULL (esperado; reporte usa costo en vivo de fallback). De mañana en adelante se congela.
+> - Después de Entrega 2 → reportes: Fase 1 margen por producto, Fase 2 agregado ventas vs costo, Fase 3 por ticket.
+
 
 ### Objetivo
 Capturar el costo de cada producto y compararlo contra las ventas para ver el margen real ($ y %) por producto, por periodo y por ticket. El costo se **congela al momento de la venta** (snapshot): cambiar un costo solo afecta ventas nuevas, no las pasadas.
