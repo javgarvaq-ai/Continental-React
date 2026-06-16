@@ -400,6 +400,29 @@ function LoginPage() {
                         >
                             ← Volver
                         </button>
+
+                        {validatedUser?.role === 'admin' && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setAuth(validatedUser, null)
+                                    navigate('/dashboard')
+                                }}
+                                style={{
+                                    width: '100%',
+                                    marginTop: '10px',
+                                    padding: '10px',
+                                    borderRadius: '7px',
+                                    border: '1px solid #2a3a2a',
+                                    background: 'transparent',
+                                    color: '#4ade80',
+                                    fontSize: '13px',
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                → Entrar solo al panel de admin
+                            </button>
+                        )}
                     </form>
                 )}
 

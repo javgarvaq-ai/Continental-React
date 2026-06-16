@@ -8,9 +8,13 @@ export const useAuthStore = create((set, get) => ({
     shiftId:     localStorage.getItem('continentalCurrentShiftId') || null,
     isVerifying: true, // true until verifySession resolves — route guards wait on this
 
-    // Called on successful login + shift open
+    // Called on successful login. shiftId may be null for admin-only sessions
+    // (no open shift). In that case localStorage is left untouched so a page
+    // reload sends the user back to login — intentional for security.
     setAuth: (user, shiftId) => {
-        localStorage.setItem('continentalCurrentShiftId', shiftId)
+        if (shiftId) {
+            localStorage.setItem('continentalCurrentShiftId', shiftId)
+        }
         set({ user, shiftId })
     },
 
