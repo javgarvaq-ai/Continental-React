@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { computeProductCost } from '../utils/cost'
 
 // ── Date helpers ──────────────────────────────────────────────
 export function daysAgo(n) {
@@ -192,58 +193,113 @@ export async function getProductSalesForPeriod({ startDate, endDate }) {
 
     const { data: items, error } = await supabase
         .from('comanda_items')
-        .select('quantity, unit_price, is_free_benefit, is_free_mixer, product_id, source_shot_product_id, products:products!comanda_items_product_id_fkey(name, categories(name))')
+        .select('quantity, unit_price, unit_cost_at_sale, is_free_benefit, is_free_mixer, product_id, source_shot_product_id, products:products!comanda_items_product_id_fkey(name, categories(name))')
         .in('comanda_id', comandas.map(c => c.id))
         .eq('status', 'active')
 
     if (error || !items) return { data: [], error }
 
-    // Category lookup by product_id — needed to compare a combo's category
-    // against its selected "mixer" items (e.g. the beers chosen for a
-    // "Cerveza 3x2" / "Cubeta" pack, added via the same shot+free-mixer flow).
-    const categoryByProductId = {}
-    items.forEach(item => {
-        categoryByProductId[item.product_id] = item.products?.categories?.name || 'Sin categoría'
-    })
+    // ── Costo en vivo por producto (fallback cuando el snapshot es NULL) ──
+    const [prodCostRes, recipeRes, invRes] = await Promise.all([
+        supabase.from('products').select('id, manual_cost'),
+        supabase.from('product_recipes').select('product_id, inventory_item_id, deduct_amount, active').eq('active', true),
+        supabase.from('inventory_items').select('id, unit_cost'),
+    ])
+    const invById = {}
+    for (const ii of invRes.data || []) invById[ii.id] = ii
+    const recipesByProduct = {}
+    for (const r of recipeRes.data || []) {
+        if (!recipesByProduct[r.product_id]) recipesByProduct[r.product_id] = []
+        recipesByProduct[r.product_id].push(r)
+    }
+    const liveCostByProduct = {}
+    for (const p of prodCostRes.data || []) {
+        liveCostByProduct[p.id] = computeProductCost(p, recipesByProduct[p.id] || [], invById)
+    }
 
-    // For combos where the chosen mixers are the SAME category as the combo
-    // itself (beer packs), the real unit count is the number of mixer rows,
-    // not the combo's own quantity. Mixers of a different category (e.g. a
-    // shot's free soda) keep the combo's own quantity untouched.
-    const mixerUnitCounts = {} // source_shot_product_id -> total mixer units of same category
-    items.forEach(item => {
-        if (!item.is_free_mixer || !item.source_shot_product_id) return
+    // Costo unitario de una línea: snapshot congelado, o costo en vivo si está
+    // completo; null = no costeable (se marca "sin costo").
+    function lineUnitCost(item) {
+        if (item.unit_cost_at_sale != null) return Number(item.unit_cost_at_sale)
+        const lc = liveCostByProduct[item.product_id]
+        return lc && lc.complete ? lc.cost : null
+    }
+
+    // Lookups por product_id (nombre + categoría) — para combos y roll-up.
+    const nameByProductId = {}
+    const categoryByProductId = {}
+    for (const item of items) {
+        nameByProductId[item.product_id]     = item.products?.name || 'Desconocido'
+        categoryByProductId[item.product_id] = item.products?.categories?.name || 'Sin categoría'
+    }
+
+    // Override de unidades para combos de misma categoría (beer packs): la cuenta
+    // real de unidades es el número de mixers, no la cantidad del combo.
+    const mixerUnitCounts = {}
+    for (const item of items) {
+        if (!item.is_free_mixer || !item.source_shot_product_id) continue
         const comboCategory = categoryByProductId[item.source_shot_product_id]
         const mixerCategory = item.products?.categories?.name || 'Sin categoría'
         if (comboCategory && mixerCategory === comboCategory) {
             mixerUnitCounts[item.source_shot_product_id] =
                 (mixerUnitCounts[item.source_shot_product_id] || 0) + Number(item.quantity || 1)
         }
-    })
+    }
 
+    // Bucket por producto (keyed por product_id para poder hacer roll-up).
     const products = {}
-    items.forEach(item => {
-        if (item.is_free_mixer) return // mixer rows never get their own line
-        if (item.is_free_benefit) return
-        const productName  = item.products?.name || 'Desconocido'
-        const categoryName = item.products?.categories?.name || 'Sin categoría'
-        const units  = Number(item.quantity || 1)
-        const revenue = Number(item.unit_price || 0) * units
+    function bucket(productId) {
+        if (!products[productId]) {
+            products[productId] = {
+                productId,
+                productName:  nameByProductId[productId] || 'Desconocido',
+                categoryName: categoryByProductId[productId] || 'Sin categoría',
+                units: 0, revenue: 0, cost: 0, costMissing: false,
+            }
+        }
+        return products[productId]
+    }
 
-        const key = productName
-        if (!products[key]) products[key] = { productName, categoryName, units: 0, revenue: 0, productId: item.product_id }
-        products[key].units   += units
-        products[key].revenue += revenue
-    })
+    // 1) Líneas vendidas (no gratis): unidades, revenue y costo propio.
+    for (const item of items) {
+        if (item.is_free_mixer || item.is_free_benefit) continue
+        const units = Number(item.quantity || 1)
+        const b = bucket(item.product_id)
+        b.units   += units
+        b.revenue += Number(item.unit_price || 0) * units
+        const uc = lineUnitCost(item)
+        if (uc == null) b.costMissing = true
+        else b.cost += uc * units
+    }
 
-    // Override unit counts for same-category combos with the real mixer count.
-    Object.values(products).forEach(p => {
+    // 2) Roll-up: el costo de mixers/cervezas incluidos se SUMA al producto padre.
+    for (const item of items) {
+        if (!item.is_free_mixer || !item.source_shot_product_id) continue
+        const b = bucket(item.source_shot_product_id)
+        const units = Number(item.quantity || 1)
+        const uc = lineUnitCost(item)
+        if (uc == null) b.costMissing = true
+        else b.cost += uc * units
+    }
+
+    // 3) Override de unidades (beer packs) + margen final.
+    const rows = Object.values(products).map(p => {
         const override = mixerUnitCounts[p.productId]
-        if (override !== undefined) p.units = override
-        delete p.productId
+        const units = override !== undefined ? override : p.units
+        const margin = p.revenue - p.cost
+        return {
+            productName: p.productName,
+            categoryName: p.categoryName,
+            units,
+            revenue: p.revenue,
+            cost: p.cost,
+            margin,
+            marginPct: p.revenue > 0 ? (margin / p.revenue) * 100 : null,
+            costMissing: p.costMissing,
+        }
     })
 
-    return { data: Object.values(products).sort((a, b) => b.revenue - a.revenue), error: null }
+    return { data: rows.sort((a, b) => b.revenue - a.revenue), error: null }
 }
 
 export async function getTopCategoriesRevenue(days = 14) {

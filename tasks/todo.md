@@ -1,3 +1,45 @@
+## Plan — Fase 1: Reporte de margen por producto — 2026-06-16 (HECHA, falta probar con datos reales)
+
+> ### Resultado Fase 1 ✅
+> - `services/reports.js`: `getProductSalesForPeriod` ahora calcula costo por línea (snapshot `unit_cost_at_sale` ?? costo en vivo) y hace **roll-up** del costo de mixers/cervezas al padre vía `source_shot_product_id`. Devuelve `cost/margin/marginPct/costMissing`. Test de roll-up en node ✓ (Trago=licor+mixers, Cubeta=suma de cervezas).
+> - `pages/ProductSalesReportPage.jsx`: columnas Costo, Margen, Margen% + footer Utilidad bruta + CSV + group-by. "≈/sin costo" cuando falta costo de un componente.
+> - Verificado: transform OK, eslint sin issues nuevos (iguales a HEAD), solo 2 archivos tocados. NO toca BD ni cobro.
+> - Falta: Javi carga productos/insumos/recetas de ejemplo, cobra en mesa TEST, abre "Ventas por producto" y valida vs `verificacion_costeo`.
+>
+
+
+### Objetivo
+En la pantalla "Ventas por producto" agregar **Costo, Margen $ y Margen %** por producto, más utilidad bruta total en el footer (cubre de paso la Fase 2 agregada).
+
+### Fuente de costo (consistente con el snapshot)
+Por cada línea de venta: costo unitario = `comanda_items.unit_cost_at_sale` (snapshot congelado) **?? costo en vivo** (`utils/cost.js → computeProductCost`, solo si `complete`). Si ninguno → línea "sin costo".
+
+### Cambios (2 archivos, solo lectura/UI — sin BD, sin tocar el cobro)
+1. **`services/reports.js → getProductSalesForPeriod`** (único consumidor = la página, seguro extender):
+   - Agregar `unit_cost_at_sale` al select de `comanda_items`.
+   - Traer insumos para fallback en vivo: `products(id, manual_cost)` + `product_recipes(active)` + `inventory_items(id, unit_cost)` → mapa `costoVivoPorProductId` usando `computeProductCost`.
+   - Por línea NO-gratis: `costo_linea = cantidad × (unit_cost_at_sale ?? costoVivo.complete ? costoVivo.cost : null)`. Acumular `cost` por producto; marcar `costComplete=false` si alguna línea quedó sin costo.
+   - Devolver por producto: + `cost`, `margin = revenue − cost`, `marginPct`, `costComplete`.
+2. **`pages/ProductSalesReportPage.jsx`**:
+   - Columnas nuevas: Costo, Margen ($), Margen (%). Indicador "sin costo" cuando `costComplete=false`.
+   - Footer: Costo total, **Utilidad bruta** y %.
+   - Group-by-categoría suma costo/margen igual. CSV incluye las columnas nuevas.
+
+### Decisiones / caveats (a confirmar)
+- **Roll-up de componentes (CORREGIDO 2026-06-16):** las líneas `is_free_mixer` NO se excluyen del costo — su costo se SUMA al producto padre vía `source_shot_product_id` (trago = licor + mixers; cubeta = suma de cervezas). Revenue/unidades siguen igual que hoy (el padre lleva el precio). `is_free_benefit` (cortesías de membresía) sí se excluye del costo por ahora (no tiene padre; es regalo) — caveat.
+- **Combos misma categoría** (beer packs): el override de unidades es solo para mostrar; el costo se calcula por la línea del producto. A validar con un combo en pruebas.
+- Sin propina en ningún cálculo (margen es sobre la venta, no la propina).
+
+### Verificación
+- Test en node de la lógica de agregación de costo/margen (snapshot vs fallback, sin costo).
+- esbuild/eslint de los 2 archivos (sin issues nuevos).
+- Cuadre manual: margen = revenue − costo; spot-check contra `verificacion_costeo` en un periodo con ventas reales.
+
+### Commit sugerido
+`feat(reports): margen por producto (costo vs ventas) — Fase 1`
+
+---
+
 ## Plan — Costeo de productos y margen real (COGS snapshot) — 2026-06-15 (Entrega 1 HECHA · Entrega 2 APROBADA → ejecutar 2026-06-16 con bar cerrado)
 
 > ### ESTADO — Entrega 2 ESCRITA 2026-06-16 (aplicar + probar)

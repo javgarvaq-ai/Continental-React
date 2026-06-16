@@ -32,14 +32,13 @@ function getYesterday() {
 // ── CSV export ────────────────────────────────────────────────
 function downloadCsv(rows, groupByCategory) {
     const headers = groupByCategory
-        ? ['Categoría', 'Unidades', 'Ingresos']
-        : ['Producto', 'Categoría', 'Unidades', 'Ingresos']
+        ? ['Categoría', 'Unidades', 'Ingresos', 'Costo', 'Margen', 'Margen %']
+        : ['Producto', 'Categoría', 'Unidades', 'Ingresos', 'Costo', 'Margen', 'Margen %']
 
     const lines = [headers.join(',')]
     rows.forEach(r => {
-        const cols = groupByCategory
-            ? [r.categoryName, r.units, r.revenue.toFixed(2)]
-            : [r.productName, r.categoryName, r.units, r.revenue.toFixed(2)]
+        const base = groupByCategory ? [r.categoryName] : [r.productName, r.categoryName]
+        const cols = [...base, r.units, r.revenue.toFixed(2), (r.cost || 0).toFixed(2), (r.margin || 0).toFixed(2), r.marginPct == null ? '' : r.marginPct.toFixed(1)]
         lines.push(cols.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
     })
 
@@ -115,11 +114,18 @@ function ProductSalesReportPage() {
         if (groupByCategory) {
             const byCat = {}
             filtered.forEach(p => {
-                if (!byCat[p.categoryName]) byCat[p.categoryName] = { categoryName: p.categoryName, units: 0, revenue: 0 }
-                byCat[p.categoryName].units   += p.units
-                byCat[p.categoryName].revenue += p.revenue
+                if (!byCat[p.categoryName]) byCat[p.categoryName] = { categoryName: p.categoryName, units: 0, revenue: 0, cost: 0, costMissing: false }
+                const c = byCat[p.categoryName]
+                c.units   += p.units
+                c.revenue += p.revenue
+                c.cost    += p.cost || 0
+                if (p.costMissing) c.costMissing = true
             })
-            filtered = Object.values(byCat)
+            filtered = Object.values(byCat).map(c => ({
+                ...c,
+                margin: c.revenue - c.cost,
+                marginPct: c.revenue > 0 ? ((c.revenue - c.cost) / c.revenue) * 100 : null,
+            }))
         }
 
         return [...filtered].sort((a, b) => b[sortKey] - a[sortKey])
@@ -128,7 +134,8 @@ function ProductSalesReportPage() {
     const totals = useMemo(() => rows.reduce((acc, r) => ({
         units:   acc.units   + r.units,
         revenue: acc.revenue + r.revenue,
-    }), { units: 0, revenue: 0 }), [rows])
+        cost:    acc.cost    + (r.cost || 0),
+    }), { units: 0, revenue: 0, cost: 0 }), [rows])
 
     function thStyle(key) {
         return {
@@ -139,7 +146,7 @@ function ProductSalesReportPage() {
             letterSpacing: '0.06em',
             textTransform: 'uppercase',
             color: MUTED,
-            cursor: (key === 'units' || key === 'revenue') ? 'pointer' : 'default',
+            cursor: (key === 'units' || key === 'revenue' || key === 'margin') ? 'pointer' : 'default',
             userSelect: 'none',
         }
     }
@@ -279,12 +286,17 @@ function ProductSalesReportPage() {
                             <th style={thStyle('revenue')} onClick={() => setSortKey('revenue')}>
                                 Ingresos {sortKey === 'revenue' ? '▾' : ''}
                             </th>
+                            <th style={thStyle('cost')}>Costo</th>
+                            <th style={thStyle('margin')} onClick={() => setSortKey('margin')}>
+                                Margen {sortKey === 'margin' ? '▾' : ''}
+                            </th>
+                            <th style={thStyle('marginPct')}>Margen %</th>
                         </tr>
                     </thead>
                     <tbody>
                         {rows.length === 0 ? (
                             <tr>
-                                <td colSpan={groupByCategory ? 3 : 4} style={{ padding: '20px', textAlign: 'center', color: MUTED, fontSize: '13px' }}>
+                                <td colSpan={groupByCategory ? 6 : 7} style={{ padding: '20px', textAlign: 'center', color: MUTED, fontSize: '13px' }}>
                                     Sin resultados.
                                 </td>
                             </tr>
@@ -294,6 +306,9 @@ function ProductSalesReportPage() {
                                 <td style={{ padding: '8px 12px', fontSize: '13px', color: MUTED }}>{r.categoryName}</td>
                                 <td style={{ padding: '8px 12px', fontSize: '13px', textAlign: 'right' }}>{r.units}</td>
                                 <td style={{ padding: '8px 12px', fontSize: '13px', textAlign: 'right', color: '#4ade80', fontWeight: 600 }}>{money(r.revenue)}</td>
+                                <td style={{ padding: '8px 12px', fontSize: '13px', textAlign: 'right', color: r.costMissing ? '#f59e0b' : MUTED }} title={r.costMissing ? 'Costo incompleto: falta capturar el costo de algún componente' : ''}>{r.costMissing ? '≈ ' : ''}{money(r.cost || 0)}</td>
+                                <td style={{ padding: '8px 12px', fontSize: '13px', textAlign: 'right', color: (r.margin || 0) >= 0 ? '#4ade80' : '#f87171', fontWeight: 600 }}>{money(r.margin || 0)}</td>
+                                <td style={{ padding: '8px 12px', fontSize: '13px', textAlign: 'right', color: MUTED }}>{r.marginPct == null ? '—' : r.marginPct.toFixed(1) + '%'}</td>
                             </tr>
                         ))}
                     </tbody>
@@ -303,6 +318,9 @@ function ProductSalesReportPage() {
                                 <td colSpan={groupByCategory ? 1 : 2} style={{ padding: '10px 12px', fontSize: '13px', fontWeight: 700 }}>Total</td>
                                 <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: 700, textAlign: 'right' }}>{totals.units}</td>
                                 <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: 700, textAlign: 'right', color: '#4ade80' }}>{money(totals.revenue)}</td>
+                                <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: 700, textAlign: 'right', color: MUTED }}>{money(totals.cost)}</td>
+                                <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: 700, textAlign: 'right', color: (totals.revenue - totals.cost) >= 0 ? '#4ade80' : '#f87171' }}>{money(totals.revenue - totals.cost)}</td>
+                                <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: 700, textAlign: 'right', color: MUTED }}>{totals.revenue > 0 ? (((totals.revenue - totals.cost) / totals.revenue) * 100).toFixed(1) + '%' : '—'}</td>
                             </tr>
                         </tfoot>
                     )}
