@@ -63,15 +63,17 @@ function getThisWeekStart() {
 
 // ── Category label map ─────────────────────────────────────────
 const CATEGORY_LABELS = {
-    pago_proveedor_banco: 'Pago proveedor (banco)',
-    pago_proveedor_caja:  'Pago proveedor (caja)',
-    nomina_caja:          'Nómina (caja)',
-    nomina_banco:         'Nómina (banco)',
-    renta_caja:           'Renta (caja)',
-    renta_banco:          'Renta (banco)',
-    propinas_entregadas:  'Propinas entregadas',
-    gasto_operativo_caja: 'Gasto operativo (caja)',
-    gasto_operativo_banco:'Gasto operativo (banco)',
+    pago_proveedor_banco:     'Pago proveedor (banco)',
+    pago_proveedor_caja:      'Pago proveedor (caja)',
+    pago_proveedor_resguardo: 'Pago proveedor (resguardo)',
+    nomina_caja:              'Nómina (caja)',
+    nomina_banco:             'Nómina (banco)',
+    nomina_resguardo:         'Nómina (resguardo)',
+    renta_caja:               'Renta (caja)',
+    renta_banco:              'Renta (banco)',
+    propinas_entregadas:      'Propinas entregadas',
+    gasto_operativo_caja:     'Gasto operativo (caja)',
+    gasto_operativo_banco:    'Gasto operativo (banco)',
 }
 
 function formatCategory(cat) {
@@ -86,12 +88,14 @@ function calcPeriod(payments, cashMovements, comandas) {
     const totalTransferSales  = payments.reduce((s, p) => s + Number(p.transferencia || 0), 0)
     const totalTips           = payments.reduce((s, p) => s + Number((p.tip_amount ?? p.comandas?.tip_total) || 0), 0)
 
-    const totalExpenses       = cashMovements.reduce((s, m) => m.movement_nature === 'expense'      ? s + Number(m.amount || 0) : s, 0)
-    const totalBankExpenses   = cashMovements.reduce((s, m) => m.source_location === 'bank' && m.movement_nature === 'expense' ? s + Number(m.amount || 0) : s, 0)
+    const totalExpenses         = cashMovements.reduce((s, m) => m.movement_nature === 'expense'      ? s + Number(m.amount || 0) : s, 0)
+    const totalBankExpenses     = cashMovements.reduce((s, m) => m.source_location === 'bank'       && m.movement_nature === 'expense' ? s + Number(m.amount || 0) : s, 0)
+    const totalCashExpenses     = cashMovements.reduce((s, m) => m.source_location === 'drawer'     && m.movement_nature === 'expense' ? s + Number(m.amount || 0) : s, 0)
+    const totalResguardoExpenses= cashMovements.reduce((s, m) => m.source_location === 'house_safe' && m.movement_nature === 'expense' ? s + Number(m.amount || 0) : s, 0)
     const totalTransfersToHouse = cashMovements.reduce((s, m) => m.destination_location === 'house_safe' ? s + Number(m.amount || 0) : s, 0)
     const totalTransfersToBank  = cashMovements.reduce((s, m) => m.destination_location === 'bank'       ? s + Number(m.amount || 0) : s, 0)
-    const totalDrawerIn       = cashMovements.reduce((s, m) => m.destination_location === 'drawer'       ? s + Number(m.amount || 0) : s, 0)
-    const totalDrawerOut      = cashMovements.reduce((s, m) => m.source_location === 'drawer'            ? s + Number(m.amount || 0) : s, 0)
+    const totalDrawerIn         = cashMovements.reduce((s, m) => m.destination_location === 'drawer'     ? s + Number(m.amount || 0) : s, 0)
+    const totalDrawerOut        = cashMovements.reduce((s, m) => m.source_location === 'drawer'          ? s + Number(m.amount || 0) : s, 0)
 
     const expensesByCategory  = cashMovements.reduce((acc, m) => {
         if (m.movement_nature === 'expense') {
@@ -105,7 +109,8 @@ function calcPeriod(payments, cashMovements, comandas) {
 
     return {
         totalSales, totalCashSales, totalCardSales, totalTransferSales, totalTips,
-        totalExpenses, totalBankExpenses, totalTransfersToHouse, totalTransfersToBank,
+        totalExpenses, totalBankExpenses, totalCashExpenses, totalResguardoExpenses,
+        totalTransfersToHouse, totalTransfersToBank,
         totalDrawerIn, totalDrawerOut, expensesByCategory, estimatedUtility,
     }
 }
@@ -314,15 +319,35 @@ function WeeklyReportPage() {
 
             {/* ── Egresos ── */}
             <div style={sectionCard}>
-                <div style={sectionTitle}>Egresos del período</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '10px' }}>
-                    <MetricCard label="Gastos totales (caja)"    value={money(period.totalExpenses)}          color={RED}  accent={RED} />
-                    <MetricCard label="Gastos desde banco"       value={money(period.totalBankExpenses)}      color={RED}  accent="#ef4444" />
-                    <MetricCard label="Traslados a resguardo"    value={money(period.totalTransfersToHouse)}  color={MUTED} accent="#475569" />
-                    <MetricCard label="Traslados a banco"        value={money(period.totalTransfersToBank)}   color={MUTED} accent="#475569" />
-                    <MetricCard label="Entradas a caja"          value={money(period.totalDrawerIn)}          color={MUTED} accent="#475569" />
-                    <MetricCard label="Salidas de caja"          value={money(period.totalDrawerOut)}         color={MUTED} accent="#475569" />
+                <div style={sectionTitle}>Gastos operativos del período</div>
+                <div style={{ fontSize: '11px', color: MUTED, marginBottom: '12px' }}>
+                    Dinero que salió permanentemente del negocio (proveedores, nómina, propinas).
                 </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '10px', marginBottom: '16px' }}>
+                    <MetricCard label="Total gastos operativos" value={money(period.totalExpenses)}          color={RED}   accent={RED} />
+                    <MetricCard label="Pagados desde banco"     value={money(period.totalBankExpenses)}      color={RED}   accent="#ef4444" />
+                    <MetricCard label="Pagados desde caja"      value={money(period.totalCashExpenses)}      color={RED}   accent="#ef4444" />
+                    {period.totalResguardoExpenses > 0 && (
+                        <MetricCard label="Pagados desde resguardo" value={money(period.totalResguardoExpenses)} color={RED} accent="#ef4444" />
+                    )}
+                </div>
+
+                {period.totalTransfersToHouse > 0 && (
+                    <>
+                        <div style={{ fontSize: '11px', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase', color: '#475569', marginBottom: '10px', marginTop: '4px', borderTop: '1px solid #222', paddingTop: '14px' }}>
+                            Traslados internos — no son gastos
+                        </div>
+                        <div style={{ fontSize: '11px', color: MUTED, marginBottom: '10px' }}>
+                            Dinero movido entre ubicaciones del negocio. No sale del negocio.
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '10px' }}>
+                            <MetricCard label="Movido a resguardo" value={money(period.totalTransfersToHouse)} color={MUTED} accent="#475569" />
+                            {period.totalTransfersToBank > 0 && (
+                                <MetricCard label="Movido a banco" value={money(period.totalTransfersToBank)} color={MUTED} accent="#475569" />
+                            )}
+                        </div>
+                    </>
+                )}
             </div>
 
             {/* ── Utilidad estimada ── */}
@@ -330,20 +355,28 @@ function WeeklyReportPage() {
                 ...sectionCard,
                 border: `1px solid ${period.estimatedUtility >= 0 ? '#166534' : '#7f1d1d'}`,
                 background: period.estimatedUtility >= 0 ? '#052e16' : '#1c0a0a',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: '8px',
             }}>
-                <div>
-                    <div style={{ fontSize: '11px', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase', color: MUTED, marginBottom: '4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
+                    <div style={{ fontSize: '11px', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase', color: MUTED }}>
                         Utilidad estimada del período
                     </div>
-                    <div style={{ fontSize: '11px', color: MUTED }}>Ventas totales − gastos totales del período</div>
+                    <div style={{ fontSize: '32px', fontWeight: '800', color: period.estimatedUtility >= 0 ? GREEN : RED }}>
+                        {money(period.estimatedUtility)}
+                    </div>
                 </div>
-                <div style={{ fontSize: '32px', fontWeight: '800', color: period.estimatedUtility >= 0 ? GREEN : RED }}>
-                    {money(period.estimatedUtility)}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontSize: '12px', color: MUTED }}>
+                    <span style={{ color: GREEN }}>{money(period.totalSales)}</span>
+                    <span>ventas</span>
+                    <span style={{ color: '#475569' }}>−</span>
+                    <span style={{ color: RED }}>{money(period.totalExpenses)}</span>
+                    <span>gastos operativos</span>
+                    <span style={{ color: '#475569' }}>=</span>
+                    <span style={{ color: period.estimatedUtility >= 0 ? GREEN : RED, fontWeight: '700' }}>
+                        {money(period.estimatedUtility)}
+                    </span>
+                    <span style={{ color: '#333', marginLeft: '8px' }}>
+                        (no incluye costo de producto — COGS pendiente)
+                    </span>
                 </div>
             </div>
 
