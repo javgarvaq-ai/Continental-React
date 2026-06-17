@@ -60,7 +60,7 @@ export async function getTodayPaymentStats() {
 export async function getOpenTables() {
     const { data, error } = await supabase
         .from('comandas')
-        .select('id, status, opened_at, folio, final_total, units(name), customers(name)')
+        .select('id, status, opened_at, folio, final_total, customer_name, units(name), customers(name)')
         .not('status', 'in', '(paid,cancelled)')
         .order('opened_at', { ascending: true })
     return { data: data || [], error }
@@ -150,7 +150,7 @@ export async function getTopProductsToday() {
 export async function getRecentPayments() {
     const { data, error } = await supabase
         .from('payments')
-        .select('id, created_at, total_paid, efectivo, tarjeta, transferencia, tip_amount, comandas(folio, customers(name))')
+        .select('id, created_at, total_paid, efectivo, tarjeta, transferencia, tip_amount, comandas(folio, customer_name, customers(name))')
         .order('created_at', { ascending: false })
         .limit(8)
     return { data: data || [], error }

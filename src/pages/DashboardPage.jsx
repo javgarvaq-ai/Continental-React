@@ -369,8 +369,8 @@ function DashboardPage() {
                                                         <span style={{ fontWeight: 600, fontSize: '14px', color: risk ? '#fcd34d' : '#e2e8f0' }}>
                                                             {t.units?.name || '—'}
                                                         </span>
-                                                        {t.customers?.name && (
-                                                            <span style={{ fontSize: '12px', color: '#64748b', marginLeft: '8px' }}>{t.customers.name}</span>
+                                                        {(t.customers?.name || t.customer_name) && (
+                                                            <span style={{ fontSize: '12px', color: '#64748b', marginLeft: '8px' }}>{t.customers?.name || t.customer_name}</span>
                                                         )}
                                                         {Number(t.final_total) > 0 && (
                                                             <span style={{ fontSize: '12px', color: risk ? '#fbbf24' : '#475569', marginLeft: '8px' }}>
@@ -411,8 +411,8 @@ function DashboardPage() {
                                                         <span style={{ fontWeight: 600, fontSize: '13px' }}>
                                                             C-{String(p.comandas?.folio || 0).padStart(6, '0')}
                                                         </span>
-                                                        {p.comandas?.customers?.name && (
-                                                            <span style={{ fontSize: '12px', color: '#64748b', marginLeft: '8px' }}>{p.comandas.customers.name}</span>
+                                                        {(p.comandas?.customers?.name || p.comandas?.customer_name) && (
+                                                            <span style={{ fontSize: '12px', color: '#64748b', marginLeft: '8px' }}>{p.comandas?.customers?.name || p.comandas?.customer_name}</span>
                                                         )}
                                                         {methods && (
                                                             <span style={{ fontSize: '11px', color: '#475569', marginLeft: '6px' }}>· {methods}</span>

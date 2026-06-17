@@ -420,9 +420,9 @@ function FolioHistoryPage() {
                                         </div>
                                         <div style={{ fontSize: '13px' }}>
                                             <span style={{ color: '#e2e8f0', fontWeight: 600 }}>{c.units?.name || '—'}</span>
-                                            {c.customers?.name && (
+                                            {(c.customers?.name || c.customer_name) && (
                                                 <span style={{ color: '#64748b', marginLeft: '8px', fontSize: '12px' }}>
-                                                    {c.customers.name}
+                                                    {c.customers?.name || c.customer_name}
                                                 </span>
                                             )}
                                         </div>

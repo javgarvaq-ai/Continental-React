@@ -1,3 +1,33 @@
+## Fix — Nombre de mesa en reportes — 2026-06-17
+
+### Objetivo
+Mostrar el nombre ingresado al abrir una mesa en todos los reportes, cuando no hay cliente asignado.
+
+### Análisis
+- Al crear la comanda, `customer_name` ya guarda el nombre escrito al abrir la mesa (sea cliente o texto libre).
+- Los reportes usan `customers?.name` via join por `customer_id` — si no hay cliente, ese join da null y no se muestra nada, aunque `customer_name` sí tenga el dato.
+- **Sin migración, sin cambios de lógica/flujo.** Solo exponer el campo ya existente en los selects y ajustar el display.
+
+### Cambios (solo lectura / display)
+- [ ] `services/tickets.js` → `searchComandas`: agregar `customer_name` al select.
+- [ ] `services/dashboard.js` → `getOpenTables` y `getRecentPayments`: agregar `customer_name` al select de comandas.
+- [ ] `pages/FolioHistoryPage.jsx`: mostrar `customers?.name || customer_name` (en lugar de solo `customers?.name`).
+- [ ] `pages/DashboardPage.jsx`: mismo cambio en las dos cards (mesas abiertas y últimos cobros).
+
+### Garantías
+- Sin migración, sin cambio de esquema.
+- Sin alterar lógica de cobro, apertura, asignación de clientes ni ningún otro flujo.
+- Si hay cliente → muestra nombre del cliente (mismo comportamiento actual). Si no → muestra el nombre de mesa escrito al abrir.
+
+### Verificación
+- [ ] `@babel/parser` en los 4 archivos editados — sintaxis OK.
+- [ ] Smoke visual (Javi): FolioHistory muestra nombre de mesa en folios sin cliente; Dashboard lo mismo.
+
+### Mensaje de commit sugerido
+`fix(reports): mostrar nombre de mesa cuando no hay cliente asignado`
+
+---
+
 ## Plan — Fase 1: Reporte de margen por producto — 2026-06-16 (HECHA, falta probar con datos reales)
 
 > ### Resultado Fase 1 ✅

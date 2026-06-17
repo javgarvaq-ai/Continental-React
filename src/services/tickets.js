@@ -82,7 +82,7 @@ export async function searchComandas({ startDate, endDate, search = '', status =
     let query = supabase
         .from('comandas')
         .select(`
-            id, folio, status, opened_at, cobrado_at, final_total, personas,
+            id, folio, status, opened_at, cobrado_at, final_total, personas, customer_name,
             units ( name ),
             customers ( name, customer_number ),
             payments ( total_paid, efectivo, tarjeta, transferencia, tip_amount )
