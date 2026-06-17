@@ -118,13 +118,13 @@ function calcGlobal(payments, cashMovements) {
     const drawerIn          = cashMovements.reduce((s, m) => m.destination_location === 'drawer'    ? s + Number(m.amount || 0) : s, 0)
     const drawerOut         = cashMovements.reduce((s, m) => m.source_location      === 'drawer'    ? s + Number(m.amount || 0) : s, 0)
     const toHouse           = cashMovements.reduce((s, m) => m.destination_location === 'house_safe'? s + Number(m.amount || 0) : s, 0)
-    const fromHouseToDrawer = cashMovements.reduce((s, m) => m.source_location === 'house_safe' && m.destination_location === 'drawer' ? s + Number(m.amount || 0) : s, 0)
+    const fromHouse         = cashMovements.reduce((s, m) => m.source_location === 'house_safe' ? s + Number(m.amount || 0) : s, 0)
     const toBank            = cashMovements.reduce((s, m) => m.destination_location === 'bank'      ? s + Number(m.amount || 0) : s, 0)
     const fromBankToDrawer  = cashMovements.reduce((s, m) => m.source_location === 'bank' && m.destination_location === 'drawer' ? s + Number(m.amount || 0) : s, 0)
     const bankExpenses      = cashMovements.reduce((s, m) => m.source_location === 'bank' && m.movement_nature === 'expense' ? s + Number(m.amount || 0) : s, 0)
 
     const drawerBalance = cashSales + drawerIn - drawerOut
-    const houseBalance  = toHouse - fromHouseToDrawer
+    const houseBalance  = toHouse - fromHouse
     const bankBalance   = cardSales + transferSales + toBank - fromBankToDrawer - bankExpenses
 
     return { drawerBalance, houseBalance, bankBalance }
