@@ -28,6 +28,7 @@ const NAV_SECTIONS = [
             { label: 'Productos',      path: '/admin/products'         },
             { label: 'Inventario',     path: '/admin/inventory-items'  },
             { label: 'Recetas',        path: '/admin/recipe-mappings'  },
+            { label: 'Costeo',         path: '/admin/product-costing'  },
             { label: 'Membresías',     path: '/admin/membership-plans' },
             { label: 'Clientes',       path: '/admin/customers'        },
             { label: 'Mesas/Unidades', path: '/admin/units'            },
