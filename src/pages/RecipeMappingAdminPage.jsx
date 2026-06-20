@@ -26,6 +26,11 @@ function RecipeMappingAdminPage() {
     const [newInventoryItemId, setNewInventoryItemId] = useState('')
     const [newDeductAmount, setNewDeductAmount] = useState('')
 
+    // ── Filtros (cliente, sin tocar el servicio) ──────────────
+    const [productSearch, setProductSearch] = useState('')
+    const [categoryFilter, setCategoryFilter] = useState('')
+    const [onlyWithRecipe, setOnlyWithRecipe] = useState(false)
+
     const [editingId, setEditingId] = useState('')
     const [editForm, setEditForm] = useState({
         inventory_item_id: '',
@@ -201,9 +206,6 @@ function RecipeMappingAdminPage() {
         setStatus('Recipe mapping status updated.')
     }
 
-    const filteredRecipeRows = recipeRows.filter(
-        (row) => selectedProductId === 'all' || row.product_id === selectedProductId
-    )
     const requiredInventoryProducts = products.filter(
         (product) => product.requires_inventory && product.active
     )
@@ -220,6 +222,29 @@ function RecipeMappingAdminPage() {
                 (row) => row.product_id === product.id && row.active
             )
     )
+
+    // ── Filtros (cliente) ─────────────────────────────────────
+    const coveredProductIds = new Set(coveredProducts.map((product) => product.id))
+    const productSearchQuery = productSearch.trim().toLowerCase()
+
+    const visibleProducts = requiredInventoryProducts.filter((product) => {
+        if (productSearchQuery && !product.name.toLowerCase().includes(productSearchQuery)) return false
+        if (categoryFilter && product.category_id !== categoryFilter) return false
+        if (onlyWithRecipe && !coveredProductIds.has(product.id)) return false
+        return true
+    })
+    const visibleProductIds = new Set(visibleProducts.map((product) => product.id))
+
+    const visibleMissingRecipeProducts = missingRecipeProducts.filter((product) => {
+        if (productSearchQuery && !product.name.toLowerCase().includes(productSearchQuery)) return false
+        if (categoryFilter && product.category_id !== categoryFilter) return false
+        return true
+    })
+
+    const filteredRecipeRows = recipeRows.filter((row) => {
+        if (selectedProductId === 'all') return visibleProductIds.has(row.product_id)
+        return row.product_id === selectedProductId
+    })
 
     function getCategoryName(categoryId) {
         return (
@@ -321,6 +346,46 @@ function RecipeMappingAdminPage() {
                         background: '#181818',
                         border: '1px solid #2f2f2f',
                         borderRadius: '16px',
+                        padding: '16px 20px',
+                        marginBottom: '24px',
+                        display: 'flex',
+                        gap: '12px',
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                    }}
+                >
+                    <input
+                        type="text"
+                        placeholder="Buscar producto por nombre..."
+                        value={productSearch}
+                        onChange={(event) => setProductSearch(event.target.value)}
+                        style={{ flex: 1, minWidth: '220px', ...inputStyle }}
+                    />
+                    <select
+                        value={categoryFilter}
+                        onChange={(event) => setCategoryFilter(event.target.value)}
+                        style={{ width: '200px', ...inputStyle }}
+                    >
+                        <option value="">Todas las categorías</option>
+                        {categories.map((category) => (
+                            <option key={category.id} value={category.id}>{category.name}</option>
+                        ))}
+                    </select>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer' }}>
+                        <input
+                            type="checkbox"
+                            checked={onlyWithRecipe}
+                            onChange={(event) => setOnlyWithRecipe(event.target.checked)}
+                        />
+                        Solo con receta activa
+                    </label>
+                </div>
+
+                <div
+                    style={{
+                        background: '#181818',
+                        border: '1px solid #2f2f2f',
+                        borderRadius: '16px',
                         padding: '20px',
                         marginBottom: '24px',
                     }}
@@ -342,9 +407,13 @@ function RecipeMappingAdminPage() {
                         >
                             All active products that require inventory currently have at least one active recipe mapping.
                         </div>
+                    ) : visibleMissingRecipeProducts.length === 0 ? (
+                        <div style={{ padding: '12px 14px', color: '#888', fontSize: '13px' }}>
+                            Sin resultados con estos filtros.
+                        </div>
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                            {missingRecipeProducts.map((product) => (
+                            {visibleMissingRecipeProducts.map((product) => (
                                 <div
                                     key={product.id}
                                     style={{
@@ -412,7 +481,7 @@ function RecipeMappingAdminPage() {
                                     style={inputStyle}
                                 >
                                     <option value="">Select product</option>
-                                    {requiredInventoryProducts.map((product) => (
+                                    {visibleProducts.map((product) => (
                                         <option key={product.id} value={product.id}>
                                             {product.name}
                                         </option>
@@ -484,7 +553,7 @@ function RecipeMappingAdminPage() {
                             >
                                 <option value="all">Todos los productos</option>
                                 <option value="">— Seleccionar para crear —</option>
-                                {requiredInventoryProducts.map((product) => (
+                                {visibleProducts.map((product) => (
                                     <option key={product.id} value={product.id}>
                                         {product.name}
                                     </option>
@@ -496,7 +565,9 @@ function RecipeMappingAdminPage() {
                             <div>Loading...</div>
                         ) : filteredRecipeRows.length === 0 ? (
                             <div>
-                                No recipe mappings found for <strong>{getProductName(selectedProductId)}</strong>.
+                                {selectedProductId === 'all'
+                                    ? 'No recipe mappings found for these filters.'
+                                    : <>No recipe mappings found for <strong>{getProductName(selectedProductId)}</strong>.</>}
                             </div>
                         ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>

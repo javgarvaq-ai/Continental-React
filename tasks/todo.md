@@ -1,3 +1,42 @@
+## Plan — Filtros en Inventario y Recetas (admin) — 2026-06-19 ✅ (APROBADA Y CODEADA, falta smoke de Javi)
+
+> ### Resultado (2026-06-19)
+> - [x] `InventoryItemsAdminPage.jsx`: barra de filtros (buscar nombre, select tipo de unidad derivado de los items cargados, toggle "solo sin costo capturado", toggle "ocultar inactivos") + `visibleItems` (useMemo); la lista renderiza `visibleItems`, mensaje "Sin resultados con estos filtros." cuando queda vacía. Cero cambios en `services/inventoryAdmin.js`.
+> - [x] `RecipeMappingAdminPage.jsx`: barra de filtros (buscar producto, select categoría, toggle "solo con receta activa") + `visibleProducts`/`visibleProductIds`/`visibleMissingRecipeProducts`. Reemplaza a `requiredInventoryProducts` en el dropdown "Product" del form de creación y en "Filter by product"; `filteredRecipeRows` ahora acota "Todos los productos" a `visibleProducts` (antes ignoraba cualquier filtro); "Products Missing Active Recipe" se filtra por nombre/categoría (no por `onlyWithRecipe`, no aplica). Mensaje "No recipe mappings found for these filters." cuando `selectedProductId==='all'` y no hay resultados. Cero cambios en `services/recipeMappingsAdmin.js`.
+> - [x] **Verificación:** ambos archivos parsean OK con `@babel/parser` (esta vez el mount de bash del proyecto sí los vio, solo con un desfase de 1 línea por EOF — no bloqueó la verificación).
+> - [ ] Pendiente: Javi prueba los filtros en ambas páginas en el navegador.
+
+### Objetivo
+Agregar filtros a `InventoryItemsAdminPage` y `RecipeMappingAdminPage` — hoy ninguna de las dos tiene buscador; Recetas solo tiene un dropdown de un producto a la vez.
+
+### Decisiones (Javi, 2026-06-19)
+- **Inventario:** varios filtros, el principal es **buscar por nombre**. Se agregan también (ya que el patrón es el mismo de `ProductCostingPage`, bajo costo agregarlos): "solo sin costo capturado", filtro por tipo de unidad, ocultar inactivos.
+- **Recetas:** buscar producto por nombre, filtro por categoría, toggle "solo con receta activa".
+
+### Pasos — `InventoryItemsAdminPage.jsx` (solo UI/cliente, `getAllInventoryItems` ya trae todo lo necesario)
+- [ ] Barra de filtros arriba de la lista (mismo patrón visual de `ProductCostingPage`): input de texto (busca por nombre, principal/destacado), toggle "Solo sin costo capturado" (`unit_cost == null`), select de `unit_type` (opciones derivadas de los items cargados), toggle "Ocultar inactivos".
+- [ ] `visibleItems = items.filter(...)` con los 4 criterios combinados; la lista renderiza `visibleItems` en vez de `items`.
+- [ ] Sin cambios en `services/inventoryAdmin.js` — todo el filtrado es en cliente.
+
+### Pasos — `RecipeMappingAdminPage.jsx` (solo UI/cliente, `getRecipeMappingsAdminData` ya trae products+categories+recipeRows)
+- [ ] Nuevos estados: `productSearch` (texto), `categoryFilter` (select de `categories`), `onlyWithRecipe` (toggle).
+- [ ] `visibleProducts = requiredInventoryProducts.filter(matches search + category + (onlyWithRecipe ? tiene receta activa : true))` — reemplaza a `requiredInventoryProducts` en: el dropdown "Product" del formulario de creación, y el dropdown "Filter by product" de "Current Mappings".
+- [ ] Cuando `selectedProductId === 'all'`, `filteredRecipeRows` también se acota a `row.product_id` dentro de `visibleProducts` (hoy "Todos" ignora cualquier filtro).
+- [ ] Sección "Products Missing Active Recipe" se filtra por `productSearch` + `categoryFilter` (no por `onlyWithRecipe`, no aplica ahí).
+- [ ] Sin cambios en `services/recipeMappingsAdmin.js`.
+
+### Alcance / garantías
+- **Solo lectura/UI.** No toca `product_recipes`, `inventory_items`, esquema ni RLS — mismas queries que ya existen, solo se filtra en cliente.
+
+### Verificación
+- [ ] `@babel/parser` de los 2 archivos.
+- [ ] Smoke visual (Javi): buscar por nombre en ambas páginas, probar cada toggle/select, confirmar que "Current Mappings" y "Missing Active Recipe" respetan los filtros.
+
+### Commit sugerido
+`feat(admin): filtros en Inventario (nombre/costo/tipo/activo) y Recetas (nombre/categoría/cobertura)`
+
+---
+
 ## Plan — Página de Costeo de productos (costo/margen sin depender de ventas) — 2026-06-19 ✅ (APROBADA Y CODEADA, falta smoke de Javi)
 
 > ### Resultado (2026-06-19)

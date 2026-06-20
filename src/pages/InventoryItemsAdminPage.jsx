@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStatus } from '../hooks/useStatus'
 import {
@@ -35,6 +35,28 @@ function InventoryItemsAdminPage() {
 
     const [adjustingId, setAdjustingId] = useState(null)
     const [adjustForm, setAdjustForm] = useState({ amount: '', type: 'entry', note: '' })
+
+    // ── Filtros (cliente, sin tocar el servicio) ──────────────
+    const [searchText, setSearchText] = useState('')
+    const [onlySinCosto, setOnlySinCosto] = useState(false)
+    const [unitTypeFilter, setUnitTypeFilter] = useState('')
+    const [hideInactive, setHideInactive] = useState(false)
+
+    const unitTypeOptions = useMemo(() => {
+        const set = new Set(items.map(item => item.unit_type).filter(Boolean))
+        return Array.from(set).sort()
+    }, [items])
+
+    const visibleItems = useMemo(() => {
+        const q = searchText.trim().toLowerCase()
+        return items.filter(item => {
+            if (q && !item.name.toLowerCase().includes(q)) return false
+            if (onlySinCosto && item.unit_cost != null) return false
+            if (unitTypeFilter && item.unit_type !== unitTypeFilter) return false
+            if (hideInactive && !item.active) return false
+            return true
+        })
+    }, [items, searchText, onlySinCosto, unitTypeFilter, hideInactive])
 
     const currentUser = useAuthStore(state => state.user)
     const isAdmin = currentUser?.role === 'admin'
@@ -141,10 +163,40 @@ function InventoryItemsAdminPage() {
                     </form>
                 </div>
 
+                {/* FILTERS */}
+                <div style={{ background: '#181818', border: '1px solid #2f2f2f', borderRadius: '16px', padding: '16px 20px', marginBottom: '16px', display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <input
+                        type="text"
+                        placeholder="Buscar por nombre..."
+                        value={searchText}
+                        onChange={(e) => setSearchText(e.target.value)}
+                        style={{ flex: 1, minWidth: '220px', padding: '10px 12px', borderRadius: '8px', border: '1px solid #444', background: '#111', color: 'white' }}
+                    />
+                    <select
+                        value={unitTypeFilter}
+                        onChange={(e) => setUnitTypeFilter(e.target.value)}
+                        style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid #444', background: '#111', color: 'white' }}
+                    >
+                        <option value="">Todos los tipos</option>
+                        {unitTypeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={onlySinCosto} onChange={(e) => setOnlySinCosto(e.target.checked)} />
+                        Solo sin costo capturado
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={hideInactive} onChange={(e) => setHideInactive(e.target.checked)} />
+                        Ocultar inactivos
+                    </label>
+                </div>
+
                 {/* ITEMS LIST */}
                 {loading ? <div>Loading...</div> : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        {items.map(item => (
+                        {visibleItems.length === 0 && (
+                            <div style={{ padding: '16px', color: '#888', fontSize: '13px' }}>Sin resultados con estos filtros.</div>
+                        )}
+                        {visibleItems.map(item => (
                             <div key={item.id} style={{ background: '#181818', border: '1px solid #2f2f2f', borderRadius: '14px', padding: '16px' }}>
                                 {editingId === item.id ? (
                                     <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
