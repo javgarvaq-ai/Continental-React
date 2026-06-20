@@ -1,3 +1,58 @@
+## Plan — Página de Costeo de productos (costo/margen sin depender de ventas) — 2026-06-19 ✅ (APROBADA Y CODEADA, falta smoke de Javi)
+
+> ### Resultado (2026-06-19)
+> - [x] `services/productCosting.js` (nuevo): `getProductCostingData()` + función pura exportada `computeProductCostingRows({products, categories, recipeRows, inventoryItems, allowedMixerRows})`, separada para poder probarse sin red. Reusa `computeProductCost` de `utils/cost.js` SIN modificarlo. Estimado de combos = promedio de costo de mixers elegibles con costo completo × `free_mixers_qty`; si el combo tiene `manual_cost` o receta propia completa, eso gana sobre el estimado (igual que cualquier producto).
+> - [x] `pages/ProductCostingPage.jsx` (nuevo): tabla Producto/Categoría/Precio/Costo/Fuente/Margen $/Margen %, filtro categoría + búsqueda + ocultar inactivos, export CSV. Badge ámbar solo en "sin costo" real; badge azul "≈ Estimado (mixers)" para combos estimados (tooltip explica que el costo real depende de lo elegido en cada venta).
+> - [x] `App.jsx` → ruta `/admin/product-costing` (`AuthRoute`, admin-only). `AdminNav.jsx` → botón "Costeo" junto a "Recetas".
+> - [x] **Verificación:** 6/6 casos en node (receta completa, receta incompleta no-combo, manual_cost, combo estimado por promedio×qty, combo con mixers sin costear → sin costo, combo con manual_cost gana sobre el estimado). Sintaxis de los 4 archivos confirmada con `@babel/parser` sobre copia fresca en `outputs/` (el mount de bash del proyecto seguía stale — mismo problema ya documentado en `lessons.md`, archivos reales correctos).
+> - [ ] Pendiente: Javi abre `/admin/product-costing`, revisa un combo conocido (¿el estimado se acerca a lo esperado?) y confirma que no rompe nada visualmente.
+
+### Objetivo
+Vista admin nueva que muestre, para **cada producto activo**, su costo calculado (receta o `manual_cost`) y margen $/% contra el precio de venta — **sin necesitar que haya ventas históricas**. Hoy el único lugar donde se ve costo es "Ventas por producto", que solo calcula costo de lo que YA se vendió en un periodo; Javi necesita auditar el costeo en frío, producto por producto.
+
+### Contexto (ya existe, se reusa)
+- `utils/cost.js → computeProductCost(product, recipes, inventoryItemsById)` — el mismo motor puro que usa el snapshot de cobro (`finalize_comanda_payment`) y el reporte de margen. No se toca.
+- `services/recipeMappingsAdmin.js → getRecipeMappingsAdminData` ya trae products + product_recipes + inventory_items, casi todo lo necesario — le falta `price` en el select de products.
+
+### Decisiones (Javi, 2026-06-19)
+- **Página nueva dedicada** (`/admin/product-costing`), separada de "Recetas" y de "Productos".
+- Muestra **costo + margen $ y %** (no solo costo).
+
+### Combos (is_shot) — costo ESTIMADO por promedio de mixers elegibles (decidido, Javi 2026-06-19)
+Por diseño, las cubetas/combos no llevan receta propia. Ya existe `product_allowed_mixers(shot_product_id, mixer_product_id, active)` — el catálogo de cervezas que se pueden elegir para ese combo (lo usa `ShotMixerSelector` en el POS). Con eso SÍ se puede estimar un costo en frío:
+
+`costo_estimado_combo = promedio(costo de cada mixer elegible con costo completo) × free_mixers_qty`
+
+- Se promedia solo sobre los mixers elegibles que tengan costo `complete` (vía su propia receta); si ninguno tiene costo capturado → el combo queda "sin costo" (real, hay que cargar recetas de esas cervezas).
+- Esto es **solo para esta vista en frío**. NO se toca `utils/cost.js` ni el snapshot de cobro — en la venta real, el roll-up YA calcula el costo exacto según los mixers que el cliente eligió de verdad (eso no cambia). Aquí solo se agrega una capa de estimación encima, en `productCosting.js`.
+- Si el combo tiene `manual_cost` puesto a mano, ese gana (igual que cualquier producto) — el estimado por promedio solo aplica cuando no hay receta propia ni `manual_cost`.
+- Badge distinto al de "incompleto": algo como "≈ estimado (promedio de N mixers)" en vez del ámbar de "falta costear", para no confundir un estimado válido con un dato faltante.
+
+### Pasos (archivos)
+1. `services/productCosting.js` (nuevo) → `getProductCostingData()`: trae `products(id, name, price, manual_cost, is_shot, free_mixers_qty, active, category_id)`, `categories(id, name)`, `product_recipes(active)`, `inventory_items(id, unit_cost)`, `product_allowed_mixers(shot_product_id, mixer_product_id, active)` (activos). Por producto:
+   - `baseline = computeProductCost(product, recipes, invById)` (reuso de `utils/cost.js`, sin tocarlo).
+   - Si `baseline.complete` → usar baseline tal cual (`source: 'recipe'|'manual'`).
+   - Si NO y `product.is_shot` → calcular promedio de costo de sus mixers elegibles (cada uno vía su propio `computeProductCost`) × `free_mixers_qty` → si hay al menos 1 mixer con costo completo, `source: 'estimated_mixers_avg'`, `complete: true` (estimado); si ninguno, `complete: false` (sin costo real).
+   - Si NO y no es combo → baseline incompleto tal cual ("sin costo").
+   - `margin = price - cost`, `marginPct = price > 0 ? margin/price*100 : null`.
+2. `pages/ProductCostingPage.jsx` (nuevo) → tabla: Producto · Categoría · Precio · Costo · Margen $ · Margen % · Fuente (receta / manual / estimado mixers / sin costo). Filtro por categoría + búsqueda texto libre + toggle ocultar inactivos. Badge ámbar solo para "sin costo" real; badge informativo (azul/neutro) para "estimado". Mismo patrón visual que `RecipeMappingAdminPage`/`ProductSalesReportPage` (AdminNav, sectionCard).
+3. `App.jsx` → ruta `/admin/product-costing`, `AuthRoute` (admin-only, igual que recipe-mappings).
+4. `components/AdminNav.jsx` → botón nuevo en sección "Configuración", junto a "Recetas".
+
+### Alcance / garantías
+- **Solo lectura.** No toca `finalize_comanda_payment`, no toca `utils/cost.js`, no toca esquema, no toca RLS (mismos selects que ya usan `recipeMappingsAdmin.js`/`productsAdmin.js`, permitidos a `authenticated`).
+- No reemplaza el reporte de margen por ventas — es complementario (costeo estimado "en frío" vs costeo real ya cobrado).
+
+### Verificación
+- [ ] Test puro en node de la función que arma las filas: receta completa, receta con insumo sin costo (no-combo → "sin costo"), manual_cost, combo con mixers elegibles costeados (verifica el promedio × qty), combo con mixers sin costear (→ "sin costo"), combo con `manual_cost` puesto a mano (gana sobre el estimado).
+- [ ] Lint/`@babel/parser` de los 4 archivos.
+- [ ] Smoke visual (Javi): abrir `/admin/product-costing`, comparar el estimado de un combo conocido contra el cálculo a mano, confirmar que un combo cobrado de verdad cuadra entre el estimado y lo que salió en "Ventas por producto".
+
+### Commit sugerido
+`feat(admin): página de costeo por producto (costo/margen sin depender de ventas)`
+
+---
+
 ## Fix — Nombre de mesa en reportes — 2026-06-17
 
 ### Objetivo

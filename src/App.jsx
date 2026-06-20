@@ -29,6 +29,7 @@ import ComandaEventsPage from './pages/ComandaEventsPage'
 import FolioHistoryPage from './pages/FolioHistoryPage'
 import ProductSalesReportPage from './pages/ProductSalesReportPage'
 import LedgerPage from './pages/LedgerPage'
+import ProductCostingPage from './pages/ProductCostingPage'
 
 function App() {
   const verifySession = useAuthStore(state => state.verifySession)
@@ -57,6 +58,14 @@ function App() {
           element={
             <AuthRoute>
               <RecipeMappingAdminPage />
+            </AuthRoute>
+          }
+        />
+        <Route
+          path="/admin/product-costing"
+          element={
+            <AuthRoute>
+              <ProductCostingPage />
             </AuthRoute>
           }
         />
