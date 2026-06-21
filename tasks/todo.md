@@ -1,3 +1,88 @@
+## Plan — Descuento de membresías: desglose en ticket + captura/reconciliación de dinero — 2026-06-21 🔍 EN REVISIÓN CON JAVI (sin aprobar, sin código todavía)
+
+### Diagnóstico (investigado con subagente, archivo:línea confirmados)
+
+**Flujo actual del descuento:**
+1. `src/utils/membership.js:20-29` — `computeMembershipDiscount()` calcula el % y monto de descuento sobre el total del carrito. Función pura, solo para mostrar en pantalla.
+2. `src/hooks/usePayment.js:68` — se resta del total (`displayedTotal = cartTotal - discountAmount`) y ESE es el número que se cobra.
+3. `src/services/comandaCheckout.js:104-156` — el RPC `finalize_comanda_payment` recibe el total YA descontado (`p_total`), pero **no tiene ningún parámetro de descuento**. `payments` no tiene columna de descuento. `comanda_items` tampoco — cada item se guarda a precio de lista normal.
+4. Por separado, DESPUÉS de confirmado el cobro, se llama otro RPC (`process_membership_on_payment`) que sí guarda el monto exacto, pero en `membership_benefit_usage.discount_amount_saved` — una tabla de historial de beneficios, sin relación con `comanda_items`/`payments`/reportes. **Si este segundo RPC falla, el cobro ya se hizo y el registro del descuento se pierde** (`usePayment.js:194-200` solo guarda un warning, no revierte nada).
+
+**Problema 1 — Ticket sin desglose:**
+`Ticket.jsx` ya tiene la lógica correcta para mostrar "Subtotal / Descuento X% / Total" (líneas 93-200), pero `handlePresentBill` (`usePayment.js:139-167`, el ticket de "cuenta" que se le da al cliente) **nunca le pasa `membershipInfo`** al llamar `printTicket`. Por eso nunca se ve el desglose ahí. (El ticket de "pagado" sí lo recibe, salvo que haya `membershipWarning`.)
+
+**Problema 2 — Dinero no coincide:**
+- Los totales de turno/caja (`payments.total_paid`) SÍ reflejan el descuento correctamente — ahí no hay descuadre.
+- El descuadre está en los reportes por producto/categoría (`reports.js:264-273` y `323-330`): suman `unit_price * quantity` de `comanda_items`, que es SIEMPRE precio de lista. Como el descuento nunca se escribe en `comanda_items`, la suma de "ventas por producto" siempre será mayor que el dinero real cobrado cuando hay membresía con descuento de por medio — por exactamente el monto del descuento.
+- La auditoría previa (`tasks/verificacion_ventas_dinero_2026-06-21.sql`, BLOQUE 5) ya expone este síntoma (`items_calc` vs `final_total` no coinciden) pero sin poder distinguir "descuento legítimo" de "error de captura", porque no existe columna de descuento en ningún lado confiable.
+
+**Raíz del problema (ambos casos):** el descuento nunca se persiste como dato estructurado junto al pago/items — solo vive como resta efímera en JS + un registro desconectado en `membership_benefit_usage`.
+
+### Plan propuesto (pendiente de aprobación — NO IMPLEMENTAR AÚN)
+
+- [ ] **Fix 1 — Ticket de cuenta:** en `handlePresentBill` (`usePayment.js`), pasar el mismo objeto `membershipInfo` que ya se construye en `handleConfirmPayment` (líneas 348-357). Cambio acotado, sin tocar esquema ni RPCs. Bajo riesgo.
+- [ ] **Fix 2 — Captura atómica del descuento:** agregar columnas `discount_amount` y `discount_pct` a `payments`, y mandarlas como parámetros nuevos (`p_discount_amount`, `p_discount_pct`) al RPC `finalize_comanda_payment` (migración nueva en `supabase/migrations/`), para que el descuento quede grabado en la MISMA transacción que el cobro — eliminando la dependencia del segundo RPC (`process_membership_on_payment`) como única fuente de verdad. Ese segundo RPC se mantiene igual, sigue siendo el historial de beneficios del cliente.
+- [ ] **Fix 3 — Reportes:** ajustar `getProductSalesForPeriod` / `getTopCategoriesRevenue` en `reports.js` para que el total del periodo cuadre con `payments.total_paid` real. **Pendiente decisión de Javi** (ver pregunta abajo) sobre el nivel de detalle.
+- [ ] **Verificación:** nuevo bloque SQL (mismo patrón que `verificacion_ventas_dinero_2026-06-21.sql`) que reconcilie `SUM(payments.discount_amount)` vs `SUM(membership_benefit_usage.discount_amount_saved)` vs el descuadre `items_calc - final_total` del BLOQUE 5 — para confirmar que después del fix las tres cantidades cuadran.
+
+### Decisión final de Javi (2026-06-21): SOLO Fix 1 — quirúrgico
+Javi decidió NO tocar `payments`/RPC de cobro/reportes (Fix 2 y Fix 3 quedan descartados por ahora — riesgo de tocar el flujo de cobro real no se justifica solo para esto). El descuadre de reportes por producto/categoría sigue existiendo igual que antes; se revisará manualmente cuando haga falta (con mi ayuda, comparando `membership_benefit_usage.discount_amount_saved` contra el BLOQUE 5 de `verificacion_ventas_dinero_2026-06-21.sql`).
+
+### ✅ Hecho (2026-06-21) — Fix 1: desglose de descuento en ticket de cuenta
+- [x] `src/hooks/usePayment.js` — `handlePresentBill` ahora pasa `membershipInfo: { customerName, customerNumber, planName, discountAmount, discountPct }` a `printTicket` (antes no mandaba nada). Mismos datos que ya estaban en memoria (`discountAmount`, `membershipDiscountPct`), sin tocar cálculo ni DB.
+- [x] `src/components/Ticket.jsx` — el bloque de fidelidad (`membershipHtml`: visitas del mes / créditos botella) se quitó del footer de tipo `'cuenta'`, porque esos datos aún no existen en ese punto del flujo (se calculan al confirmar el pago, no al presentar cuenta). El desglose Subtotal/Descuento/Total (`totalsHtml`, líneas 110-129) ya funcionaba correctamente y no se tocó — solo necesitaba recibir `membershipInfo`. Sigue intacto para tipo `'pagado'`.
+- Cero cambios de esquema, RPC, o lógica de cobro. Cero riesgo de dinero.
+
+### Verificación
+- [ ] Javi prueba en el POS: comanda con cliente+membresía con descuento → "Presentar cuenta" → confirmar que el ticket de cuenta impreso muestra Subtotal / Descuento X% / TOTAL, y que NO aparece el bloque de "Visitas este mes/Créditos botella" (ese debe seguir saliendo solo en el ticket de "pagado").
+- [ ] Confirmar que una comanda SIN membresía sigue imprimiendo el ticket de cuenta igual que antes (sin bloque de descuento, sin errores).
+
+### Commit sugerido
+`fix(ticket): mostrar desglose de descuento de membresía en ticket de cuenta`
+
+---
+
+## Plan — Verificación de ventas y dinero (2026-06-08 a 2026-06-21) — 2026-06-21 ✅ (APROBADA Y GENERADA, falta que Javi corra el script y me pase resultados)
+
+> ### Resultado (2026-06-21)
+> - [x] `tasks/verificacion_ventas_dinero_2026-06-21.sql` generado — 12 bloques, mismo patrón que `verificacion_conteo_2026-06-13.sql`, rango actualizado a 2026-06-08 / 2026-06-21. Confirmado que el esquema de `payments`/`shifts`/`comandas`/`comanda_items`/`cash_movements`/`inventory_movements`/`customer_memberships` no cambió desde el 13 jun (solo migraciones de costeo/COGS, que no se tocan aquí).
+> - [ ] Pendiente: Javi corre cada bloque en el SQL Editor de Supabase y me pasa los resultados para comparar contra el POS/admin.
+
+### Objetivo
+Generar `tasks/verificacion_ventas_dinero_2026-06-21.sql` para que Javi corra en el SQL Editor de Supabase y me pase los resultados, y así confirmemos que cuadran contra lo que muestra el POS/admin en el periodo.
+
+### Alcance (confirmado con Javi)
+- Rango: día operativo (corte 06:00 CDMX, misma fórmula que `operationalDateKey()`) **2026-06-08 a 2026-06-21**.
+- Solo ventas y dinero — **sin bloque de margen/COGS** (decisión de Javi: el costeo todavía no está completamente capturado para todos los productos, lo dejaríamos incompleto/confuso).
+- Mismo patrón ya validado en `tasks/verificacion_conteo_2026-06-13.sql` (12 bloques), solo actualizando el rango de fechas — sin cambios de esquema desde entonces que afecten estas tablas (`payments`, `shifts`, `comandas`, `comanda_items`, `cash_movements`, `inventory_movements`, `customer_memberships`).
+
+### Bloques (mismo patrón que el script anterior)
+1. Resumen maestro de turnos — guardado vs recalculado desde `payments`/`cash_movements`.
+2. Ingresos por día operativo (replica `buildDailyRevenue` del admin).
+3. Gran total del periodo (cuadre rápido).
+4. Consistencia interna de cada pago (efectivo+tarjeta+transferencia = total_paid).
+5. Comanda vs items vs pago (¿se cobró todo lo que se vendió?).
+6. Anomalías de integridad — debe regresar 0 filas en cada tipo (comandas pagadas sin pago, pagos huérfanos, pagos sin turno, etc.).
+7. Ventas por producto.
+8. Ventas por categoría.
+9. Movimientos de caja (detalle + resumen por naturaleza/ubicación).
+10. Inventario: ventas sin deducción registrada (0 filas esperadas).
+11. Inventario: stock actual + consumo del periodo.
+12. Membresías vendidas/activadas en el periodo.
+
+### Garantías
+- Solo `SELECT`. Cero migraciones, cero cambios de esquema/RLS/lógica/datos.
+- Archivo nuevo en `tasks/`, no se pushea ni se ejecuta automáticamente.
+
+### Verificación
+- [ ] Confirmar que las fechas/columnas usadas siguen vigentes en el esquema actual (`product_recipes`, `inventory_movements.movement_type`, etc. sin cambios desde el 13 jun).
+- [ ] Javi corre cada bloque en el SQL Editor de Supabase y me pasa los resultados (o pega capturas) para comparar contra el POS/admin.
+
+### Commit sugerido
+No aplica — archivo de solo consulta en `tasks/`, no se commitea código de la app. (Si Javi quiere versionarlo: `docs(tasks): script de verificación ventas/dinero 8-21 jun`.)
+
+---
+
 ## Plan — Filtros en Inventario y Recetas (admin) — 2026-06-19 ✅ (APROBADA Y CODEADA, falta smoke de Javi)
 
 > ### Resultado (2026-06-19)

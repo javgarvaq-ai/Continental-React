@@ -129,7 +129,6 @@ function buildTicketHtml({
         `;
 
     footerHtml = `
-          ${membershipHtml}
           <div class="divider">--------------------------------</div>
           <div class="center footer">Gracias por su visita</div>
           <div class="center footer small">Si requiere factura</div>

@@ -158,6 +158,17 @@ export function usePayment({
                 items: visibleCartItems,
                 unit: selectedUnit,
                 onBlocked: () => { printBlocked = true },
+                // Solo para desglosar el descuento (Subtotal/Descuento/Total) en el
+                // ticket de cuenta. Aún no hay membershipResult (eso ocurre al cobrar),
+                // así que no se manda newVisitCount/bottleCredits — ver Ticket.jsx,
+                // el bloque de fidelidad (visitas/créditos) solo aplica a tipo 'pagado'.
+                membershipInfo: currentCustomer && currentMembership ? {
+                    customerName: currentCustomer.name,
+                    customerNumber: String(currentCustomer.customer_number).padStart(4, '0'),
+                    planName: currentMembership.membership_plans?.name,
+                    discountAmount,
+                    discountPct: membershipDiscountPct,
+                } : null,
             })
 
             await onBackToUnits(
