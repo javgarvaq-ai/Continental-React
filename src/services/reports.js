@@ -282,15 +282,15 @@ export async function getProductSalesForPeriod({ startDate, endDate }) {
         else b.cost += uc * units
     }
 
-    // 3) Override de unidades (beer packs) + margen final.
+    // 3) Margen final. (unit override por beer packs eliminado — las cubetas/promos
+    //    muestran cuántas veces se vendió el combo, no cuántos componentes individuales.
+    //    Para ver unidades físicas por SKU usa getProductUnitsForPeriod.)
     const rows = Object.values(products).map(p => {
-        const override = mixerUnitCounts[p.productId]
-        const units = override !== undefined ? override : p.units
         const margin = p.revenue - p.cost
         return {
             productName: p.productName,
             categoryName: p.categoryName,
-            units,
+            units: p.units,
             revenue: p.revenue,
             cost: p.cost,
             margin,
@@ -300,6 +300,125 @@ export async function getProductSalesForPeriod({ startDate, endDate }) {
     })
 
     return { data: rows.sort((a, b) => b.revenue - a.revenue), error: null }
+}
+
+// ── Units per product (inventory view) ─────────────────────────
+// Counts physical units per SKU across ALL channels:
+//   - unitsDirect  = sold individually (is_free_mixer = false)
+//   - unitsInPromo = served as component inside a cubeta/promo/shot (is_free_mixer = true)
+//   - totalUnits   = unitsDirect + unitsInPromo
+// Also returns a promosList breakdown (which promos each unit count came from).
+// Membership benefits are excluded.
+export async function getProductUnitsForPeriod({ startDate, endDate }) {
+    const startIso = `${startDate}T06:00:00-06:00`
+    const endIso   = `${addDaysToDateString(endDate, 1)}T06:00:00-06:00`
+
+    const { data: comandas, error: comandasError } = await supabase
+        .from('comandas')
+        .select('id')
+        .eq('status', 'paid')
+        .gte('cobrado_at', startIso)
+        .lt('cobrado_at', endIso)
+
+    if (comandasError) return { data: [], error: comandasError }
+    if (!comandas || comandas.length === 0) return { data: [], error: null }
+
+    const { data: items, error } = await supabase
+        .from('comanda_items')
+        .select(`
+            quantity,
+            is_free_mixer,
+            is_free_benefit,
+            source_shot_product_id,
+            product_id,
+            products:products!comanda_items_product_id_fkey(
+                name,
+                is_shot,
+                categories(name)
+            )
+        `)
+        .in('comanda_id', comandas.map(c => c.id))
+        .eq('status', 'active')
+
+    if (error || !items) return { data: [], error }
+
+    // Build name/category map from the items we already have
+    const nameById     = {}
+    const categoryById = {}
+    const isShotById   = {}
+    for (const item of items) {
+        nameById[item.product_id]     = item.products?.name || null
+        categoryById[item.product_id] = item.products?.categories?.name || 'Sin categoría'
+        isShotById[item.product_id]   = item.products?.is_shot || false
+    }
+
+    // Some source_shot_product_ids may point to cancelled shot rows (not in items).
+    // Fetch their names so the promo breakdown makes sense.
+    const missingIds = [...new Set(
+        items
+            .filter(i => i.is_free_mixer && i.source_shot_product_id && !nameById[i.source_shot_product_id])
+            .map(i => i.source_shot_product_id)
+    )]
+    if (missingIds.length > 0) {
+        const { data: extra } = await supabase
+            .from('products')
+            .select('id, name, categories(name)')
+            .in('id', missingIds)
+        for (const p of extra || []) {
+            nameById[p.id]     = p.name
+            categoryById[p.id] = p.categories?.name || 'Sin categoría'
+        }
+    }
+
+    // Aggregate by product_id
+    const byProduct = {}
+    function ensureBucket(productId) {
+        if (!byProduct[productId]) {
+            byProduct[productId] = {
+                productId,
+                productName:  nameById[productId]     || 'Desconocido',
+                categoryName: categoryById[productId] || 'Sin categoría',
+                isBundle:     isShotById[productId]   || false,
+                unitsDirect:  0,
+                unitsInPromo: 0,
+                promos:       {},
+            }
+        }
+        return byProduct[productId]
+    }
+
+    for (const item of items) {
+        if (item.is_free_benefit) continue
+        const units = Number(item.quantity || 1)
+
+        if (item.is_free_mixer && item.source_shot_product_id) {
+            // Served as a component inside a promo / cubeta / shot
+            const b = ensureBucket(item.product_id)
+            b.unitsInPromo += units
+            const pid = item.source_shot_product_id
+            if (!b.promos[pid]) b.promos[pid] = { promoId: pid, promoName: nameById[pid] || 'Promo desconocida', units: 0 }
+            b.promos[pid].units += units
+        } else if (!item.is_free_mixer) {
+            // Direct sale (includes the promo/cubeta products themselves)
+            ensureBucket(item.product_id).unitsDirect += units
+        }
+    }
+
+    const rows = Object.values(byProduct)
+        .map(p => ({
+            productId:    p.productId,
+            productName:  p.productName,
+            categoryName: p.categoryName,
+            isBundle:     p.isBundle,
+            unitsDirect:  p.unitsDirect,
+            unitsInPromo: p.unitsInPromo,
+            totalUnits:   p.unitsDirect + p.unitsInPromo,
+            promosList:   Object.values(p.promos).sort((a, b) => b.units - a.units),
+        }))
+        .filter(p => p.totalUnits > 0)
+        .sort((a, b) => b.totalUnits - a.totalUnits)
+
+    return { data: rows, error: null }
 }
 
 export async function getTopCategoriesRevenue(days = 14) {
