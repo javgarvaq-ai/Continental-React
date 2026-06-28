@@ -29,22 +29,50 @@ function DailyRevenueChart({ data }) {
     const max = Math.max(...data.map(d => d.revenue), 1)
     return (
         <div>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', height: '120px', marginBottom: '6px' }}>
-                {data.map(d => (
-                    <div
-                        key={d.date}
-                        title={`${d.label}: ${money(d.revenue)} · ${d.comandas} cobros`}
-                        style={{
-                            flex: 1,
-                            minWidth: 0,
-                            height: `${Math.max(3, (d.revenue / max) * 100)}%`,
-                            background: d.revenue > 0 ? '#4ade80' : '#1e293b',
-                            borderRadius: '3px 3px 0 0',
-                            transition: 'height 0.3s ease',
-                            cursor: 'default',
-                        }}
-                    />
-                ))}
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', height: '150px', marginBottom: '6px' }}>
+                {data.map(d => {
+                    const pct = Math.max(3, (d.revenue / max) * 100)
+                    const hasRevenue = d.revenue > 0
+                    return (
+                        <div
+                            key={d.date}
+                            title={`${d.label}: ${money(d.revenue)} · ${d.comandas} cobros`}
+                            style={{
+                                flex: 1,
+                                minWidth: 0,
+                                height: '100%',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'flex-end',
+                                cursor: 'default',
+                            }}
+                        >
+                            {hasRevenue && (
+                                <div style={{
+                                    fontSize: '9px',
+                                    color: '#86efac',
+                                    marginBottom: '3px',
+                                    whiteSpace: 'nowrap',
+                                    lineHeight: 1,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    maxWidth: '100%',
+                                    textAlign: 'center',
+                                }}>
+                                    {money(d.revenue)}
+                                </div>
+                            )}
+                            <div style={{
+                                width: '100%',
+                                height: `${pct}%`,
+                                background: hasRevenue ? '#4ade80' : '#1e293b',
+                                borderRadius: '3px 3px 0 0',
+                                transition: 'height 0.3s ease',
+                            }} />
+                        </div>
+                    )
+                })}
             </div>
             <div style={{ display: 'flex', gap: '4px' }}>
                 {data.map(d => (

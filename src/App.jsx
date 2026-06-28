@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage'
 import PosPage from './pages/PosPage'
 import ProtectedRoute from './components/ProtectedRoute'
 import WeeklyReportPage from './pages/WeeklyReportPage'
+import MonthlyReportPage from './pages/MonthlyReportPage'
 import InventoryPage from './pages/InventoryPage'
 import SetupAdminPage from './pages/SetupAdminPage'
 import AuthRoute from './components/AuthRoute'
@@ -152,6 +153,7 @@ function App() {
         <Route path="/admin/folios" element={<AuthRoute><FolioHistoryPage /></AuthRoute>} />
         <Route path="/admin/product-sales" element={<AuthRoute><ProductSalesReportPage /></AuthRoute>} />
         <Route path="/admin/cash-movements" element={<AuthRoute><CashMovementsAdminPage /></AuthRoute>} />
+        <Route path="/admin/monthly" element={<AuthRoute><MonthlyReportPage /></AuthRoute>} />
         <Route path="/admin/ledger" element={<AuthRoute><LedgerPage /></AuthRoute>} />
         <Route path="/admin/shifts" element={<AuthRoute><ShiftHistoryPage /></AuthRoute>} />
         <Route path="/admin/comanda-events" element={<AuthRoute><ComandaEventsPage /></AuthRoute>} />

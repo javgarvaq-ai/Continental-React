@@ -38,8 +38,11 @@ export function currentMonthDate() {
 }
 
 export async function getWeeklyReportData({ startDate, endDate }) {
-    const startIso = `${startDate}T00:00:00-06:00`
-    const endIso = `${endDate}T23:59:59-06:00`
+    // Use the same 06:00 operational-day cutoff as every other query in this file.
+    // T00:00:00 would include early-morning (madrugada) records that operationally
+    // belong to the previous day/week.
+    const startIso = `${startDate}T06:00:00-06:00`
+    const endIso   = `${addDaysToDateString(endDate, 1)}T06:00:00-06:00`
 
     const [paymentsResult, cashMovementsResult, comandasResult] = await Promise.all([
         supabase
@@ -56,20 +59,20 @@ export async function getWeeklyReportData({ startDate, endDate }) {
                 )
             `)
             .gte('created_at', startIso)
-            .lte('created_at', endIso),
+            .lt('created_at', endIso),
 
         supabase
             .from('cash_movements')
             .select('*')
             .gte('created_at', startIso)
-            .lte('created_at', endIso),
+            .lt('created_at', endIso),
 
         supabase
             .from('comandas')
             .select('*')
             .eq('status', 'paid')
             .gte('cobrado_at', startIso)
-            .lte('cobrado_at', endIso),
+            .lt('cobrado_at', endIso),
     ])
 
     return {
@@ -568,5 +571,134 @@ export async function getComandaEvents({ startDate, endDate, eventType } = {}) {
 
     const { data, error } = await query
     return { data, error }
+}
+
+// ── Multi-week comparison ─────────────────────────────────────
+// Returns the last `numWeeks` operational weeks (Sun 06:00 → Sun 06:00),
+// each with total revenue (payments.total_paid) and expenses (cash_movements).
+// Uses the same OPERATIONAL_DAY_SHIFT_MS bucketing as operationalDateKey so
+// early-morning records (before 6am) belong to the previous day/week.
+function operationalWeekSunday(timestamp) {
+    // Shift the timestamp by the operational offset, then find that date's Sunday
+    const ms = new Date(timestamp).getTime() - OPERATIONAL_DAY_SHIFT_MS
+    const d  = new Date(ms)
+    d.setUTCDate(d.getUTCDate() - d.getUTCDay())   // roll back to Sunday in shifted-UTC
+    return d.toISOString().split('T')[0]
+}
+
+export async function getWeeklySummary({ numWeeks = 4 } = {}) {
+    // Current operational week's Sunday (same 12h shift as operationalDateKey)
+    const weekStartStr = operationalWeekSunday(Date.now())
+    // Range start: (numWeeks-1) weeks before the current week
+    const rangeStartStr = addDaysToDateString(weekStartStr, -(numWeeks - 1) * 7)
+    const rangeStartIso = `${rangeStartStr}T06:00:00-06:00`
+    // Range end: tomorrow 06:00 (captures today fully)
+    const tomorrowStr   = addDaysToDateString(isoDate(new Date()), 1)
+    const rangeEndIso   = `${tomorrowStr}T06:00:00-06:00`
+
+    const [paymentsRes, movementsRes] = await Promise.all([
+        supabase.from('payments')
+            .select('created_at, total_paid')
+            .gte('created_at', rangeStartIso)
+            .lt('created_at',  rangeEndIso),
+        supabase.from('cash_movements')
+            .select('created_at, amount, movement_nature')
+            .gte('created_at', rangeStartIso)
+            .lt('created_at',  rangeEndIso),
+    ])
+
+    // Build ordered week buckets (oldest → newest)
+    const buckets = {}
+    for (let i = 0; i < numWeeks; i++) {
+        const sunStr = addDaysToDateString(rangeStartStr, i * 7)
+        const satStr = addDaysToDateString(sunStr, 6)
+        buckets[sunStr] = { sunStr, satStr, revenue: 0, expenses: 0 }
+    }
+
+    for (const p of (paymentsRes.data || [])) {
+        const key = operationalWeekSunday(p.created_at)
+        if (buckets[key]) buckets[key].revenue += Number(p.total_paid || 0)
+    }
+    for (const m of (movementsRes.data || [])) {
+        if (m.movement_nature !== 'expense') continue
+        const key = operationalWeekSunday(m.created_at)
+        if (buckets[key]) buckets[key].expenses += Number(m.amount || 0)
+    }
+
+    return {
+        data: Object.values(buckets),   // ordered oldest-first
+        error: paymentsRes.error || movementsRes.error || null,
+    }
+}
+
+// ── Monthly reporting ─────────────────────────────────────────
+
+// Returns revenue (sin propina), tips, and expenses for each of the 12 months
+// of `year`, bucketed using the same 12h operational shift as the rest of the system.
+export async function getYearlyMonthSummaries({ year }) {
+    const startIso = `${year}-01-01T06:00:00-06:00`
+    const endIso   = `${year + 1}-01-01T06:00:00-06:00`
+
+    const [paymentsRes, movementsRes] = await Promise.all([
+        supabase.from('payments')
+            .select('created_at, total_paid, tip_amount')
+            .gte('created_at', startIso)
+            .lt('created_at',  endIso),
+        supabase.from('cash_movements')
+            .select('created_at, amount, movement_nature')
+            .gte('created_at', startIso)
+            .lt('created_at',  endIso),
+    ])
+
+    const months = Array.from({ length: 12 }, (_, i) => ({
+        month: i + 1, revenue: 0, tips: 0, expenses: 0,
+    }))
+
+    for (const p of (paymentsRes.data || [])) {
+        const idx = new Date(new Date(p.created_at).getTime() - OPERATIONAL_DAY_SHIFT_MS).getUTCMonth()
+        months[idx].revenue += Number(p.total_paid || 0) - Number(p.tip_amount || 0)
+        months[idx].tips    += Number(p.tip_amount || 0)
+    }
+    for (const m of (movementsRes.data || [])) {
+        if (m.movement_nature !== 'expense') continue
+        const idx = new Date(new Date(m.created_at).getTime() - OPERATIONAL_DAY_SHIFT_MS).getUTCMonth()
+        months[idx].expenses += Number(m.amount || 0)
+    }
+
+    return { data: months, error: paymentsRes.error || movementsRes.error || null }
+}
+
+// Returns raw payments and cash_movements for a specific month,
+// plus the date strings needed to call getProductSalesForPeriod and getLedgerData.
+export async function getMonthlyReportData({ year, month }) {
+    const mm       = String(month).padStart(2, '0')
+    const nextMon  = month === 12 ? 1 : month + 1
+    const nextYear = month === 12 ? year + 1 : year
+    const nmm      = String(nextMon).padStart(2, '0')
+    const startIso = `${year}-${mm}-01T06:00:00-06:00`
+    const endIso   = `${nextYear}-${nmm}-01T06:00:00-06:00`
+
+    // Last calendar day of the month (for getProductSalesForPeriod endDate)
+    const lastDay = new Date(year, month, 0).getDate()
+    const lastDayStr = `${year}-${mm}-${String(lastDay).padStart(2, '0')}`
+
+    const [paymentsRes, movementsRes] = await Promise.all([
+        supabase.from('payments')
+            .select('created_at, total_paid, tip_amount, efectivo, tarjeta, transferencia')
+            .gte('created_at', startIso)
+            .lt('created_at',  endIso),
+        supabase.from('cash_movements')
+            .select('created_at, amount, movement_nature, category, source_location, destination_location')
+            .gte('created_at', startIso)
+            .lt('created_at',  endIso),
+    ])
+
+    return {
+        payments:      paymentsRes.data  || [],
+        cashMovements: movementsRes.data || [],
+        startDate: `${year}-${mm}-01`,
+        endDate:   lastDayStr,
+        error: paymentsRes.error || movementsRes.error || null,
+    }
 }
 

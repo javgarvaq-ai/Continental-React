@@ -12,6 +12,7 @@ const NAV_SECTIONS = [
             { label: '🛒 Ventas',     path: '/admin/product-sales'    },
             { label: '📈 Analytics',  path: '/analytics'              },
             { label: '💰 Reporte',   path: '/weekly-report'          },
+            { label: '📅 Mensual',   path: '/admin/monthly'          },
             { label: '👥 Clientes',   path: '/customers/intelligence' },
             { label: '📦 Inventario', path: '/inventory/dashboard'    },
             { label: '💵 Movimientos', path: '/admin/cash-movements'  },

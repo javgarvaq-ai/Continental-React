@@ -20,10 +20,10 @@ function toLocalDateString(date) {
 }
 function today() { return toLocalDateString(new Date()) }
 function getThisWeekStart() {
-    const t = new Date()
-    const dow = t.getDay()
-    const start = new Date(t)
-    start.setDate(t.getDate() - (dow === 0 ? 6 : dow - 1))
+    const now = new Date()
+    if (now.getHours() < 6) now.setDate(now.getDate() - 1)
+    const start = new Date(now)
+    start.setDate(now.getDate() - now.getDay())   // roll back to Sunday
     return toLocalDateString(start)
 }
 function formatDateTime(iso) {
@@ -77,14 +77,13 @@ function rowConcept(e) {
     return CATEGORY_LABELS[e.category] || e.category || e.movementType || 'Movimiento'
 }
 
-function BalanceCard({ label, opening, closing, accent, sub }) {
+function BalanceCard({ label, closing, accent, sub }) {
     return (
         <div style={{ flex: 1, minWidth: '200px', padding: '16px 18px', background: '#1a1a1a', border: '1px solid #2a2a2a', borderLeft: `3px solid ${accent}`, borderRadius: '10px' }}>
             <div style={{ fontSize: '11px', color: MUTED, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
             <div style={{ fontSize: '22px', fontWeight: 700, color: 'white' }}>{money(closing)}</div>
-            <div style={{ fontSize: '11px', color: '#475569', marginTop: '6px' }}>Inicial: {money(opening)}</div>
             {sub && (
-                <div style={{ fontSize: '12px', color: '#7dd3fc', marginTop: '4px' }}>{sub}</div>
+                <div style={{ fontSize: '12px', color: '#7dd3fc', marginTop: '6px' }}>{sub}</div>
             )}
         </div>
     )
@@ -206,9 +205,9 @@ function LedgerPage() {
                 {/* ── Balance cards ── */}
                 {ledger && !loading && (
                     <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
-                        <BalanceCard label="Cajón"       opening={ledger.opening.drawerBalance} closing={ledger.closing.drawerBalance} accent={GREEN} />
-                        <BalanceCard label="Caja fuerte" opening={ledger.opening.houseBalance}  closing={ledger.closing.houseBalance}  accent="#facc15" />
-                        <BalanceCard label="Banco"       opening={ledger.opening.bankBalance}   closing={ledger.closing.bankBalance}   accent="#60a5fa"
+                        <BalanceCard label="Cajón"       closing={ledger.closing.drawerBalance} accent={GREEN} />
+                        <BalanceCard label="Caja fuerte" closing={ledger.closing.houseBalance}  accent="#facc15" />
+                        <BalanceCard label="Banco"       closing={ledger.closing.bankBalance}   accent="#60a5fa"
                             sub={ledger.closing.cardSalesCumulative > 0
                                 ? `Real estimado (− comisión MP): ${money(estimateBankNet(ledger.closing.bankBalance, ledger.closing.cardSalesCumulative))}`
                                 : null} />

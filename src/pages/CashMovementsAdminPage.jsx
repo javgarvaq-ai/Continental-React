@@ -24,6 +24,50 @@ function nDaysAgo(n) {
     return toLocalDateString(d)
 }
 
+
+// ── Operational week helpers (same 12h shift as reports.js) ───
+const MONTH_SHORT = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
+const OPERATIONAL_SHIFT_MS = 12 * 60 * 60 * 1000
+
+function operationalWeekSunday(timestamp) {
+    const ms = new Date(timestamp).getTime() - OPERATIONAL_SHIFT_MS
+    const d  = new Date(ms)
+    d.setUTCDate(d.getUTCDate() - d.getUTCDay())
+    return d.toISOString().split('T')[0]
+}
+
+function addDays(dateStr, days) {
+    const d = new Date(dateStr + 'T12:00:00')
+    d.setDate(d.getDate() + days)
+    return toLocalDateString(d)
+}
+
+function weekLabel(sunStr, satStr) {
+    const sun = new Date(sunStr + 'T12:00:00')
+    const sat = new Date(satStr + 'T12:00:00')
+    if (sun.getMonth() === sat.getMonth()) {
+        return `${sun.getDate()}-${sat.getDate()} ${MONTH_SHORT[sat.getMonth()]}`
+    }
+    return `${sun.getDate()} ${MONTH_SHORT[sun.getMonth()]}-${sat.getDate()} ${MONTH_SHORT[sat.getMonth()]}`
+}
+
+function getLastNWeeks(n = 4) {
+    const currentSun = operationalWeekSunday(Date.now())
+    const todayStr   = toLocalDateString(new Date())
+    return Array.from({ length: n }, (_, i) => {
+        const offset = n - 1 - i
+        const sunStr = addDays(currentSun, -offset * 7)
+        const satStr = addDays(sunStr, 6)
+        const isCurrent = offset === 0
+        return {
+            label: weekLabel(sunStr, satStr) + (isCurrent ? ' (actual)' : ''),
+            start: sunStr,
+            end:   isCurrent ? todayStr : satStr,
+            isCurrent,
+        }
+    })
+}
+
 function formatDateTime(iso) {
     if (!iso) return '—'
     return new Date(iso).toLocaleString('es-MX', {
@@ -159,6 +203,29 @@ function CashMovementsAdminPage() {
                                 </button>
                             ))}
                         </div>
+                    </div>
+
+                    {/* ── Week shortcuts (second row) ── */}
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #1e1e1e' }}>
+                        <span style={{ fontSize: '11px', color: '#475569', alignSelf: 'center', marginRight: '4px' }}>Semana:</span>
+                        {getLastNWeeks(4).map(w => {
+                            const isActive = startDate === w.start && endDate === w.end
+                            return (
+                                <button
+                                    key={w.start}
+                                    onClick={() => { setStartDate(w.start); setEndDate(w.end) }}
+                                    style={{
+                                        padding: '5px 11px', borderRadius: '5px', border: '1px solid',
+                                        borderColor: isActive ? '#4a90d9' : '#334155',
+                                        background:  isActive ? '#1d3557' : 'transparent',
+                                        color:       isActive ? '#e2e8f0' : w.isCurrent ? '#93c5fd' : '#64748b',
+                                        cursor: 'pointer', fontSize: '12px', fontWeight: w.isCurrent ? 600 : 400,
+                                    }}
+                                >
+                                    {w.label}
+                                </button>
+                            )
+                        })}
                     </div>
                 </div>
 

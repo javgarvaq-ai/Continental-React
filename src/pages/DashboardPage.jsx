@@ -18,9 +18,19 @@ const REFRESH_INTERVAL_MS = 60_000 // auto-refresh every 60s
 const RISK_HOURS  = 3      // hours open
 const RISK_AMOUNT = 3000   // MXN on the tab
 
+// Computes the live running total of an open comanda from its active items.
+// final_total is only populated at payment time; while the comanda is open
+// we sum the items directly (same data the POS cart shows).
+function computeRunningTotal(table) {
+    const items = table.comanda_items || []
+    return items
+        .filter(i => i.status === 'active' && !i.is_free_mixer && !i.is_free_benefit)
+        .reduce((sum, i) => sum + Number(i.quantity || 1) * Number(i.unit_price || 0), 0)
+}
+
 function isAtRisk(table) {
     const hoursOpen = (Date.now() - new Date(table.opened_at)) / (1000 * 60 * 60)
-    return hoursOpen >= RISK_HOURS && Number(table.final_total || 0) >= RISK_AMOUNT
+    return hoursOpen >= RISK_HOURS && computeRunningTotal(table) >= RISK_AMOUNT
 }
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -128,8 +138,14 @@ function DashboardPage() {
     const [velocity, setVelocity]       = useState(null)
 
     const fetchAll = useCallback(async () => {
+        // Fetch shift first so we can use its opened_at as the period start.
+        // All "today" metrics are anchored to the shift start, not a fixed clock
+        // cutoff — the bar's operational day ends when the shift ends, not at midnight.
+        const shiftRes = await getCurrentShift()
+        const shiftData = shiftRes.data
+        const since = shiftData ? shiftData.opened_at : undefined // undefined → service falls back to startOfToday()
+
         const [
-            shiftRes,
             statsRes,
             tablesRes,
             productsRes,
@@ -137,16 +153,15 @@ function DashboardPage() {
             memberRes,
             velocityRes,
         ] = await Promise.all([
-            getCurrentShift(),
-            getTodayPaymentStats(),
+            getTodayPaymentStats(since),
             getOpenTables(),
-            getTopProductsToday(),
+            getTopProductsToday(since),
             getRecentPayments(),
-            getMembershipStatsToday(),
+            getMembershipStatsToday(since),
             getSalesVelocity(),
         ])
 
-        setShift(shiftRes.data)
+        setShift(shiftData)
         setStats(statsRes.data)
         setOpenTables(tablesRes.data)
         setTopProducts(productsRes.data)
@@ -163,17 +178,19 @@ function DashboardPage() {
         return () => clearInterval(interval)
     }, [fetchAll])
 
-    const avgTicket = stats?.comandaCount > 0
+    const avgTicket = stats && stats.comandaCount > 0
         ? stats.totalRevenue / stats.comandaCount
         : 0
 
-    const maxUnits = topProducts[0]?.units || 1
+    const maxUnits = topProducts[0] ? topProducts[0].units : 1
     const maxPayment = Math.max(
-        stats?.totalEfectivo || 0,
-        stats?.totalTarjeta || 0,
-        stats?.totalTransferencia || 0,
+        stats ? stats.totalEfectivo : 0,
+        stats ? stats.totalTarjeta : 0,
+        stats ? stats.totalTransferencia : 0,
         1
     )
+
+    const pendingTotal = openTables.reduce((sum, t) => sum + computeRunningTotal(t), 0)
 
     return (
         <div style={{ minHeight: '100vh', background: '#0f0f0f', color: '#e2e8f0', padding: '24px', paddingLeft: '216px', boxSizing: 'border-box', fontFamily: 'system-ui, sans-serif' }}>
@@ -223,7 +240,7 @@ function DashboardPage() {
                     {shift ? (
                         <span style={{ color: '#86efac' }}>
                             <strong>Turno abierto</strong> · desde {formatTime(shift.opened_at)} · {timeAgo(shift.opened_at)}
-                            {shift.users?.name ? ` · abierto por ${shift.users.name}` : ''}
+                            {shift.users && shift.users.name ? ` · abierto por ${shift.users.name}` : ''}
                         </span>
                     ) : (
                         <span style={{ color: '#fbbf24' }}><strong>Sin turno activo</strong> · El POS está cerrado</span>
@@ -238,26 +255,26 @@ function DashboardPage() {
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px', marginBottom: '20px' }}>
                             <MetricCard
                                 label="Ingresos hoy"
-                                value={money(stats?.totalRevenue || 0)}
-                                sub={`${stats?.comandaCount || 0} comandas pagadas`}
+                                value={money(stats ? stats.totalRevenue : 0)}
+                                sub={`${stats ? stats.comandaCount : 0} comandas pagadas`}
                                 accent="#4ade80"
                             />
                             <MetricCard
                                 label="Ticket promedio"
                                 value={money(avgTicket)}
-                                sub={stats?.comandaCount > 0 ? `de ${stats.comandaCount} comandas` : 'Sin datos hoy'}
+                                sub={stats && stats.comandaCount > 0 ? `de ${stats.comandaCount} comandas` : 'Sin datos hoy'}
                                 accent="#60a5fa"
                             />
                             <MetricCard
                                 label="Propinas hoy"
-                                value={money(stats?.totalTips || 0)}
+                                value={money(stats ? stats.totalTips : 0)}
                                 sub="incluidas en ingresos"
                                 accent="#a78bfa"
                             />
                             <MetricCard
                                 label="Mesas abiertas"
                                 value={openTables.length}
-                                sub={openTables.length === 1 ? '1 mesa activa' : `${openTables.length} mesas activas`}
+                                sub={pendingTotal > 0 ? `${money(pendingTotal)} pendiente` : `${openTables.length} mesa${openTables.length !== 1 ? 's' : ''} activa${openTables.length !== 1 ? 's' : ''}`}
                                 accent="#fbbf24"
                             />
                             <MetricCard
@@ -303,7 +320,7 @@ function DashboardPage() {
                             {/* Payment breakdown */}
                             <Card>
                                 <SectionTitle>Forma de pago — hoy</SectionTitle>
-                                {stats?.totalRevenue > 0 ? (
+                                {stats && stats.totalRevenue > 0 ? (
                                     <>
                                         <BarRow label="Efectivo"        value={money(stats.totalEfectivo)}      max={maxPayment} color="#4ade80" />
                                         <BarRow label="Tarjeta"         value={money(stats.totalTarjeta)}       max={maxPayment} color="#60a5fa" />
@@ -349,8 +366,9 @@ function DashboardPage() {
                                 ) : (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                         {openTables.map(t => {
-                                            const s    = statusLabel(t.status)
-                                            const risk = isAtRisk(t)
+                                            const s            = statusLabel(t.status)
+                                            const runningTotal = computeRunningTotal(t)
+                                            const risk         = isAtRisk(t)
                                             return (
                                                 <div
                                                     key={t.id}
@@ -367,18 +385,20 @@ function DashboardPage() {
                                                     <div>
                                                         {risk && <span style={{ marginRight: '6px' }}>⚠️</span>}
                                                         <span style={{ fontWeight: 600, fontSize: '14px', color: risk ? '#fcd34d' : '#e2e8f0' }}>
-                                                            {t.units?.name || '—'}
+                                                            {t.units ? t.units.name : '—'}
                                                         </span>
-                                                        {(t.customers?.name || t.customer_name) && (
-                                                            <span style={{ fontSize: '12px', color: '#64748b', marginLeft: '8px' }}>{t.customers?.name || t.customer_name}</span>
-                                                        )}
-                                                        {Number(t.final_total) > 0 && (
-                                                            <span style={{ fontSize: '12px', color: risk ? '#fbbf24' : '#475569', marginLeft: '8px' }}>
-                                                                {money(t.final_total)}
+                                                        {(t.customers && t.customers.name || t.customer_name) && (
+                                                            <span style={{ fontSize: '12px', color: '#64748b', marginLeft: '8px' }}>
+                                                                {(t.customers && t.customers.name) || t.customer_name}
                                                             </span>
                                                         )}
                                                     </div>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                        {runningTotal > 0 && (
+                                                            <span style={{ fontSize: '13px', fontWeight: 700, color: risk ? '#fbbf24' : '#4ade80' }}>
+                                                                {money(runningTotal)}
+                                                            </span>
+                                                        )}
                                                         <span style={{ fontSize: '12px', color: risk ? '#fbbf24' : '#64748b' }}>{timeAgo(t.opened_at)}</span>
                                                         <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: `${s.color}1a`, color: s.color, fontWeight: 600 }}>
                                                             {s.label}
@@ -409,10 +429,12 @@ function DashboardPage() {
                                                 <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#111', borderRadius: '6px', padding: '8px 12px' }}>
                                                     <div>
                                                         <span style={{ fontWeight: 600, fontSize: '13px' }}>
-                                                            C-{String(p.comandas?.folio || 0).padStart(6, '0')}
+                                                            C-{String(p.comandas ? p.comandas.folio : 0).padStart(6, '0')}
                                                         </span>
-                                                        {(p.comandas?.customers?.name || p.comandas?.customer_name) && (
-                                                            <span style={{ fontSize: '12px', color: '#64748b', marginLeft: '8px' }}>{p.comandas?.customers?.name || p.comandas?.customer_name}</span>
+                                                        {(p.comandas && (p.comandas.customers && p.comandas.customers.name || p.comandas.customer_name)) && (
+                                                            <span style={{ fontSize: '12px', color: '#64748b', marginLeft: '8px' }}>
+                                                                {(p.comandas.customers && p.comandas.customers.name) || p.comandas.customer_name}
+                                                            </span>
                                                         )}
                                                         {methods && (
                                                             <span style={{ fontSize: '11px', color: '#475569', marginLeft: '6px' }}>· {methods}</span>

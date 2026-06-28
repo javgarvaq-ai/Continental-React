@@ -77,8 +77,8 @@ export async function adjustPaymentTip({ paymentId, tipAmount }) {
 
 // ── Folio history browser ─────────────────────────────────────
 // Searches comandas by date range, optional folio number, customer name,
-// or status. Returns up to `limit` results newest-first.
-export async function searchComandas({ startDate, endDate, search = '', status = 'all', limit = 100 }) {
+// or status. Returns up to `limit` results newest-first (default 2000 — enough for any realistic date range).
+export async function searchComandas({ startDate, endDate, search = '', status = 'all', limit = 2000 }) {
     let query = supabase
         .from('comandas')
         .select(`

@@ -116,11 +116,12 @@ export async function getSalesVelocity() {
     }
 }
 
-// ── Top 6 products sold today ─────────────────────────────────
-// Uses payments.created_at (not comandas.cobrado_at) to find paid comandas.
+// ── Top 5 products sold today ─────────────────────────────────
+// Uses payments.created_at (not comandas.cobrado_at) to find paid comandas —
+// same timestamp getTodayPaymentStats uses, so both are always in sync.
 // `since` — ISO string start of period (defaults to startOfToday()).
 export async function getTopProductsToday(since) {
-    // Step 1: get paid comanda IDs via payments
+    // Step 1: get today's paid comanda IDs via payments (consistent with payment stats)
     const { data: payments, error: e1 } = await supabase
         .from('payments')
         .select('comanda_id')
@@ -133,9 +134,9 @@ export async function getTopProductsToday(since) {
     // Step 2: fetch items for those comandas
     const { data: items, error: e2 } = await supabase
         .from('comanda_items')
-        .select('quantity, products!comanda_items_product_id_fkey(name)')
+        .select('quantity, products(name)')
         .in('comanda_id', ids)
-        .neq('status', 'cancelled')
+        .eq('status', 'active')
         .eq('is_free_mixer', false)
         .eq('is_free_benefit', false)
 
