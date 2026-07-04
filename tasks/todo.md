@@ -60,11 +60,23 @@ Confirmado como hueco de diseño real: cada `category` hoy mezcla en un solo str
 - [x] Verificado con `@babel/parser` sobre copia fresca en `outputs/` (mount de bash del proyecto, patrón ya documentado en `lessons.md`) — los 3 archivos parsean OK.
 - [x] `tasks/correccion_descuadre_2026-07-03.sql` — 5 bloques (SELECT turno abierto → SELECT user_id → SELECT saldo antes → 2 INSERT de corrección → SELECT saldo después + confirmación). **NO ejecutado — Javi lo corre en el SQL Editor de Supabase.**
 
+### Cambio de mecanismo de ejecución (2026-07-03) — vía UI, no SQL directo
+Javi preguntó si mejor se hace desde los modales nuevos en vez de SQL directo. **Sí** — confirmado seguro:
+- `getShiftSummary` (`services/shifts.js:74-84`) calcula `expectedCash` genérico por `source_location`/`destination_location === 'drawer'`, sin importar `category`/`movement_nature` — el movimiento `ajuste_egreso_caja` (source=drawer) resta del cajón exactamente igual que cualquier otro retiro. `ajuste_ingreso_resguardo` (source/destination = adjustment/house_safe, ninguno es `drawer`) no toca el cálculo del turno — correcto, caja fuerte no es parte del cajón.
+- El modal (`TopBar → "Movimiento de caja"`, ya visible en el POS tras el deploy) llena `shift_id`/`user_id` automáticamente (turno abierto + usuario logueado) — cero riesgo de UUID mal copiado, y de paso prueba en vivo que las categorías nuevas quedaron bien conectadas.
+- SQL (`tasks/correccion_descuadre_2026-07-03.sql`) se deja en el repo como referencia/auditoría, pero **no se usa** para esta corrección — se hace desde la app.
+
+### Pendiente (Javi) — vía modal "Movimiento de caja"
+- [x] Con un turno abierto, registrado desde el POS: "ajuste_ingreso_resguardo" +1080 y "ajuste_egreso_caja" -540 (3 jul, 09:09 p.m., nota "correccion de captura julio 3" / "correccion ajuste julio 3").
+- [x] Verificado contra `ledger_2026-06-10_2026-07-03 (3).csv` que Javi exportó: saldo caja fuerte queda en **5500.00** ✅, saldo cajón queda en **2512.5** ✅ — coincide exacto con la tabla del audit original. Ninguna otra fila se movió (banco intacto, 461/463 intactas).
+
+### 🐛 Bug encontrado durante la verificación (2026-07-03) — corregido
+El CSV mostraba el `category` crudo (`ajuste_ingreso_resguardo`, `ajuste_egreso_caja`) en vez de un label legible. Causa: hay **3 copias independientes** de `CATEGORY_LABELS` en el código (`CashMovementsAdminPage.jsx`, `LedgerPage.jsx`, y el `EXPENSE_GROUPS` de `MonthlyReportPage.jsx` para gastos) — solo había actualizado la primera. **Fix:** agregadas las 4 categorías de ajuste a `src/pages/LedgerPage.jsx → CATEGORY_LABELS` (línea ~45). Verificado con `@babel/parser` sobre copia escrita directo a `outputs/` (el mount de bash del proyecto seguía con copia truncada/stale — mismo problema ya documentado en `lessons.md`, el archivo real vía `Read` está completo y correcto).
+`MonthlyReportPage.jsx` NO necesita el cambio: su `EXPENSE_GROUPS` solo agrupa movimientos con `movement_nature === 'expense'`; los nuestros son `'adjustment'`, nunca aparecen ahí — confirmado, no se toca.
+
 ### Pendiente (Javi)
-- [ ] Correr BLOQUE 1 y 2 del SQL, confirmar `<SHIFT_ID>` y `<USER_ID>`.
-- [ ] Reemplazar los placeholders en BLOQUE 4 y correr los 2 INSERT.
-- [ ] Correr BLOQUE 5, confirmar que caja fuerte da 5,500.00 y que las 2 filas nuevas aparecen con nota correcta.
-- [ ] Smoke visual: `/admin/cash-movements` y `/admin/ledger` muestran las 2 filas nuevas con label correcto ("Ajuste ingreso (caja fuerte)" / "Ajuste egreso (caja)") y el saldo corrido de caja fuerte/caja queda en 5,500 / (cajón del turno − 540).
+- [ ] `git add src/pages/LedgerPage.jsx && git commit -m "fix(ledger): agregar labels de categorías de ajuste (evita mostrar el category crudo)" && git push` — deploy pendiente de este fix puntual.
+- [ ] Después del deploy, refrescar `/admin/ledger` y confirmar que las 2 filas ahora dicen "Ajuste ingreso (caja fuerte)" / "Ajuste egreso (caja)" en vez del texto crudo.
 
 ### Commit sugerido
 `feat(cash-movements): categorías de ajuste independientes para caja y caja fuerte (ingreso/egreso)`

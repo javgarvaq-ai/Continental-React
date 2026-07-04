@@ -42,7 +42,8 @@ const CATEGORY_LABELS = {
     propinas_entregadas: 'Propinas entregadas', gasto_operativo_caja: 'Gasto operativo (caja)',
     gasto_operativo_banco: 'Gasto operativo (banco)', regreso_resguardo: 'Regreso de resguardo',
     retiro_banco_a_caja: 'Retiro banco → caja', aportacion_socio: 'Aportación socio',
-    ajuste_ingreso: 'Ajuste ingreso',
+    ajuste_ingreso: 'Ajuste ingreso (caja)', ajuste_egreso_caja: 'Ajuste egreso (caja)',
+    ajuste_ingreso_resguardo: 'Ajuste ingreso (caja fuerte)', ajuste_egreso_resguardo: 'Ajuste egreso (caja fuerte)',
 }
 
 const LOCATION_FILTERS = [
