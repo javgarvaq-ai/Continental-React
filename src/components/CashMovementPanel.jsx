@@ -25,15 +25,26 @@ const WITHDRAWAL_CATEGORIES = [
     { key: 'ajuste_egreso_resguardo', label: 'Ajuste de egreso', sublabel: 'Corrección · Caja fuerte' },
 ]
 
-function CashMovementPanel({ open, onClose, onSubmit, isSubmitting }) {
-    const [section, setSection] = useState('deposit')
+// Rol manager: por ahora sin ingresos, y en salidas solo estas 3 (decisión Javi, 2026-07-03).
+const MANAGER_WITHDRAWAL_KEYS = ['nomina_caja', 'pago_proveedor_caja', 'gasto_operativo_caja']
+
+function CashMovementPanel({ open, onClose, onSubmit, isSubmitting, role }) {
+    const isManager = role === 'manager'
+    const [section, setSection] = useState(isManager ? 'withdrawal' : 'deposit')
     const [selectedCategory, setSelectedCategory] = useState(null)
     const [amount, setAmount] = useState('')
     const [note, setNote] = useState('')
 
     if (!open) return null
 
-    const categories = section === 'deposit' ? DEPOSIT_CATEGORIES : WITHDRAWAL_CATEGORIES
+    // Managers solo pueden ver/operar la sección de salida, sin importar el estado previo.
+    const effectiveSection = isManager ? 'withdrawal' : section
+
+    const categories = effectiveSection === 'deposit'
+        ? DEPOSIT_CATEGORIES
+        : isManager
+            ? WITHDRAWAL_CATEGORIES.filter(c => MANAGER_WITHDRAWAL_KEYS.includes(c.key))
+            : WITHDRAWAL_CATEGORIES
 
     function handleSectionChange(newSection) {
         setSection(newSection)
@@ -43,7 +54,7 @@ function CashMovementPanel({ open, onClose, onSubmit, isSubmitting }) {
     }
 
     function handleClose() {
-        setSection('deposit')
+        setSection(isManager ? 'withdrawal' : 'deposit')
         setSelectedCategory(null)
         setAmount('')
         setNote('')
@@ -99,41 +110,43 @@ function CashMovementPanel({ open, onClose, onSubmit, isSubmitting }) {
                     </button>
                 </div>
 
-                {/* Section tabs */}
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
-                    <button
-                        type="button"
-                        onClick={() => handleSectionChange('deposit')}
-                        style={{
-                            flex: 1,
-                            padding: '10px',
-                            borderRadius: '8px',
-                            border: 'none',
-                            fontWeight: 'bold',
-                            cursor: 'pointer',
-                            background: section === 'deposit' ? '#1f4d32' : '#2a2a2a',
-                            color: section === 'deposit' ? '#66bb6a' : '#aaa',
-                        }}
-                    >
-                        ➕ Entrada
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => handleSectionChange('withdrawal')}
-                        style={{
-                            flex: 1,
-                            padding: '10px',
-                            borderRadius: '8px',
-                            border: 'none',
-                            fontWeight: 'bold',
-                            cursor: 'pointer',
-                            background: section === 'withdrawal' ? '#4a1c1c' : '#2a2a2a',
-                            color: section === 'withdrawal' ? '#ef9a9a' : '#aaa',
-                        }}
-                    >
-                        ➖ Salida
-                    </button>
-                </div>
+                {/* Section tabs — managers solo tienen salida, no hay nada que alternar */}
+                {!isManager && (
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+                        <button
+                            type="button"
+                            onClick={() => handleSectionChange('deposit')}
+                            style={{
+                                flex: 1,
+                                padding: '10px',
+                                borderRadius: '8px',
+                                border: 'none',
+                                fontWeight: 'bold',
+                                cursor: 'pointer',
+                                background: effectiveSection === 'deposit' ? '#1f4d32' : '#2a2a2a',
+                                color: effectiveSection === 'deposit' ? '#66bb6a' : '#aaa',
+                            }}
+                        >
+                            ➕ Entrada
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleSectionChange('withdrawal')}
+                            style={{
+                                flex: 1,
+                                padding: '10px',
+                                borderRadius: '8px',
+                                border: 'none',
+                                fontWeight: 'bold',
+                                cursor: 'pointer',
+                                background: effectiveSection === 'withdrawal' ? '#4a1c1c' : '#2a2a2a',
+                                color: effectiveSection === 'withdrawal' ? '#ef9a9a' : '#aaa',
+                            }}
+                        >
+                            ➖ Salida
+                        </button>
+                    </div>
+                )}
 
                 {/* Category grid */}
                 <div style={{ marginBottom: '20px' }}>
@@ -148,7 +161,7 @@ function CashMovementPanel({ open, onClose, onSubmit, isSubmitting }) {
                                     padding: '10px 12px',
                                     borderRadius: '8px',
                                     border: selectedCategory === cat.key
-                                        ? `2px solid ${section === 'deposit' ? '#66bb6a' : '#ef9a9a'}`
+                                        ? `2px solid ${effectiveSection === 'deposit' ? '#66bb6a' : '#ef9a9a'}`
                                         : '2px solid transparent',
                                     background: selectedCategory === cat.key ? '#222' : '#111',
                                     color: 'white',
@@ -221,14 +234,14 @@ function CashMovementPanel({ open, onClose, onSubmit, isSubmitting }) {
                         border: 'none',
                         background: !canSubmit
                             ? '#555'
-                            : section === 'deposit' ? '#2e7d32' : '#c62828',
+                            : effectiveSection === 'deposit' ? '#2e7d32' : '#c62828',
                         color: 'white',
                         fontWeight: 'bold',
                         fontSize: '15px',
                         cursor: canSubmit ? 'pointer' : 'default',
                     }}
                 >
-                    {isSubmitting ? 'Registrando...' : `Registrar ${section === 'deposit' ? 'entrada' : 'salida'}`}
+                    {isSubmitting ? 'Registrando...' : `Registrar ${effectiveSection === 'deposit' ? 'entrada' : 'salida'}`}
                 </button>
             </div>
         </div>

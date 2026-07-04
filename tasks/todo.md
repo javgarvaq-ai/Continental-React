@@ -1,3 +1,60 @@
+## Plan — Restringir categorías del modal "Movimiento de caja" para rol manager — 2026-07-03 ✅ APROBADO Y CODEADO (falta smoke de Javi)
+
+### Decisión de Javi (2026-07-03)
+Aprobado tal cual el plan — solo restricción en la app/cliente, sin tocar BD/RLS.
+
+### Resultado
+- [x] `src/components/CashMovementPanel.jsx`: nueva prop `role`; `MANAGER_WITHDRAWAL_KEYS`; si `role==='manager'` → pestaña "Entrada" oculta por completo (`{!isManager && (...)}`), `effectiveSection` fuerza `'withdrawal'` siempre, y `categories` se filtra a las 3 keys. Admin/otros roles: comportamiento idéntico a antes.
+- [x] `src/pages/PosPage.jsx`: `role={currentUser?.role}` agregado a `<CashMovementPanel>` (línea 538).
+- [x] `src/hooks/useShift.js`: guard en `handleCashMovementSubmit` — si `currentUser.role==='manager'` y la categoría no está en `MANAGER_ALLOWED_CATEGORIES`, rechaza con mensaje y no llama `addCashMovement`. Constante movida después de los imports (evita mezclar declaración entre imports).
+- [x] Verificación: `@babel/parser` de los 3 archivos (copias frescas escritas directo a `outputs/`, el mount de bash del proyecto seguía stale — mismo patrón de `lessons.md`) → OK. Test lógico en node del filtro `WITHDRAWAL_CATEGORIES.filter(...)` → da exactamente `['pago_proveedor_caja','nomina_caja','gasto_operativo_caja']`, 3 elementos.
+- [x] Sin migración, sin RLS, sin cambios en categorías/config existentes — puramente aditivo (prop nueva + 1 guard).
+
+### Pendiente (Javi)
+- [ ] `git add src/components/CashMovementPanel.jsx src/pages/PosPage.jsx src/hooks/useShift.js tasks/todo.md && git commit -m "feat(cash-movements): restringir categorías del modal a rol manager (solo 3 salidas, sin entradas)" && git push`
+- [ ] Smoke: login como manager → "Movimiento de caja" → sin pestaña "Entrada", "Salida" solo Nómina/Pago proveedor/Gasto operativo (todas "Desde caja"). Login como admin → sigue viendo todo igual.
+
+### Commit sugerido
+`feat(cash-movements): restringir categorías del modal a rol manager (solo 3 salidas, sin entradas)`
+
+---
+
+## Plan — Restringir categorías del modal "Movimiento de caja" para rol manager — 2026-07-03 🔍 PROPUESTO, PENDIENTE DE APROBACIÓN (sin código todavía) [SUPERSEDIDO POR EL BLOQUE DE ARRIBA]
+
+### Objetivo
+Cuando el usuario logueado sea `role === 'manager'`, el modal "Movimiento de caja" (`CashMovementPanel.jsx`) debe:
+- **No mostrar ninguna categoría de entrada** (pestaña "➕ Entrada" desaparece por completo — por ahora managers no tienen ingresos).
+- **En salidas, mostrar solo 3**: `nomina_caja` (Nómina · Desde caja), `pago_proveedor_caja` (Pago proveedor · Desde caja), `gasto_operativo_caja` (Gasto operativo · Desde caja).
+- `admin` sigue viendo todo, sin cambios.
+- `waiter` ya ni siquiera ve el botón "Movimiento de caja" en el TopBar (`isManagerOrAdmin` en `TopBar.jsx:15-16`) — no aplica, no se toca.
+
+### Diagnóstico (investigado, archivo:línea confirmados) — respondiendo tu pregunta de tamaño
+Es un cambio **chico**: 3 archivos, todo frontend, **cero migración, cero cambio de esquema/RLS**.
+- `CashMovementPanel.jsx` es el **único componente** del modal — se abre tanto desde el botón del TopBar (`PosPage.jsx:521`) como desde el botón interno "+ Movimiento de caja" de `ShiftPanel` (`ShiftPanel.jsx:190`, vía `onOpenCashMovement`), pero AMBOS caminos abren el mismo `<CashMovementPanel>` (`PosPage.jsx:533-538`). Un solo punto de control cubre las 2 entradas.
+- Hoy `CashMovementPanel` no recibe el rol del usuario — hay que agregarlo como prop nueva (`role`), pasado desde `PosPage.jsx` (`currentUser.role` ya vive ahí, línea 38).
+- Las 3 categorías que pide Javi (`nomina_caja`, `pago_proveedor_caja`, `gasto_operativo_caja`) **ya existen** en `WITHDRAWAL_CATEGORIES` — no hay que crear nada, solo filtrar el arreglo que se renderiza.
+
+### Cambios propuestos (3 archivos)
+1. **`src/components/CashMovementPanel.jsx`**:
+   - Nueva prop `role`.
+   - `const MANAGER_WITHDRAWAL_KEYS = ['nomina_caja', 'pago_proveedor_caja', 'gasto_operativo_caja']`.
+   - Si `role === 'manager'`: forzar `section` a `'withdrawal'` siempre (sin opción de cambiar a "Entrada" — ocultar o deshabilitar ese botón de pestaña), y las categorías mostradas = `WITHDRAWAL_CATEGORIES.filter(c => MANAGER_WITHDRAWAL_KEYS.includes(c.key))`.
+   - `admin` (o cualquier otro valor): comportamiento actual, sin cambios.
+2. **`src/pages/PosPage.jsx`**: pasar `role={currentUser?.role}` a `<CashMovementPanel>` (línea ~533).
+3. **`src/hooks/useShift.js → handleCashMovementSubmit`**: guard defensivo — si `currentUser.role === 'manager'` y la `category` recibida NO está en `MANAGER_WITHDRAWAL_KEYS`, rechazar (`setStatus('No tienes permiso para registrar este tipo de movimiento.')`, no llamar `addCashMovement`). Barato de agregar y es el único punto real de "enforcement" en el cliente (por si el estado de React se manipulara antes del submit).
+
+### Caveat de seguridad (a tu criterio, no bloquea el plan)
+Esto es una restricción **de cliente/UI únicamente**. La política RLS de `cash_movements` (`cash_movements_insert ... TO authenticated WITH CHECK (true)`) no distingue por rol — un manager con su JWT válido podría, en teoría, insertar cualquier categoría llamando la API directo (fuera de la app). Mitigado por: `cash_movements` es de solo INSERT (sin UPDATE/DELETE, auditoría inmutable) y cada fila queda ligada a `user_id` — cualquier cosa fuera de lo esperado es 100% atribuible y auditable después. Si más adelante quieres bloquear esto también a nivel BD (RLS con función que lea el rol del usuario, o trigger), es un esfuerzo más grande (migración + función) — lo dejo como posible Fase 2, no incluido aquí.
+
+### Verificación
+- [ ] `@babel/parser` de los 3 archivos (patrón ya usado, copia fresca a `outputs/` por el mount stale del sandbox).
+- [ ] Smoke visual (Javi): login como manager → "Movimiento de caja" → confirmar que NO aparece pestaña "Entrada" y que "Salida" solo muestra las 3 categorías. Login como admin → confirmar que sigue viendo todo igual que hoy.
+
+### Commit sugerido
+`feat(cash-movements): restringir categorías del modal a rol manager (solo 3 salidas, sin entradas)`
+
+---
+
 ## Plan — Corrección descuadre caja/caja fuerte por doble captura de pago a proveedor — 2026-07-03 🔍 PROPUESTO, PENDIENTE DE APROBACIÓN (no tocar BD todavía)
 
 ### Qué pasó (confirmado contra `ledger_2026-06-10_2026-07-03.csv`)

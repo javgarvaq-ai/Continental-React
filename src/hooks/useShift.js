@@ -8,6 +8,11 @@ import {
     addCashMovement,
 } from '../services/shifts'
 
+// Rol manager: mismo set permitido que en CashMovementPanel.jsx (guard defensivo
+// del lado del cliente — la fuente de verdad de la UI es el componente, esto
+// solo protege el submit por si algo enviara una categoría fuera de esa lista).
+const MANAGER_ALLOWED_CATEGORIES = ['nomina_caja', 'pago_proveedor_caja', 'gasto_operativo_caja']
+
 /**
  * Manages shift lifecycle, cash movements, and shift panel state.
  *
@@ -88,6 +93,11 @@ export function useShift({ currentUser, currentShiftId, isOnline, setStatus, onS
     async function handleCashMovementSubmit({ category, amount, note }) {
         if (!requireOnline(isOnline, setStatus)) return
         if (!currentUser?.id || !currentShiftId) return
+
+        if (currentUser.role === 'manager' && !MANAGER_ALLOWED_CATEGORIES.includes(category)) {
+            setStatus('No tienes permiso para registrar este tipo de movimiento.')
+            return
+        }
 
         const config = getCashMovementConfig(category)
         if (!config) return

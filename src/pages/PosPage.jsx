@@ -535,6 +535,7 @@ function PosPage() {
                 onClose={() => setCashPanelOpen(false)}
                 onSubmit={handleCashMovementSubmit}
                 isSubmitting={isSubmittingCash}
+                role={currentUser?.role}
             />
 
             <ShiftPanel
