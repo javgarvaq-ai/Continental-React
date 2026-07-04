@@ -26,7 +26,7 @@ const WITHDRAWAL_CATEGORIES = [
 ]
 
 // Rol manager: por ahora sin ingresos, y en salidas solo estas 3 (decisión Javi, 2026-07-03).
-const MANAGER_WITHDRAWAL_KEYS = ['nomina_caja', 'pago_proveedor_caja', 'gasto_operativo_caja']
+const MANAGER_WITHDRAWAL_KEYS = ['propinas_entregadas', 'pago_proveedor_caja', 'gasto_operativo_caja']
 
 function CashMovementPanel({ open, onClose, onSubmit, isSubmitting, role }) {
     const isManager = role === 'manager'

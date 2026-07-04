@@ -10,9 +10,12 @@ Aprobado tal cual el plan — solo restricción en la app/cliente, sin tocar BD/
 - [x] Verificación: `@babel/parser` de los 3 archivos (copias frescas escritas directo a `outputs/`, el mount de bash del proyecto seguía stale — mismo patrón de `lessons.md`) → OK. Test lógico en node del filtro `WITHDRAWAL_CATEGORIES.filter(...)` → da exactamente `['pago_proveedor_caja','nomina_caja','gasto_operativo_caja']`, 3 elementos.
 - [x] Sin migración, sin RLS, sin cambios en categorías/config existentes — puramente aditivo (prop nueva + 1 guard).
 
+### Corrección (2026-07-03) — Javi: no era Nómina, era Propinas
+Javi se corrigió: el set correcto es **Propinas entregadas** (no Nómina). Actualizado `MANAGER_WITHDRAWAL_KEYS` (`CashMovementPanel.jsx`) y `MANAGER_ALLOWED_CATEGORIES` (`useShift.js`) → `['propinas_entregadas', 'pago_proveedor_caja', 'gasto_operativo_caja']`. Verificado con assert en node. Set final para manager: **Propinas entregadas · Pago proveedor (caja) · Gasto operativo (caja)** — todas "Desde caja".
+
 ### Pendiente (Javi)
 - [ ] `git add src/components/CashMovementPanel.jsx src/pages/PosPage.jsx src/hooks/useShift.js tasks/todo.md && git commit -m "feat(cash-movements): restringir categorías del modal a rol manager (solo 3 salidas, sin entradas)" && git push`
-- [ ] Smoke: login como manager → "Movimiento de caja" → sin pestaña "Entrada", "Salida" solo Nómina/Pago proveedor/Gasto operativo (todas "Desde caja"). Login como admin → sigue viendo todo igual.
+- [ ] Smoke: login como manager → "Movimiento de caja" → sin pestaña "Entrada", "Salida" solo **Propinas entregadas / Pago proveedor / Gasto operativo** (todas "Desde caja"). Login como admin → sigue viendo todo igual.
 
 ### Commit sugerido
 `feat(cash-movements): restringir categorías del modal a rol manager (solo 3 salidas, sin entradas)`

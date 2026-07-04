@@ -11,7 +11,7 @@ import {
 // Rol manager: mismo set permitido que en CashMovementPanel.jsx (guard defensivo
 // del lado del cliente — la fuente de verdad de la UI es el componente, esto
 // solo protege el submit por si algo enviara una categoría fuera de esa lista).
-const MANAGER_ALLOWED_CATEGORIES = ['nomina_caja', 'pago_proveedor_caja', 'gasto_operativo_caja']
+const MANAGER_ALLOWED_CATEGORIES = ['propinas_entregadas', 'pago_proveedor_caja', 'gasto_operativo_caja']
 
 /**
  * Manages shift lifecycle, cash movements, and shift panel state.
