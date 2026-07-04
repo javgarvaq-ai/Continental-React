@@ -1,3 +1,76 @@
+## Plan — Corrección descuadre caja/caja fuerte por doble captura de pago a proveedor — 2026-07-03 🔍 PROPUESTO, PENDIENTE DE APROBACIÓN (no tocar BD todavía)
+
+### Qué pasó (confirmado contra `ledger_2026-06-10_2026-07-03.csv`)
+- Línea 461 (3 jul, 01:35 p.m.) — `Pago proveedor (resguardo)`, -540 a Caja fuerte, nota "jugos 03/07/26". Fue un pago real en EFECTIVO que salió de **caja (cajón)**, no de resguardo — error de captura de cuenta.
+- Línea 463 (3 jul, 02:10 p.m.) — `Regreso de resguardo`, +540 caja / **-540 caja fuerte**, nota "03/07/26". Fue la devolución del proveedor (cobro duplicado), entró bien a caja, pero al capturarse como "Regreso de resguardo" restó también de caja fuerte (esa categoría siempre mueve las dos cuentas a la vez).
+- Línea 473 confirma que el pago correcto por transferencia ($540, "pago zumo de limon y naranja") ya está bien registrado en Banco — no se toca.
+- **Efecto neto:** caja fuerte -$1,080 que nunca salieron físicamente de ahí; caja nunca registró el gasto real de $540 en efectivo.
+- **Estado actual → correcto:** Caja fuerte $4,420 → $5,500 (+1,080). Caja $3,052.50 → $2,512.50 (-540).
+
+### Diagnóstico del esquema (investigado, archivo:línea confirmados)
+- `cash_movements.category` es **texto libre, sin CHECK constraint** en la BD (`supabase/migrations/20260508191907_remote_schema.sql` — la tabla no tiene ningún constraint de enum sobre `category`). El catálogo de categorías válidas vive **solo en el frontend**: `src/config/cashMovements.js` (`CASH_MOVEMENT_CONFIG`, mapea `category → {type, movementNature, sourceLocation, destinationLocation}`) + `src/components/CashMovementPanel.jsx` (arrays `DEPOSIT_CATEGORIES`/`WITHDRAWAL_CATEGORIES`, lo que ve el usuario) + `src/pages/CashMovementsAdminPage.jsx` (`CATEGORY_LABELS`, solo display).
+- El saldo por cuenta (Ledger `utils/ledger.js`, y el resto de reportes) se calcula **solo** por `source_location`/`destination_location` de cada movimiento: `+amount` en `destination_location`, `-amount` en `source_location`. Cualquier location que NO sea `drawer`/`house_safe`/`bank` (ej. `'adjustment'`) es ignorada — no suma ni resta en ninguna de las 3 cuentas reales.
+- **Ya existe un precedente exacto de este mecanismo:** `ajuste_ingreso` (`type: deposit, movementNature: adjustment, sourceLocation: 'adjustment', destinationLocation: 'drawer'`) — un ingreso a caja que NO sale de ningún otro lado. Lo que falta es lo simétrico: (a) un **egreso** de ajuste (que reste de una cuenta sin que nada la reciba), y (b) que el ajuste pueda apuntar a **caja fuerte**, no solo a caja. Las categorías `resguardo_casa`/`regreso_resguardo` no sirven para esto porque **siempre mueven las dos cuentas a la vez** (por diseño, son transferencias reales entre caja y resguardo).
+
+### Mecanismo propuesto (responde a tus 3 preguntas)
+**No usar `Pago proveedor (caja)` ni `Pago proveedor (resguardo)`** — correcto, esto no es un pago nuevo. Se necesitan **2 categorías nuevas de tipo "Ajuste/Corrección"**, simétricas a `ajuste_ingreso` mereces pero para resguardo y en egreso:
+
+```js
+// src/config/cashMovements.js — 2 entradas nuevas (o 3 con la de egreso_resguardo para dejar el set completo)
+ajuste_egreso_caja: {
+    type: 'withdrawal', movementNature: 'adjustment',
+    sourceLocation: 'drawer', destinationLocation: 'adjustment',
+},
+ajuste_ingreso_resguardo: {
+    type: 'deposit', movementNature: 'adjustment',
+    sourceLocation: 'adjustment', destinationLocation: 'house_safe',
+},
+ajuste_egreso_resguardo: {   // no se usa en esta corrección, pero completa el set (simetría con ajuste_ingreso)
+    type: 'withdrawal', movementNature: 'adjustment',
+    sourceLocation: 'house_safe', destinationLocation: 'adjustment',
+},
+```
+Cada una mueve **una sola cuenta real**, sin cruces — exactamente lo que pide el punto 2 de tu mensaje. Como `category` no tiene constraint en BD, esto es **puramente aditivo en frontend**: 3 archivos, ~15 min, cero migración, cero riesgo a datos/flujo existente.
+
+**¿Vale la pena crearlo? Sí** — el esfuerzo es casi nulo (config, no esquema) y cierra un hueco real: hoy no existe forma de corregir un error de captura en caja fuerte sin simular una transferencia falsa o un "pago" falso.
+
+### Corrección concreta a ejecutar (2 filas nuevas en `cash_movements`, referencian el error — NO se tocan 461/463)
+1. `category='ajuste_ingreso_resguardo'`, `amount=1080`, `type='deposit'`, `movement_nature='adjustment'`, `source_location='adjustment'`, `destination_location='house_safe'`, nota: *"Corrección error de captura 03/07/26 — ver líneas 461 y 463 del ledger (pago proveedor jugos capturado por error contra resguardo en vez de caja, más devolución que restó resguardo de nuevo). Caja fuerte nunca se tocó físicamente."*
+2. `category='ajuste_egreso_caja'`, `amount=540`, `type='withdrawal'`, `movement_nature='adjustment'`, `source_location='drawer'`, `destination_location='adjustment'`, nota: *"Corrección error de captura 03/07/26 — gasto real en efectivo (jugos, línea 461) que nunca se registró contra caja porque quedó capturado contra resguardo."*
+- `shift_id`/`user_id`: pendiente de confirmar contra el turno abierto/relevante (se arma con un `SELECT` primero, mismo patrón que los scripts de verificación previos).
+- Resultado esperado tras aplicar: Caja fuerte 4,420 → 5,500. Caja 3,052.50 → 2,512.50. Coincide exacto con tu tabla.
+
+### Idea adicional (tu pregunta del final — separar "de dónde salió" vs "a quién se pagó")
+Confirmado como hueco de diseño real: cada `category` hoy mezcla en un solo string el **concepto** (proveedor/nómina/renta/ajuste) y la **cuenta de origen** (caja/banco/resguardo) — ej. `pago_proveedor_resguardo`. Por eso es fácil elegir la opción equivocada cuando el pago sale de una cuenta distinta a la "normal" para ese concepto. La cuenta de origen YA es una columna independiente (`source_location`) — el fix de fondo sería separar el selector en 2 pasos (concepto, luego cuenta) en `CashMovementPanel.jsx`, en vez de 1 dropdown combinado. Es un rediseño de UI más grande (no de esquema) — lo dejo como mejora de Fase 2, **no** lo incluyo en esta corrección.
+
+### Garantías
+- No se edita ni borra ninguna fila existente (461, 463 quedan intactos).
+- Sin migración, sin cambio de esquema/RLS (category ya es texto libre).
+- Cambio de código es aditivo (nuevas categorías), no toca ninguna categoría/lógica existente.
+- Nada se ejecuta contra la BD hasta que apruebes explícitamente.
+
+### Decisión de Javi (2026-07-03)
+- Aprobadas las 3 categorías (incluyendo `ajuste_egreso_resguardo` para dejar el set simétrico completo).
+- Las 2 filas de corrección van contra el **turno abierto ahora mismo** (confirmar con BLOQUE 1 del SQL antes de insertar).
+
+### ✅ Hecho (2026-07-03) — código
+- [x] `src/config/cashMovements.js` — 3 entradas nuevas: `ajuste_egreso_caja`, `ajuste_ingreso_resguardo`, `ajuste_egreso_resguardo`. Todas mueven una sola cuenta real (la otra punta es `'adjustment'`, ignorada por el cálculo de saldos).
+- [x] `src/components/CashMovementPanel.jsx` — agregadas a `DEPOSIT_CATEGORIES`/`WITHDRAWAL_CATEGORIES` con sublabel indicando cuenta (Caja / Caja fuerte), para que queden disponibles en el modal de "Movimiento de caja" de ahora en adelante.
+- [x] `src/pages/CashMovementsAdminPage.jsx` — labels agregados a `CATEGORY_LABELS`.
+- [x] Verificado con `@babel/parser` sobre copia fresca en `outputs/` (mount de bash del proyecto, patrón ya documentado en `lessons.md`) — los 3 archivos parsean OK.
+- [x] `tasks/correccion_descuadre_2026-07-03.sql` — 5 bloques (SELECT turno abierto → SELECT user_id → SELECT saldo antes → 2 INSERT de corrección → SELECT saldo después + confirmación). **NO ejecutado — Javi lo corre en el SQL Editor de Supabase.**
+
+### Pendiente (Javi)
+- [ ] Correr BLOQUE 1 y 2 del SQL, confirmar `<SHIFT_ID>` y `<USER_ID>`.
+- [ ] Reemplazar los placeholders en BLOQUE 4 y correr los 2 INSERT.
+- [ ] Correr BLOQUE 5, confirmar que caja fuerte da 5,500.00 y que las 2 filas nuevas aparecen con nota correcta.
+- [ ] Smoke visual: `/admin/cash-movements` y `/admin/ledger` muestran las 2 filas nuevas con label correcto ("Ajuste ingreso (caja fuerte)" / "Ajuste egreso (caja)") y el saldo corrido de caja fuerte/caja queda en 5,500 / (cajón del turno − 540).
+
+### Commit sugerido
+`feat(cash-movements): categorías de ajuste independientes para caja y caja fuerte (ingreso/egreso)`
+
+---
+
 ## Plan — Descuento de membresías: desglose en ticket + captura/reconciliación de dinero — 2026-06-21 🔍 EN REVISIÓN CON JAVI (sin aprobar, sin código todavía)
 
 ### Diagnóstico (investigado con subagente, archivo:línea confirmados)

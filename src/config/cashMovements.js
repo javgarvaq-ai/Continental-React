@@ -95,6 +95,24 @@ const CASH_MOVEMENT_CONFIG = {
         sourceLocation: 'adjustment',
         destinationLocation: 'drawer',
     },
+    ajuste_egreso_caja: {
+        type: 'withdrawal',
+        movementNature: 'adjustment',
+        sourceLocation: 'drawer',
+        destinationLocation: 'adjustment',
+    },
+    ajuste_ingreso_resguardo: {
+        type: 'deposit',
+        movementNature: 'adjustment',
+        sourceLocation: 'adjustment',
+        destinationLocation: 'house_safe',
+    },
+    ajuste_egreso_resguardo: {
+        type: 'withdrawal',
+        movementNature: 'adjustment',
+        sourceLocation: 'house_safe',
+        destinationLocation: 'adjustment',
+    },
 }
 
 export function getCashMovementConfig(category) {

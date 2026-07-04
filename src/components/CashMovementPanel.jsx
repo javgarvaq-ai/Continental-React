@@ -4,7 +4,8 @@ const DEPOSIT_CATEGORIES = [
     { key: 'regreso_resguardo', label: 'Regreso de resguardo', sublabel: 'Casa → Caja' },
     { key: 'retiro_banco_a_caja', label: 'Retiro de banco', sublabel: 'Banco → Caja' },
     { key: 'aportacion_socio', label: 'Aportación socio', sublabel: 'Socio → Caja' },
-    { key: 'ajuste_ingreso', label: 'Ajuste de ingreso', sublabel: 'Corrección' },
+    { key: 'ajuste_ingreso', label: 'Ajuste de ingreso', sublabel: 'Corrección · Caja' },
+    { key: 'ajuste_ingreso_resguardo', label: 'Ajuste de ingreso', sublabel: 'Corrección · Caja fuerte' },
 ]
 
 const WITHDRAWAL_CATEGORIES = [
@@ -20,6 +21,8 @@ const WITHDRAWAL_CATEGORIES = [
     { key: 'propinas_entregadas', label: 'Propinas entregadas', sublabel: 'Desde caja' },
     { key: 'gasto_operativo_caja', label: 'Gasto operativo', sublabel: 'Desde caja' },
     { key: 'gasto_operativo_banco', label: 'Gasto operativo', sublabel: 'Desde banco' },
+    { key: 'ajuste_egreso_caja', label: 'Ajuste de egreso', sublabel: 'Corrección · Caja' },
+    { key: 'ajuste_egreso_resguardo', label: 'Ajuste de egreso', sublabel: 'Corrección · Caja fuerte' },
 ]
 
 function CashMovementPanel({ open, onClose, onSubmit, isSubmitting }) {
