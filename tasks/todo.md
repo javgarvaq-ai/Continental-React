@@ -1309,3 +1309,77 @@ Esto le da al cajero, en el mismo modal, la referencia de cuánta propina gener�
 - [x] `src/components/ShiftPanel.jsx` → 2 filas nuevas condicionales (solo si `totalPropinasRetiradas > 0`): "Propinas ya retiradas" y "Propinas pendientes en caja"
 - [x] Verificado con `@babel/parser` (el mount de bash quedó stale en la primera pasada — confirmado con `Read` + copia limpia, ver `lessons.md`)
 - No se tocó `closeShift()`, ni migraciones, ni `CashMovementPanel.jsx`
+
+---
+
+## Plan — Cajón persistente en el Ledger (2026-07-07)
+
+### Decisión de diseño (acordada con Javi en conversación)
+El corte por turno (`ShiftPanel.jsx`, `getShiftSummary`, `closeShift`) **no se toca**. Sigue siendo el conteo físico manual `starting_cash` / `cash_counted` / `difference`, turno por turno, tal como está hoy.
+
+El **Ledger** pasa a tener un cajón verdaderamente persistente, calculado **solo** a partir de movimientos documentados (`payments.efectivo` + `cash_movements` de/hacia `drawer`), igual que ya se hace con caja fuerte y banco — sin reset en cada apertura de turno. El conteo físico de cada turno se muestra como **anotación/comparación** sobre ese saldo persistente, nunca lo alimenta ni lo corrige automáticamente (evita el problema circular de "estaríamos viendo el total según lo que se contó").
+
+Regla rectora (Javi): no debería entrar o salir dinero del cajón sin que exista un `cash_movement` que lo respalde. Esto exige un backfill único: el fondo con el que arrancó el negocio nunca se registró como movimiento (la convención actual es que `createShift` no genera `cash_movement` por el fondo).
+
+### 1. Backfill histórico — `tasks/backfill_fondo_inicial_2026-07-07.sql`
+Un solo `INSERT INTO cash_movements`, para que el sistema tenga on registro real de la primera inyección de efectivo (los $805 de caja chica para cambio, puestos un día antes de abrir el primer turno):
+- `shift_id` = el turno más antiguo (`SELECT id FROM shifts ORDER BY opened_at ASC LIMIT 1`) — se ancla ahí porque `shift_id` es `NOT NULL` con FK; no existe un turno "antes del primero".
+- `user_id` = primer usuario con `role = 'admin'` (`ORDER BY created_at ASC LIMIT 1`) — cuenta de Javi. **Antes de correrlo, revisar que esa subconsulta resuelva al usuario correcto si hay más de un admin.**
+- `created_at` = `(SELECT MIN(opened_at) FROM shifts) - INTERVAL '1 day'` (para que ordene antes que el evento de apertura del turno 1 en el Ledger).
+- `amount` = 805.
+- `category` = `aportacion_socio` (ya existe, `sourceLocation: 'owner'`, `destinationLocation: 'drawer'` — encaja exacto).
+- `type` = `deposit`, `movement_nature` = `owner_funding`, `source_location` = `owner`, `destination_location` = `drawer`.
+- `note` = `'Fondo inicial histórico — caja chica para cambio, un día antes de abrir el primer turno (backfill 2026-07-07)'`.
+- **Javi debe correr esto a mano en el SQL Editor de Supabase** (no vía `apply_migration`, no es cambio de esquema).
+
+### 2. `src/services/ledger.js` → `getLedgerData()` — paginación
+Reemplazar los 3 `.select()` directos (`payments`, `cash_movements`, `shifts`) por un helper de paginación que haga `.range(offset, offset+999)` en loop hasta que la página venga incompleta (`data.length < pageSize`), acumulando resultados. Sin este cambio, el acumulado persistente queda expuesto a que Supabase trunque filas viejas silenciosamente si el histórico crece más allá de una página — antes no importaba porque el reset por turno "olvidaba" la historia vieja de todos modos.
+
+### 3. `src/utils/ledger.js` → `computeRunningBalances()`
+Quitar el reset `drawer = e.startingCash` en `shift_open`. El cajón acumula siempre por `drawerDelta` (igual que house/bank). En los eventos `shift_open` y `shift_close`, anotar la comparación contra el conteo físico sin modificar el acumulado:
+```js
+if (e.kind === 'shift_open') {
+    annotated.systemDrawerAtOpen  = drawer
+    annotated.physicalCountAtOpen = e.startingCash
+    annotated.openVariance        = e.startingCash - drawer
+}
+if (e.kind === 'shift_close') {
+    annotated.systemDrawerAtClose  = drawer
+    annotated.physicalCountAtClose = e.cashCounted
+    annotated.closeVariance        = e.cashCounted != null ? e.cashCounted - drawer : null
+}
+```
+
+### 4. `src/pages/LedgerPage.jsx` — mostrar la comparación
+En `rowConcept()`, para `shift_open`/`shift_close`, agregar el saldo del sistema junto al conteo físico y la diferencia (ej. `"Apertura de turno · Físico $9,800 · Sistema $9,850 · dif -$50"`). Resaltar en rojo/verde cuando `openVariance`/`closeVariance` ≠ 0. El card "Cajón" del encabezado no cambia de código — automáticamente pasa a mostrar el saldo persistente real.
+
+### Fuera de alcance
+- No se toca `ShiftPanel.jsx`, `getShiftSummary`, `closeShift`, ni las tablas `shifts`/`payments`.
+- No se crea ningún `cash_movement` automático en aperturas/cierres futuros — solo el backfill único de arranque.
+- `MonthlyReportPage.jsx` usa `ledger.closing.drawerBalance` — pasa a reflejar el saldo persistente automáticamente, sin cambio de código ahí.
+
+### Checklist
+- [ ] `tasks/backfill_fondo_inicial_2026-07-07.sql` — creado, pendiente de que Javi lo corra en Supabase
+- [ ] `src/services/ledger.js` — paginación en `getLedgerData()`
+- [ ] `src/utils/ledger.js` — quitar reset, anotar variance
+- [ ] `src/pages/LedgerPage.jsx` — mostrar variance en marcadores de turno
+- [ ] Verificar sintaxis (`@babel/parser`, evitar mount stale del sandbox)
+- [ ] Probar: cargar `/admin/ledger` con rango "Semana" y confirmar que el cajón ya no salta a `starting_cash` en cada apertura
+
+**Aprobado por Javi 2026-07-07 (usuario = cuenta admin/dueño; sí agregar paginación). Procediendo a implementar.**
+
+### Implementado ✅
+- [x] `tasks/backfill_fondo_inicial_2026-07-07.sql` — creado. **Pendiente: Javi debe correrlo en el SQL Editor de Supabase** (revisar antes que la subconsulta de `role='admin'` resuelva al usuario correcto si hay más de un admin).
+- [x] `src/services/ledger.js` — `getLedgerData()` ahora pagina con `.range()` en loop (`fetchAllPages`) sobre las 3 tablas, orden ascendente. Ya no depende del truco de "traer descendente y truncar lo viejo".
+- [x] `src/utils/ledger.js` — `computeRunningBalances()` ya no resetea `drawer` en `shift_open`; acumula siempre como house/bank. Anota `systemDrawerAtOpen/AtClose`, `physicalCountAtOpen/AtClose`, `openVariance`/`closeVariance` sin tocar el acumulado. Docstring del archivo actualizado con la nueva convención.
+- [x] `src/pages/LedgerPage.jsx` — nuevo componente `SystemVarianceNote` muestra "Cuadra con el saldo acumulado del sistema" o la diferencia en rojo/verde bajo cada marcador de apertura/cierre. `rowConcept` distingue `dif. turno` (contra su propio fondo) de la nueva comparación (contra todo el histórico documentado). Descripción del encabezado actualizada.
+- [x] Verificado: sintaxis con `@babel/parser` (3 archivos, copias limpias en outputs — mount de bash quedó stale otra vez, ver `lessons.md`) + prueba lógica con datos de ejemplo confirmando: turno cuadrado → `variance: 0`; turno que abre con menos efectivo del que el sistema esperaba → `openVariance` negativo y visible, sin que el turno en sí se vea "mal" en su propia matemática interna.
+
+### Fuera de alcance (confirmado sin tocar)
+- `ShiftPanel.jsx`, `getShiftSummary`, `closeShift` — el corte por turno sigue exactamente igual.
+- No se crea ningún `cash_movement` automático en aperturas/cierres futuros — solo el backfill único de arranque.
+- `MonthlyReportPage.jsx` — usa `ledger.closing.drawerBalance`, ahora refleja el saldo persistente sin cambio de código ahí.
+
+### Pendiente de Javi
+- Correr `tasks/backfill_fondo_inicial_2026-07-07.sql` en Supabase.
+- Después de correrlo, abrir `/admin/ledger`, filtrar "Semana" o el rango que incluya turnos recientes, y confirmar visualmente que el cajón ya no salta a `starting_cash` en cada apertura.

@@ -67,15 +67,35 @@ function deltaCell(n) {
 }
 
 function rowConcept(e) {
-    if (e.kind === 'shift_open')  return `Apertura de turno · Fondo ${money(e.startingCash)}`
+    if (e.kind === 'shift_open')  return `Apertura de turno · Contado ${money(e.startingCash)}`
     if (e.kind === 'shift_close') {
         const parts = ['Cierre de turno']
         if (e.cashCounted != null) parts.push(`contado ${money(e.cashCounted)}`)
-        if (e.difference  != null) parts.push(`dif ${money(e.difference)}`)
+        if (e.difference  != null) parts.push(`dif. turno ${e.difference >= 0 ? '+' : ''}${money(e.difference)}`)
         return parts.join(' · ')
     }
     if (e.kind === 'payment')  return e.folio != null ? `Folio #${e.folio} cobrado` : 'Folio cobrado'
     return CATEGORY_LABELS[e.category] || e.category || e.movementType || 'Movimiento'
+}
+
+// Comparación del conteo físico (apertura/cierre de turno) contra el saldo
+// persistente del cajón (acumulado desde siempre por movimientos + ventas).
+// "dif. turno" (rowConcept) checa el turno contra su PROPIO fondo declarado;
+// esto checa contra TODO el histórico documentado — detecta cuando el fondo
+// declarado al abrir no coincidió con lo que el sistema esperaba, aunque el
+// turno en sí haya cuadrado internamente.
+function SystemVarianceNote({ e }) {
+    const variance = e.kind === 'shift_open' ? e.openVariance : e.kind === 'shift_close' ? e.closeVariance : null
+    if (variance == null) return null
+    const v = Number(variance)
+    const ok = Math.abs(v) < 1 // tolerancia de redondeo, no de negocio
+    return (
+        <div style={{ fontSize: '11px', marginTop: '2px', color: ok ? '#475569' : (v > 0 ? GREEN : RED), fontWeight: ok ? 400 : 700 }}>
+            {ok
+                ? 'Cuadra con el saldo acumulado del sistema'
+                : `vs. saldo acumulado del sistema: ${v > 0 ? '+' : '−'}${money(Math.abs(v))}`}
+        </div>
+    )
 }
 
 function BalanceCard({ label, closing, accent, sub }) {
@@ -168,7 +188,7 @@ function LedgerPage() {
 
                 <h1 style={{ margin: '0 0 4px 0', fontSize: '22px', fontWeight: 700, color: '#f1f5f9' }}>📒 Ledger</h1>
                 <p style={{ margin: '0 0 20px 0', fontSize: '12px', color: MUTED }}>
-                    Todo lo que entra y sale, en orden, con saldo corrido por ubicación. El cajón se ancla al fondo de cada turno; caja fuerte y banco son acumulados.
+                    Todo lo que entra y sale, en orden, con saldo corrido por ubicación. Cajón, caja fuerte y banco son acumulados — nunca se resetean. El conteo físico de apertura/cierre de turno se muestra como comparación contra ese saldo, no lo modifica.
                 </p>
 
                 {/* ── Filters ── */}
@@ -247,6 +267,7 @@ function LedgerPage() {
                                         {(e.note || e.user) && (
                                             <div style={{ fontSize: '11px', color: '#475569', marginTop: '2px' }}>{[e.user, e.note].filter(Boolean).join(' · ')}</div>
                                         )}
+                                        {isMarker && <SystemVarianceNote e={e} />}
                                     </div>
 
                                     {showAllCols ? (

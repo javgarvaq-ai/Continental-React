@@ -1,6 +1,33 @@
 import { supabase } from './supabase'
 import { addDaysToDateString } from './reports'
 
+const PAGE_SIZE = 1000
+
+/**
+ * Fetches every row matching `builder` (a function that takes a fresh query
+ * and returns it with filters/order applied), paginating with .range() until
+ * a page comes back shorter than PAGE_SIZE. This guarantees completeness
+ * regardless of how large the table grows — needed now that the Ledger's
+ * drawer balance is persistent/cumulative (see utils/ledger.computeRunningBalances):
+ * a single silently-dropped historical row would permanently skew the running
+ * total, with no way to detect it from the UI.
+ */
+async function fetchAllPages(builder) {
+    let all = []
+    let from = 0
+
+    while (true) {
+        const { data, error } = await builder(from, from + PAGE_SIZE - 1)
+        if (error) return { data: null, error }
+
+        all = all.concat(data || [])
+        if (!data || data.length < PAGE_SIZE) break
+        from += PAGE_SIZE
+    }
+
+    return { data: all, error: null }
+}
+
 /**
  * Fetches everything the Ledger view needs to compute running balances.
  *
@@ -17,29 +44,31 @@ export async function getLedgerData({ startDate, endDate }) {
     const startIso = `${startDate}T06:00:00-06:00`
     const endIso   = `${addDaysToDateString(endDate, 1)}T06:00:00-06:00`
 
-    // IMPORTANTE: ordenar DESCENDENTE (más nuevos primero). Supabase corta las
-    // respuestas grandes en un tope de filas; si pedimos ascendente, lo que se
-    // pierde es lo MÁS RECIENTE (bug: el Ledger se quedaba en los primeros días).
-    // `sortEvents` reordena cronológicamente después, así que el cálculo del
-    // saldo corrido no cambia.
+    // Orden ascendente + paginación explícita: ya no dependemos de "traer lo
+    // más nuevo primero y truncar lo viejo" (workaround anterior para el reset
+    // por turno). Con .range() en loop no se pierde ninguna fila sin importar
+    // cuánto crezca el histórico.
     const [paymentsRes, movementsRes, shiftsRes] = await Promise.all([
-        supabase
+        fetchAllPages((from, to) => supabase
             .from('payments')
             .select('id, created_at, efectivo, tarjeta, transferencia, tip_amount, shift_id, comanda_id, comandas ( folio )')
             .lt('created_at', endIso)
-            .order('created_at', { ascending: false }),
+            .order('created_at', { ascending: true })
+            .range(from, to)),
 
-        supabase
+        fetchAllPages((from, to) => supabase
             .from('cash_movements')
             .select('id, created_at, type, amount, note, category, movement_nature, source_location, destination_location, shift_id, users ( name )')
             .lt('created_at', endIso)
-            .order('created_at', { ascending: false }),
+            .order('created_at', { ascending: true })
+            .range(from, to)),
 
-        supabase
+        fetchAllPages((from, to) => supabase
             .from('shifts')
             .select('id, opened_at, closed_at, status, starting_cash, cash_counted, difference, opener:users!opened_by_user_id ( name ), closer:users!closed_by_user_id ( name )')
             .lt('opened_at', endIso)
-            .order('opened_at', { ascending: false }),
+            .order('opened_at', { ascending: true })
+            .range(from, to)),
     ])
 
     return {

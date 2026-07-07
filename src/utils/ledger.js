@@ -5,16 +5,31 @@
  * (folios cobrados + movimientos de caja + apertura/cierre de turno) and
  * computes a running balance per location.
  *
- * Location model — mirrors WeeklyReportPage.calcGlobal (the existing authority):
+ * Location model:
  *   - drawer (cajón):      + payments.efectivo, + movs dest=drawer,      − movs origen=drawer
  *   - house_safe (caja fuerte): + movs dest=house_safe,                  − movs origen=house_safe
  *   - bank (banco):        + payments.tarjeta + payments.transferencia, + movs dest=bank, − movs origen=bank
  *
- * Drawer convention (decision 2026-06-13): createShift only writes
- * shifts.starting_cash — it does NOT create a cash_movement for the fund.
- * So the drawer balance is ANCHORED PER SHIFT: it resets to that shift's
- * starting_cash at each shift open. This makes the drawer's closing balance
- * equal the shift's expected_cash. House_safe and bank run cumulatively.
+ * Drawer convention (revisada 2026-07-07 — decisión Javi): el cajón es
+ * PERSISTENTE, igual que house_safe y bank — nunca se resetea. Solo se mueve
+ * por eventos documentados (ventas en efectivo y cash_movements). Esto exigió
+ * un backfill único (tasks/backfill_fondo_inicial_2026-07-07.sql) para
+ * registrar como cash_movement el fondo con el que arrancó el negocio, que
+ * nunca había quedado documentado.
+ *
+ * El conteo físico de cada turno (`starting_cash` al abrir, `cash_counted` al
+ * cerrar) sigue existiendo y sigue siendo la fuente de verdad del corte por
+ * turno (ShiftPanel / getShiftSummary / closeShift — sin cambios), pero AQUÍ
+ * se usa solo como comparación/anotación sobre el saldo persistente, nunca
+ * para resetearlo ni corregirlo automáticamente. Ver `openVariance` /
+ * `closeVariance` en computeRunningBalances: si el conteo físico y el saldo
+ * del sistema no coinciden, esa diferencia es la señal de que salió o entró
+ * dinero sin pasar por un cash_movement.
+ *
+ * (Convención anterior, ya no aplica: el cajón se anclaba a `starting_cash`
+ * en cada apertura, haciendo que el saldo de cierre del cajón fuera siempre
+ * igual a `expected_cash` por construcción — no era una verificación
+ * independiente.)
  */
 
 export const LEDGER_LOCATIONS = ['drawer', 'house_safe', 'bank']
@@ -139,7 +154,10 @@ export function sortEvents(events) {
 
 /**
  * Applies running balances to a chronologically-sorted event list.
- * Drawer resets to starting_cash at each shift_open; house & bank accumulate.
+ * Drawer, house & bank all accumulate — none of them reset. shift_open and
+ * shift_close events carry drawerDelta === 0, so they don't move the drawer
+ * balance by themselves; instead they get annotated with a comparison
+ * against the physical count (see openVariance / closeVariance) for display.
  * @returns events annotated with drawerBalance / houseBalance / bankBalance
  */
 export function computeRunningBalances(sortedEvents) {
@@ -148,15 +166,26 @@ export function computeRunningBalances(sortedEvents) {
     let bank = 0
     let cardSales = 0 // cumulative card sales — base for the bank commission estimate
     return sortedEvents.map((e) => {
-        if (e.kind === 'shift_open') {
-            drawer = e.startingCash // seed/reset the drawer for the new shift
-        } else {
-            drawer += e.drawerDelta
-        }
-        house += e.houseDelta
-        bank  += e.bankDelta
+        drawer += e.drawerDelta
+        house  += e.houseDelta
+        bank   += e.bankDelta
         if (e.kind === 'payment') cardSales += Number(e.tarjeta || 0)
-        return { ...e, drawerBalance: drawer, houseBalance: house, bankBalance: bank, cardSalesCumulative: cardSales }
+
+        const annotated = { ...e, drawerBalance: drawer, houseBalance: house, bankBalance: bank, cardSalesCumulative: cardSales }
+
+        // Comparación contra el conteo físico — no altera drawer/drawerBalance.
+        if (e.kind === 'shift_open') {
+            annotated.systemDrawerAtOpen  = drawer
+            annotated.physicalCountAtOpen = e.startingCash
+            annotated.openVariance        = e.startingCash != null ? Number(e.startingCash) - drawer : null
+        }
+        if (e.kind === 'shift_close') {
+            annotated.systemDrawerAtClose  = drawer
+            annotated.physicalCountAtClose = e.cashCounted
+            annotated.closeVariance        = e.cashCounted != null ? Number(e.cashCounted) - drawer : null
+        }
+
+        return annotated
     })
 }
 
