@@ -1262,3 +1262,50 @@ Migraciones pendientes de sesiones anteriores + hoy:
 - B5: Propina edge case con pago mixto (medium risk)
 - `getCurrentMonthDate()` deduplicación (low risk)
 - QA smoke test pendiente: 2-shift simulation en curso — auditoría de números al terminar
+
+---
+
+## Propuesta — Contador de "propinas ya retiradas" en modal de corte (2026-07-06)
+
+### Problema
+El modal de corte (`ShiftPanel.jsx`) muestra "Propinas" = total de propina generada en el turno (`totalPropinas`, suma de `payments.tip_amount`). Pero si durante el turno se sacaron propinas de caja (movimiento `propinas_entregadas`, categoría ya existente en `config/cashMovements.js` con `destinationLocation: 'tips'`), ese retiro queda mezclado dentro de "Retiros" (`totalWithdrawals`) junto con pagos a proveedor, renta, gastos operativos, etc. No hay forma de ver en el modal cuánta propina ya salió de caja sin entrar al admin — el cajero no puede saber cuánta propina *debería* seguir físicamente en el cajón.
+
+Importante: `expectedCash` **ya está correcto** hoy — el retiro de propina sí resta de la caja esperada porque `source_location === 'drawer'`. Este cambio es puramente informativo/visual, no toca el cálculo de caja esperada ni el cierre real.
+
+### Causa raíz
+`getShiftSummary()` (src/services/shifts.js) ya trae todos los `cash_movements` del turno pero solo los agrega a `totalWithdrawals`/`totalDeposits` genéricos — nunca separa por categoría/destino.
+
+### Cambio propuesto (sin tocar DB, sin migración — 100% derivado de datos que ya existen)
+
+**1. `src/services/shifts.js` → `getShiftSummary()`**
+Dentro del mismo `forEach` que ya recorre `cashMovements`, agregar un acumulador nuevo:
+```js
+let totalPropinasRetiradas = 0
+// ...
+if (m.destination_location === 'tips') totalPropinasRetiradas += amount
+```
+(Uso `destination_location === 'tips'` en vez de `category === 'propinas_entregadas'` — mismo patrón que ya usan `totalWithdrawals`/`totalDeposits`, más robusto si algún día se agrega otra categoría con el mismo destino.)
+
+Agregar `totalPropinasRetiradas` al objeto `data` retornado. No se toca `expectedCash` ni `closeShift()` — sigue exactamente igual.
+
+**2. `src/components/ShiftPanel.jsx`**
+En la sección de summary, debajo de la fila "Propinas" existente, agregar dos filas nuevas:
+- `Propinas ya retiradas` → `-money(summary.totalPropinasRetiradas)` (muted, solo si > 0)
+- `Propinas pendientes en caja` → `money(summary.totalPropinas - summary.totalPropinasRetiradas)` (bold, accent naranja como la fila "Propinas")
+
+Esto le da al cajero, en el mismo modal, la referencia de cuánta propina generó el turno, cuánta ya se sacó, y cuánta debería seguir dentro del cajón — sin persistir nada nuevo en DB.
+
+### Archivos que cambian
+- `src/services/shifts.js` (+3 líneas aprox.)
+- `src/components/ShiftPanel.jsx` (+2 filas de UI)
+
+### Fuera de alcance / no se toca
+- No hay migración SQL.
+- No se cambia `closeShift()` ni lo que se persiste en `shifts` al cerrar.
+- No se cambia `CashMovementPanel.jsx` (el registro de "Propinas entregadas" ya funciona igual).
+
+**Aprobado por Javi 2026-07-06 — implementado:**
+- [x] `src/services/shifts.js` → `getShiftSummary()` agrega `totalPropinasRetiradas` (suma de `cash_movements` con `destination_location === 'tips'`)
+- [x] `src/components/ShiftPanel.jsx` → 2 filas nuevas condicionales (solo si `totalPropinasRetiradas > 0`): "Propinas ya retiradas" y "Propinas pendientes en caja"
+- [x] Verificado con `@babel/parser` (el mount de bash quedó stale en la primera pasada — confirmado con `Read` + copia limpia, ver `lessons.md`)
+- No se tocó `closeShift()`, ni migraciones, ni `CashMovementPanel.jsx`

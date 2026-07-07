@@ -62,6 +62,7 @@ export async function getShiftSummary(shiftId) {
     let totalCambio         = 0
     let totalWithdrawals    = 0
     let totalDeposits       = 0
+    let totalPropinasRetiradas = 0
 
     ;(payments || []).forEach((p) => {
         totalEfectivo      += Number(p.efectivo    || 0)
@@ -75,6 +76,10 @@ export async function getShiftSummary(shiftId) {
         const amount = Number(m.amount || 0)
         if (m.source_location      === 'drawer') totalWithdrawals += amount
         if (m.destination_location === 'drawer') totalDeposits    += amount
+        // Propinas ya sacadas de caja durante el turno (movimiento "propinas_entregadas").
+        // Solo informativo para el modal de corte — ya están incluidas en totalWithdrawals
+        // y por lo tanto ya restan de expectedCash; esto no duplica el cálculo.
+        if (m.destination_location === 'tips')   totalPropinasRetiradas += amount
     })
 
     const expectedCash =
@@ -90,6 +95,7 @@ export async function getShiftSummary(shiftId) {
             totalTarjeta,
             totalTransferencia,
             totalPropinas,
+            totalPropinasRetiradas,
             totalCambio,
             totalWithdrawals,
             totalDeposits,

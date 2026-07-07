@@ -147,6 +147,17 @@ function ShiftPanel({ open, onClose, currentUser, onFetchData, onConfirmClose, o
                             <SummaryRow label="Tarjeta" value={money(summary.totalTarjeta)} />
                             <SummaryRow label="Transferencia" value={money(summary.totalTransferencia)} />
                             <SummaryRow label="Propinas" value={money(summary.totalPropinas)} accent="#f57c00" />
+                            {summary.totalPropinasRetiradas > 0 && (
+                                <>
+                                    <SummaryRow label="Propinas ya retiradas" value={`-${money(summary.totalPropinasRetiradas)}`} muted />
+                                    <SummaryRow
+                                        label="Propinas pendientes en caja"
+                                        value={money(summary.totalPropinas - summary.totalPropinasRetiradas)}
+                                        accent="#f57c00"
+                                        bold
+                                    />
+                                </>
+                            )}
                             <div style={{ borderTop: '1px solid #2a2a2a', margin: '8px 0' }} />
                             <SummaryRow label="Depósitos" value={`+${money(summary.totalDeposits)}`} accent="#66bb6a" />
                             <SummaryRow label="Retiros" value={`-${money(summary.totalWithdrawals)}`} accent="#ef9a9a" />
