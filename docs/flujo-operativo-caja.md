@@ -110,4 +110,14 @@ Y ese número debe coincidir exactamente con cajón + banco + resguardo.
 
 ---
 
-*Última actualización: junio 2026*
+## 7. Ledger persistente (nuevo, julio 2026)
+
+El cajón en `/admin/ledger` ya no se resetea al fondo de cada turno — se acumula igual que caja fuerte y banco, solo por ventas en efectivo y `cash_movements` documentados.
+
+El conteo físico de apertura/cierre de cada turno se sigue capturando igual (`ShiftPanel`, sin cambios), pero ahora el Ledger lo compara contra ese saldo acumulado y muestra la diferencia debajo de cada marcador de turno. Si un turno "cuadra" internamente pero el fondo de apertura no coincidió con lo que el sistema esperaba (ej: se contó mal, o salió/entró dinero del cajón sin registrar un movimiento), esa diferencia ahora es visible ahí — antes se perdía silenciosamente en el reset.
+
+**Por qué importa seguir las reglas de este documento al pie de la letra ahora:** cualquier entrada o salida de efectivo del cajón que no pase por una de las categorías de arriba (secciones 1-5) va a aparecer como una diferencia en el Ledger, aunque el corte del turno se vea perfecto.
+
+---
+
+*Última actualización: julio 2026*

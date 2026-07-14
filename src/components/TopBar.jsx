@@ -10,6 +10,7 @@ function TopBar({
     onInventory,
     onWeeklyReport,
     onSchedule,
+    onChecador,
 }) {
     const navigate = useNavigate()
     const isManagerOrAdmin =
@@ -90,6 +91,14 @@ function TopBar({
 
                 <button type="button" onClick={onSchedule} style={btn}>
                     Horario
+                </button>
+
+                <button type="button" onClick={onChecador} style={{
+                    ...btn,
+                    border: '1px solid #2a5a3a',
+                    color: '#4ade80',
+                }}>
+                    Checar
                 </button>
 
                 {isManagerOrAdmin && (

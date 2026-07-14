@@ -11,6 +11,7 @@ import {
     deactivateEmployee,
     getEmployeeTimeLogs,
 } from '../services/employeesAdmin'
+import { getActiveUsers } from '../services/users'
 
 function formatTime(isoStr) {
     if (!isoStr) return ''
@@ -66,6 +67,7 @@ function EmployeesAdminPage() {
     const isAdmin = currentUser?.role === 'admin'
 
     const [employees, setEmployees] = useState([])
+    const [users, setUsers] = useState([])
     const [loading, setLoading] = useState(true)
     const { status, statusColor, setStatus } = useStatus('')
 
@@ -74,11 +76,12 @@ function EmployeesAdminPage() {
     const [newName, setNewName] = useState('')
     const [newPosition, setNewPosition] = useState('')
     const [newHourlyRate, setNewHourlyRate] = useState('')
+    const [newUserId, setNewUserId] = useState('')
     const [isSubmitting, setIsSubmitting] = useState(false)
 
     // Inline edit
     const [editingId, setEditingId] = useState(null)
-    const [editForm, setEditForm] = useState({ name: '', position: '', hourlyRate: '' })
+    const [editForm, setEditForm] = useState({ name: '', position: '', hourlyRate: '', userId: '' })
     const [isSavingEdit, setIsSavingEdit] = useState(false)
 
     // Deactivate confirm
@@ -88,9 +91,13 @@ function EmployeesAdminPage() {
     const [historyDialog, setHistoryDialog] = useState({ open: false, employee: null, logs: [], loading: false })
 
     const load = useCallback(async () => {
-        const { data, error } = await getAllEmployeesWithStatus()
-        if (error) { setStatus('Error cargando empleados.'); return }
-        setEmployees(data || [])
+        const [empResult, usersResult] = await Promise.all([
+            getAllEmployeesWithStatus(),
+            getActiveUsers(),
+        ])
+        if (empResult.error) { setStatus('Error cargando empleados.'); return }
+        setEmployees(empResult.data || [])
+        if (!usersResult.error) setUsers(usersResult.data || [])
         setLoading(false)
     }, [])
 
@@ -113,11 +120,12 @@ function EmployeesAdminPage() {
         e.preventDefault()
         if (!newName.trim() || isSubmitting) return
         setIsSubmitting(true)
-        const { error } = await createEmployee({ name: newName, position: newPosition, hourlyRate: newHourlyRate })
+        const { error } = await createEmployee({ name: newName, position: newPosition, hourlyRate: newHourlyRate, userId: newUserId || null })
         if (error) { setStatus(`Error: ${error.message}`); setIsSubmitting(false); return }
         setNewName('')
         setNewPosition('')
         setNewHourlyRate('')
+        setNewUserId('')
         setShowAddForm(false)
         setIsSubmitting(false)
         setStatus('Empleado agregado.')
@@ -126,18 +134,30 @@ function EmployeesAdminPage() {
 
     function startEdit(emp) {
         setEditingId(emp.id)
-        setEditForm({ name: emp.name, position: emp.position || '', hourlyRate: emp.hourly_rate ? String(emp.hourly_rate) : '' })
+        setEditForm({ name: emp.name, position: emp.position || '', hourlyRate: emp.hourly_rate ? String(emp.hourly_rate) : '', userId: emp.user_id || '' })
     }
 
     function cancelEdit() {
         setEditingId(null)
-        setEditForm({ name: '', position: '', hourlyRate: '' })
+        setEditForm({ name: '', position: '', hourlyRate: '', userId: '' })
+    }
+
+    /** Usuarios disponibles para ligar: activos y no ligados a OTRO empleado */
+    function availableUsers(currentEmpId = null) {
+        return users.filter(u =>
+            !employees.some(e => e.user_id === u.id && e.id !== currentEmpId)
+        )
+    }
+
+    function linkedUserName(emp) {
+        if (!emp.user_id) return null
+        return users.find(u => u.id === emp.user_id)?.name || '(usuario inactivo)'
     }
 
     async function handleSaveEdit(empId) {
         if (!editForm.name.trim() || isSavingEdit) return
         setIsSavingEdit(true)
-        const { error } = await updateEmployee({ id: empId, name: editForm.name, position: editForm.position, hourlyRate: editForm.hourlyRate })
+        const { error } = await updateEmployee({ id: empId, name: editForm.name, position: editForm.position, hourlyRate: editForm.hourlyRate, userId: editForm.userId || null })
         if (error) { setStatus(`Error actualizando: ${error.message}`); setIsSavingEdit(false); return }
         setIsSavingEdit(false)
         cancelEdit()
@@ -260,6 +280,19 @@ function EmployeesAdminPage() {
                             style={inputStyle}
                         />
                     </div>
+                    <div style={{ flex: '1 1 160px' }}>
+                        <label style={labelStyle}>Usuario (checador)</label>
+                        <select
+                            value={newUserId}
+                            onChange={e => setNewUserId(e.target.value)}
+                            style={inputStyle}
+                        >
+                            <option value="">Sin usuario</option>
+                            {availableUsers().map(u => (
+                                <option key={u.id} value={u.id}>{u.name}</option>
+                            ))}
+                        </select>
+                    </div>
                     <button
                         type="submit"
                         disabled={!newName.trim() || isSubmitting}
@@ -341,6 +374,19 @@ function EmployeesAdminPage() {
                                             style={inputStyle}
                                         />
                                     </div>
+                                    <div>
+                                        <label style={labelStyle}>Usuario (checador)</label>
+                                        <select
+                                            value={editForm.userId}
+                                            onChange={e => setEditForm(f => ({ ...f, userId: e.target.value }))}
+                                            style={inputStyle}
+                                        >
+                                            <option value="">Sin usuario</option>
+                                            {availableUsers(emp.id).map(u => (
+                                                <option key={u.id} value={u.id}>{u.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
                                     <div style={{ display: 'flex', gap: '6px' }}>
                                         <button
                                             type="button"
@@ -391,6 +437,9 @@ function EmployeesAdminPage() {
                                                 ${Number(emp.hourly_rate).toFixed(2)}/hr
                                             </div>
                                         )}
+                                        <div style={{ fontSize: '11px', color: emp.user_id ? '#3a5a8a' : '#3a3a3a', marginTop: '2px' }}>
+                                            {emp.user_id ? `⎋ ${linkedUserName(emp)}` : 'Sin usuario (no puede checar)'}
+                                        </div>
                                     </div>
                                     <button
                                         type="button"

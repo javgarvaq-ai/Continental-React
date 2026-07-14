@@ -317,9 +317,19 @@ Para verificar sintaxis sin depender del mount stale:
 
 Síntoma diagnóstico: una vista muestra datos viejos y "se corta" en una fecha fija sin importar el rango seleccionado → casi siempre es el tope de filas + orden ascendente.
 
-## Ledger view — convención del fondo de caja (starting_cash)
+## Ledger view — cajón persistente (revisado 2026-07-07)
 
-`createShift` (`services/auth.js`) solo escribe `shifts.starting_cash`; **no** crea un `cash_movement` por el fondo. Por eso:
-- `calcGlobal` (Posición de dinero) NO incluye `starting_cash` → su saldo de cajón está subestimado por el fondo (bug menor preexistente, no corregido).
-- El **Ledger** (`/admin/ledger`, `utils/ledger.js`) **ancla el cajón por turno**: resetea a `starting_cash` en cada apertura. Así el cierre del cajón == `expected_cash` del turno. Banco y caja fuerte corren acumulados y cuadran con `calcGlobal`.
-- Modelo de ubicaciones reusa los signos de `calcGlobal`: drawer/house_safe/bank con `source_location`/`destination_location` de `config/cashMovements.js`.
+**Convención anterior (ya NO aplica, solo para referencia histórica):** el Ledger anclaba el cajón por turno — resetaba a `starting_cash` en cada apertura, haciendo que el cierre del cajón fuera siempre igual a `expected_cash` por construcción (no era verificación independiente).
+
+**Convención actual:** el cajón en `utils/ledger.js` → `computeRunningBalances()` es **persistente**, igual que caja fuerte y banco — nunca resetea, solo se mueve por `payments.efectivo` y `cash_movements` documentados. El conteo físico de cada turno (`starting_cash`/`cash_counted`, capturado en `ShiftPanel`/`getShiftSummary`/`closeShift` — **sin cambios ahí**) se anota como comparación (`openVariance`/`closeVariance`) contra ese saldo, nunca lo alimenta ni lo corrige automáticamente. Ver `tasks/todo.md`, sección "Cajón persistente en el Ledger".
+
+`getLedgerData` (`services/ledger.js`) pagina con `.range()` en loop (`fetchAllPages`) — necesario ahora que el acumulado es persistente: una sola fila histórica perdida por el tope de filas de Supabase desfasaría el saldo para siempre, sin forma de detectarlo desde la UI. Ya no depende del truco de "traer descendente y truncar lo viejo".
+
+`getGlobalBalances` (`services/reports.js`) sigue existiendo pero está **muerta** (sin llamadas en el código) — antes alimentaba `calcGlobal`, que ya no existe; `MonthlyReportPage` usa `ledger.closing.drawerBalance` en su lugar.
+
+### Lección: no asumir un hueco de datos sin verificarlo primero
+Al diseñar el cajón persistente asumí que el fondo inicial del negocio ($805, caja chica) nunca se había registrado como `cash_movement`, basado en la convención general (`createShift` no crea movimiento por `starting_cash`). Escribí un script de backfill para insertarlo — pero Javi confirmó que ese movimiento **ya existía** (categoría `aportacion_socio`, ligado al primer turno). La convención general sobre `starting_cash` de turnos normales no aplicaba a este caso, porque el fondo se había documentado a mano por separado.
+
+**Por qué importa:** de haberse corrido el script sin confirmar, se habría duplicado el $805 y desfasado el cajón persistente para siempre — exactamente el tipo de error silencioso que este feature busca prevenir.
+
+**Regla:** antes de escribir un script de backfill o corrección de datos (no solo migraciones de esquema), pedir al usuario que confirme el estado real de los datos en producción cuando no se tenga forma de consultarlos directamente (RLS bloquea el anon key sin sesión). No asumir un hueco solo porque la convención de código lo sugiere — la convención puede no aplicar a casos capturados manualmente fuera del flujo normal.

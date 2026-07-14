@@ -1,3 +1,57 @@
+## Plan — Módulo Empleados/Horarios robusto + Checador en POS — 2026-07-13 ✅ FASE 1 APROBADA Y CODEADA (falta push + smoke de Javi) · Fases 2-3 pendientes
+
+### Decisiones de Javi (2026-07-13)
+- Checador en el **POS** (TopBar) — la tablet ya tiene sesión, RLS `authenticated` cubre las escrituras.
+- Validación **por sesión, sin PIN nuevo** (decisión revisada): el botón "Checar" solo marca entrada/salida del usuario logueado. Otro empleado debe cambiar de usuario para checar. La identidad la garantiza Supabase Auth (login existente).
+- **Todos los empleados activos ya tienen cuenta en `users`** — solo falta poblar `employees.user_id` para ligar cada empleado a su usuario. El botón manual del admin en Empleados se conserva como respaldo/corrección.
+- Horas reales **auto-calculadas del checador** con ajuste/corrección del admin.
+- Nómina: **solo guardar historial** del resumen semanal (NO tocar `cash_movements`).
+
+### Estado actual (auditado)
+- `employees` (name, position, hourly_rate, active, user_id sin uso), `employee_time_logs` (in/out, índice único de 1 entrada abierta por empleado), `employee_schedule_shifts` (week_start domingo + day_of_week, start/end, actual_hours manual, notes).
+- Check-in/out solo lo opera el admin en `EmployeesAdminPage`. `actual_hours` se teclea a mano — desconectado de los time logs. Sin corrección de logs (logs abiertos quedan colgados). Sin historial de semanas pasadas ni de pagos. Sin comparación plan vs. real.
+
+### Fase 1 — Checador en el POS (por sesión, sin PIN nuevo) ✅ CODEADA 2026-07-13
+- [x] **Migración `20260713000001_checador_clock_self.sql`**: UNIQUE parcial `employees_user_id_unique` sobre `employees(user_id)` (NULLs permitidos); policies `time_logs_insert`/`time_logs_update` reescritas — admin/manager (respaldo) **O** empleado propio (`employee_id IN (SELECT id FROM employees WHERE user_id = auth.uid())`); RPC `clock_self()` `SECURITY INVOKER` sin params — resuelve empleado por `auth.uid()`, toggle atómico con `FOR UPDATE`, captura `unique_violation`, devuelve `jsonb {ok, action, at, checked_in_at, employee_name}`. `REVOKE FROM anon, public` + `GRANT TO authenticated`.
+- [x] **Ligar `employees.user_id` vía UI, sin backfill SQL** (cambio vs. plan original, más seguro): dropdown "Usuario (checador)" en alta y edición de `EmployeesAdminPage` — solo usuarios activos no ligados a otro empleado. La tarjeta muestra el usuario ligado o "Sin usuario (no puede checar)". Javi liga a cada empleado manualmente una vez (lesson: no asumir datos de producción — así no hay UPDATE ciego).
+- [x] **`services/employeesAdmin.js`**: `clockSelf()` (maneja ambos branches rpcError/rpcResult.ok), `getMyEmployeeStatus({userId})` (empleado + log abierto), `createEmployee`/`updateEmployee`/`getAllEmployeesWithStatus` ahora manejan `user_id`.
+- [x] **`ChecadorPanel.jsx`** (nuevo): modal desde botón "Checar" en TopBar (visible para todos los roles). Muestra estado del usuario logueado (Fuera / En turno + hora entrada), botón con doble-confirmación (armado 3s, patrón del proyecto), `requireOnline` primera línea del handler, mensaje con hora y duración trabajada al checar salida. Si el usuario no está ligado a empleado → mensaje instructivo.
+- [x] **`TopBar.jsx`**: prop `onChecador` + botón "Checar" (verde). **`PosPage.jsx`**: estado `checadorOpen` + render del panel.
+- [x] Verificación: `@babel/parser` OK en los 5 archivos JS/JSX tocados (mount fresco esta vez, conteos de líneas consistentes).
+
+#### Pendiente (Javi) — Fase 1
+- [ ] `npx supabase db push` (aplica `20260713000001_checador_clock_self.sql`)
+- [ ] En Empleados (admin): ligar cada empleado a su usuario con el dropdown nuevo.
+- [ ] Smoke: (1) login como waiter → Checar → confirmar entrada → aparece "En turno"; (2) checar salida → muestra duración; (3) usuario sin empleado ligado → mensaje instructivo, sin crash; (4) el toggle manual del admin en Empleados sigue funcionando.
+- [ ] Commit sugerido: `feat(checador): registro entrada/salida por sesión desde el POS (RPC clock_self + RLS empleado propio + link employees.user_id)`
+
+### Fase 2 — Conectar checador ↔ horas reales
+- [ ] **Migración**: `employee_time_logs` + columnas `source text default 'clock'` (`clock`/`admin`), `edited_by uuid`, `edited_at`, `note text`. Vista o cálculo cliente que agrupa logs por día operacional (corte 06:00, convención del sistema) y semana (domingo).
+- [ ] **`ScheduleAdminPage` tab "Horas y pagos"**: cada celda muestra horas calculadas de los logs del día (redondeo a 15 min) como sugerencia; admin acepta con un click o corrige a mano → se guarda en `actual_hours` (columna existente, sin romper nada). Indicador visual: sugerido (gris) / confirmado (verde) / editado (ámbar).
+- [ ] **Corrección de logs (admin)**: en el historial del empleado, editar in/out de un log o cerrar un log olvidado (registra `edited_by`/`edited_at`/`note`). Detección de logs colgados: si un log abierto tiene >16h, marcarlo en rojo en admin.
+- [ ] **Plan vs. real**: en el mismo tab, junto a las horas, mostrar retardo (checó > X min después de start_time programado) y falta (día programado sin log).
+
+### Fase 3 — Historial y navegación
+- [ ] **Navegación libre de semanas** en `ScheduleAdminPage` (← → además de Esta/Próxima; semanas pasadas en solo-lectura para el grid, editables en horas/pagos).
+- [ ] **Migración `payroll_records`**: `id, employee_id, week_start, planned_hours, actual_hours, hourly_rate_snapshot, total_pay, notes, created_by, created_at` + UNIQUE `(employee_id, week_start)` + RLS `TO authenticated` (INSERT/SELECT; sin UPDATE/DELETE — snapshot inmutable, mismo patrón de audit trail del proyecto).
+- [ ] **Botón "Cerrar semana"** en tab pagos: persiste una fila por empleado con el cálculo vigente. Semana cerrada → celdas de horas bloqueadas (solo lectura).
+- [ ] **Vista historial de pagos**: por empleado (en `EmployeesAdminPage`, junto al historial de asistencia) y total por semana.
+
+### Fuera de alcance (explícito)
+- No se toca `cash_movements` ni el Ledger (decisión de Javi: solo historial).
+- No se toca el flujo de login ni Supabase Auth de `users` — el checador reutiliza la sesión existente, sin PIN nuevo ni credenciales extra.
+
+### Verificación
+- [ ] `@babel/parser` sobre archivos nuevos/editados (mount de bash puede quedar stale — usar copias en `outputs/`).
+- [ ] Test lógico en node: agrupación de logs por día operacional (corte 06:00, turnos overnight), redondeo 15 min, cálculo plan vs. real.
+- [ ] Revisar checklist RLS (SELECT + INSERT `TO authenticated` en `payroll_records`; escrituras de `employee_time_logs` limitadas a empleado propio + admin; probar que un waiter NO puede checar por otro).
+- [ ] Smoke (Javi): checar entrada/salida con su propia sesión desde el POS, cambiar de usuario y checar como otro empleado, corregir un log, cerrar una semana, ver historial.
+
+### Orden y tamaño
+Cada fase es deployable por separado. Fase 1 ≈ 1 migración + 1 componente + servicio. Fase 2 ≈ 1 migración + cambios en ScheduleAdminPage. Fase 3 ≈ 1 migración + navegación + botón cierre.
+
+---
+
 ## Plan — Restringir categorías del modal "Movimiento de caja" para rol manager — 2026-07-03 ✅ APROBADO Y CODEADO (falta smoke de Javi)
 
 ### Decisión de Javi (2026-07-03)
@@ -1381,5 +1435,15 @@ En `rowConcept()`, para `shift_open`/`shift_close`, agregar el saldo del sistema
 - `MonthlyReportPage.jsx` — usa `ledger.closing.drawerBalance`, ahora refleja el saldo persistente sin cambio de código ahí.
 
 ### Pendiente de Javi
-- Correr `tasks/backfill_fondo_inicial_2026-07-07.sql` en Supabase.
+- ~~Correr `tasks/backfill_fondo_inicial_2026-07-07.sql` en Supabase.~~ **Cancelado — ver corrección abajo.**
 - Después de correrlo, abrir `/admin/ledger`, filtrar "Semana" o el rango que incluya turnos recientes, y confirmar visualmente que el cajón ya no salta a `starting_cash` en cada apertura.
+
+### Corrección — 2026-07-07 (Javi): el backfill era innecesario
+Javi confirmó que el movimiento de $805 **ya existía** en `cash_movements` (categoría `aportacion_socio`, ligado al primer turno que se abrió). Mi supuesto de que "el fondo inicial nunca se registró como movimiento" era incorrecto para este caso — no investigué la data real antes de asumir el hueco, solo la convención general (`createShift` no crea movimiento por `starting_cash`), que aplica a turnos normales pero no a este caso donde el fondo sí se documentó a mano por separado.
+
+**Acción tomada:**
+- `tasks/backfill_fondo_inicial_2026-07-07.sql` marcado como NO CORRER / supersedido (contenido original conservado comentado, para que quede el registro de qué se consideró y por qué se descartó). No se tocó la base de datos.
+- No se requiere ningún cambio de código: `computeRunningBalances()` ya suma automáticamente cualquier `cash_movement` existente con `destination_location = 'drawer'`, así que ese movimiento histórico ya alimenta bien el cálculo persistente sin backfill.
+- Único detalle cosmético pendiente de observar (no de corregir): si el `created_at` de ese movimiento quedó fechado durante/después de la apertura del turno 1 (en vez de antes), el marcador de apertura de ESE turno específico podría mostrar una "diferencia vs. sistema" de $805 en el Ledger — es un artefacto de orden cronológico de un turno histórico de hace meses, no un error real ni algo que afecte turnos actuales. Javi puede confirmarlo mirando `/admin/ledger` filtrado a esa fecha; no amerita tocar timestamps de producción por algo puramente visual e histórico.
+
+**Lección capturada en `tasks/lessons.md`.**

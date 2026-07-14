@@ -16,6 +16,7 @@ import TopBar from '../components/TopBar'
 import CashMovementPanel from '../components/CashMovementPanel'
 import ShiftPanel from '../components/ShiftPanel';
 import ScheduleViewPanel from '../components/ScheduleViewPanel';
+import ChecadorPanel from '../components/ChecadorPanel';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { requireOnline } from '../utils/requireOnline';
 import {
@@ -185,6 +186,7 @@ function PosPage() {
     });
 
     const [scheduleOpen, setScheduleOpen] = useState(false);
+    const [checadorOpen, setChecadorOpen] = useState(false);
 
     // useShift — shift lifecycle, cash movements, panel state
     const {
@@ -523,11 +525,18 @@ function PosPage() {
                 onInventory={handleInventory}
                 onWeeklyReport={handleWeeklyReport}
                 onSchedule={() => setScheduleOpen(true)}
+                onChecador={() => setChecadorOpen(true)}
             />
 
             <ScheduleViewPanel
                 open={scheduleOpen}
                 onClose={() => setScheduleOpen(false)}
+            />
+
+            <ChecadorPanel
+                open={checadorOpen}
+                onClose={() => setChecadorOpen(false)}
+                currentUser={currentUser}
             />
 
             <CashMovementPanel
