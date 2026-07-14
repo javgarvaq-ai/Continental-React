@@ -13,6 +13,7 @@ import {
     getWeekStart,
     toDateString,
 } from '../services/scheduleAdmin'
+import { getWeekPayroll, closePayrollWeek, reopenPayrollWeek } from '../services/payroll'
 import { summarizeLogsByEmpDay, lateMinutes, isOperationalDayOver } from '../utils/timeLogs'
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -45,6 +46,11 @@ function addDays(date, n) {
     const d = new Date(date)
     d.setDate(d.getDate() + n)
     return d
+}
+
+/** Devuelve el domingo (YYYY-MM-DD) de la semana desplazada `deltaWeeks` desde weekStartStr */
+function shiftWeek(weekStartStr, deltaWeeks) {
+    return toDateString(getWeekStart(addDays(new Date(weekStartStr + 'T12:00:00'), deltaWeeks * 7)))
 }
 
 function formatWeekLabel(weekStart) {
@@ -137,10 +143,15 @@ function ScheduleAdminPage() {
     const [employees, setEmployees] = useState([])
     const [shifts, setShifts] = useState([])                    // raw rows from DB
     const [timeLogs, setTimeLogs] = useState([])                // checadas de la semana operacional
+    const [payrollRows, setPayrollRows] = useState([])          // filas de nómina activas de la semana (cierre)
     const [loading, setLoading] = useState(true)
     const { status, statusColor, setStatus } = useStatus('')
     const [isCopying, setIsCopying] = useState(false)
     const [isAccepting, setIsAccepting] = useState(false)
+    const [confirmingClose, setConfirmingClose] = useState(false)
+    const [confirmingReopen, setConfirmingReopen] = useState(false)
+    const [isClosing, setIsClosing] = useState(false)
+    const [isReopening, setIsReopening] = useState(false)
 
     // Editor state: which employee is open for editing
     const [editingEmpId, setEditingEmpId] = useState(null)
@@ -162,12 +173,16 @@ function ScheduleAdminPage() {
 
     const loadShifts = useCallback(async () => {
         setLoading(true)
-        const [scheduleResult, logsResult] = await Promise.all([
+        const [scheduleResult, logsResult, payrollResult] = await Promise.all([
             getWeekSchedule({ weekStart: activeWeek }),
             getWeekTimeLogs({ weekStart: activeWeek }),
+            getWeekPayroll({ weekStart: activeWeek }),
         ])
         if (!scheduleResult.error) setShifts(scheduleResult.data || [])
         if (!logsResult.error) setTimeLogs(logsResult.data || [])
+        if (!payrollResult.error) setPayrollRows(payrollResult.data || [])
+        setConfirmingClose(false)
+        setConfirmingReopen(false)
         setLoading(false)
     }, [activeWeek])
 
@@ -188,6 +203,19 @@ function ScheduleAdminPage() {
 
     // Map: "empId_dayIdx" → { hours, firstInAt, hasOpen } desde el checador
     const logSummary = summarizeLogsByEmpDay(timeLogs, activeWeek)
+
+    // ── Estado de la semana ─────────────────────────────────────────────────────
+    const isPastWeek = activeWeek < todayWeekStart        // semana pasada → grid solo-lectura
+    const weekClosed = payrollRows.length > 0             // nómina cerrada → horas bloqueadas
+
+    /** Días con horas sugeridas del checador aún sin confirmar (celdas azules) */
+    function pendingSuggestedCells() {
+        return shifts.filter(s => {
+            const sum = logSummary[`${s.employee_id}_${s.day_of_week}`]
+            const hasActual = s.actual_hours !== null && s.actual_hours !== undefined
+            return !hasActual && sum && !sum.hasOpen && sum.hours > 0
+        })
+    }
 
     // ── Editor helpers ────────────────────────────────────────────────────────
 
@@ -221,6 +249,7 @@ function ScheduleAdminPage() {
 
     async function handleSaveSchedule() {
         if (!editingEmpId || isSavingSchedule) return
+        if (isPastWeek) { setStatus('Semana pasada: el horario es de solo lectura.'); return }
         setIsSavingSchedule(true)
         setStatus('')
 
@@ -260,6 +289,7 @@ function ScheduleAdminPage() {
     // ── Actual hours ──────────────────────────────────────────────────────────
 
     async function handleActualHoursSave(shiftId, value) {
+        if (weekClosed) { setEditingActual(null); setStatus('Semana cerrada — reábrela para editar horas.'); return }
         const hrs = value === '' ? null : Number(value)
         if (hrs !== null && (isNaN(hrs) || hrs < 0 || hrs > 24)) {
             setStatus('Horas inválidas (0–24).')
@@ -274,6 +304,7 @@ function ScheduleAdminPage() {
     /** Acepta de golpe todas las horas sugeridas por el checador (días sin actual_hours) */
     async function handleAcceptSuggested() {
         if (isAccepting) return
+        if (weekClosed) { setStatus('Semana cerrada — reábrela para editar horas.'); return }
         const targets = shifts.filter(s => {
             const sum = logSummary[`${s.employee_id}_${s.day_of_week}`]
             return (s.actual_hours === null || s.actual_hours === undefined)
@@ -312,6 +343,78 @@ function ScheduleAdminPage() {
             await loadShifts()
         }
         setIsCopying(false)
+    }
+
+    // ── Cerrar / reabrir semana (nómina) ──────────────────────────────────────
+
+    async function handleCloseWeek() {
+        if (isClosing || weekClosed) return
+
+        // Validación: no dejar celdas azules (sugeridas del checador) sin confirmar
+        const pending = pendingSuggestedCells()
+        if (pending.length > 0) {
+            setConfirmingClose(false)
+            setStatus(`Hay ${pending.length} día${pending.length !== 1 ? 's' : ''} con horas sugeridas del checador sin confirmar. Acéptalas o corrígelas antes de cerrar.`)
+            return
+        }
+
+        // Doble confirmación (patrón del proyecto)
+        if (!confirmingClose) {
+            setConfirmingClose(true)
+            setStatus('')
+            setTimeout(() => setConfirmingClose(false), 3000)
+            return
+        }
+        setConfirmingClose(false)
+
+        const rows = getPaySummary().map(r => ({
+            employeeId: r.emp.id,
+            weekStart: activeWeek,
+            plannedHours: Number(r.plannedHrs.toFixed(2)),
+            actualHours: Number(r.actualHrs.toFixed(2)),
+            hourlyRate: r.rate,
+            totalPay: Number((r.actualHrs * r.rate).toFixed(2)),
+        }))
+
+        if (rows.length === 0) {
+            setStatus('No hay empleados con turnos para cerrar esta semana.')
+            return
+        }
+
+        setIsClosing(true)
+        setStatus('')
+        const { error } = await closePayrollWeek({ rows, createdBy: currentUser?.id })
+        if (error) {
+            setStatus(error.message)
+            setIsClosing(false)
+            return
+        }
+        setStatus('Semana cerrada. Las horas quedan bloqueadas; usa "Reabrir semana" para editarlas.')
+        await loadShifts()
+        setIsClosing(false)
+    }
+
+    async function handleReopenWeek() {
+        if (isReopening || !weekClosed) return
+
+        if (!confirmingReopen) {
+            setConfirmingReopen(true)
+            setStatus('')
+            setTimeout(() => setConfirmingReopen(false), 3000)
+            return
+        }
+        setConfirmingReopen(false)
+
+        setIsReopening(true)
+        const { error } = await reopenPayrollWeek({ weekStart: activeWeek })
+        if (error) {
+            setStatus(error.message)
+            setIsReopening(false)
+            return
+        }
+        setStatus('Semana reabierta. Ya puedes editar horas; el cierre anterior queda en el historial como anulado.')
+        await loadShifts()
+        setIsReopening(false)
     }
 
     // ── Pay summary ───────────────────────────────────────────────────────────
@@ -385,13 +488,39 @@ function ScheduleAdminPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
                 <div>
                     <h2 style={{ margin: '0 0 4px 0', fontSize: '20px', fontWeight: 700, color: '#e8e8e8' }}>Horarios</h2>
-                    <p style={{ margin: 0, fontSize: '13px', color: '#555' }}>
+                    <p style={{ margin: 0, fontSize: '13px', color: '#555', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                         {formatWeekLabel(activeWeek)}
+                        {isPastWeek && (
+                            <span style={{ padding: '1px 7px', borderRadius: '4px', background: '#1e1e1e', color: '#777', fontSize: '11px', fontWeight: 600 }}>
+                                Semana pasada
+                            </span>
+                        )}
+                        {weekClosed && (
+                            <span style={{ padding: '1px 7px', borderRadius: '4px', background: '#2a1a3a', color: '#c4b5fd', fontSize: '11px', fontWeight: 600 }}>
+                                🔒 Nómina cerrada
+                            </span>
+                        )}
                     </p>
                 </div>
 
                 {/* Week selector */}
                 <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <button
+                        type="button"
+                        title="Semana anterior"
+                        onClick={() => { setActiveWeek(shiftWeek(activeWeek, -1)); setEditingEmpId(null) }}
+                        style={{
+                            padding: '7px 12px',
+                            borderRadius: '6px',
+                            border: '1px solid #2a2a2a',
+                            background: '#1a1a1a',
+                            color: '#888',
+                            fontSize: '14px',
+                            cursor: 'pointer',
+                        }}
+                    >
+                        ←
+                    </button>
                     <button
                         type="button"
                         onClick={() => { setActiveWeek(todayWeekStart); setEditingEmpId(null) }}
@@ -407,6 +536,22 @@ function ScheduleAdminPage() {
                         }}
                     >
                         Esta semana
+                    </button>
+                    <button
+                        type="button"
+                        title="Semana siguiente"
+                        onClick={() => { setActiveWeek(shiftWeek(activeWeek, 1)); setEditingEmpId(null) }}
+                        style={{
+                            padding: '7px 12px',
+                            borderRadius: '6px',
+                            border: '1px solid #2a2a2a',
+                            background: '#1a1a1a',
+                            color: '#888',
+                            fontSize: '14px',
+                            cursor: 'pointer',
+                        }}
+                    >
+                        →
                     </button>
                     <button
                         type="button"
@@ -557,7 +702,12 @@ function ScheduleAdminPage() {
                     {/* ══════════════════════════════════════════════
                         TAB: EDITOR
                     ══════════════════════════════════════════════ */}
-                    {tab === 'editor' && (
+                    {tab === 'editor' && isPastWeek && (
+                        <div style={{ padding: '20px', borderRadius: '8px', border: '1px solid #1e1e1e', background: '#121212', color: '#777', fontSize: '13px' }}>
+                            Esta es una semana pasada — el horario es de solo lectura. Puedes verlo en "Vista semanal" y ajustar horas reales en "Horas y pagos".
+                        </div>
+                    )}
+                    {tab === 'editor' && !isPastWeek && (
                         <div>
                             <p style={sectionTitle}>Selecciona un empleado para editar su semana</p>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -706,25 +856,66 @@ function ScheduleAdminPage() {
                     {tab === 'pay' && (
                         <div>
                             {/* Actual hours entry grid */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', gap: '8px', flexWrap: 'wrap' }}>
                                 <p style={{ ...sectionTitle, margin: 0 }}>Horas trabajadas por día</p>
-                                <button
-                                    type="button"
-                                    onClick={handleAcceptSuggested}
-                                    disabled={isAccepting}
-                                    style={{
-                                        padding: '6px 14px',
-                                        borderRadius: '6px',
-                                        border: '1px solid #2a4a6a',
-                                        background: '#0e1624',
-                                        color: isAccepting ? '#3a4a5a' : '#93c5fd',
-                                        fontSize: '12px',
-                                        fontWeight: 600,
-                                        cursor: isAccepting ? 'default' : 'pointer',
-                                    }}
-                                >
-                                    {isAccepting ? 'Aceptando...' : '✓ Aceptar sugeridas del checador'}
-                                </button>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    {!weekClosed && (
+                                        <button
+                                            type="button"
+                                            onClick={handleAcceptSuggested}
+                                            disabled={isAccepting}
+                                            style={{
+                                                padding: '6px 14px',
+                                                borderRadius: '6px',
+                                                border: '1px solid #2a4a6a',
+                                                background: '#0e1624',
+                                                color: isAccepting ? '#3a4a5a' : '#93c5fd',
+                                                fontSize: '12px',
+                                                fontWeight: 600,
+                                                cursor: isAccepting ? 'default' : 'pointer',
+                                            }}
+                                        >
+                                            {isAccepting ? 'Aceptando...' : '✓ Aceptar sugeridas del checador'}
+                                        </button>
+                                    )}
+                                    {weekClosed ? (
+                                        <button
+                                            type="button"
+                                            onClick={handleReopenWeek}
+                                            disabled={isReopening}
+                                            style={{
+                                                padding: '6px 14px',
+                                                borderRadius: '6px',
+                                                border: confirmingReopen ? '1px solid #b45309' : '1px solid #4a3a6a',
+                                                background: confirmingReopen ? '#3a2a0e' : '#1e1630',
+                                                color: confirmingReopen ? '#fbbf24' : '#c4b5fd',
+                                                fontSize: '12px',
+                                                fontWeight: 600,
+                                                cursor: isReopening ? 'default' : 'pointer',
+                                            }}
+                                        >
+                                            {isReopening ? 'Reabriendo...' : confirmingReopen ? '¿Reabrir? Confirmar' : '🔓 Reabrir semana'}
+                                        </button>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={handleCloseWeek}
+                                            disabled={isClosing}
+                                            style={{
+                                                padding: '6px 14px',
+                                                borderRadius: '6px',
+                                                border: confirmingClose ? '1px solid #b45309' : '1px solid #2a5a3a',
+                                                background: confirmingClose ? '#3a2a0e' : '#1a3a2a',
+                                                color: confirmingClose ? '#fbbf24' : '#4ade80',
+                                                fontSize: '12px',
+                                                fontWeight: 600,
+                                                cursor: isClosing ? 'default' : 'pointer',
+                                            }}
+                                        >
+                                            {isClosing ? 'Cerrando...' : confirmingClose ? '¿Cerrar semana? Confirmar' : '🔒 Cerrar semana'}
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                             <div style={{ overflowX: 'auto', marginBottom: '28px' }}>
                                 <table style={{ borderCollapse: 'collapse', minWidth: '600px', width: '100%' }}>
@@ -781,7 +972,25 @@ function ScheduleAdminPage() {
                                                         return (
                                                             <td key={d} style={{ padding: '4px 4px', borderBottom: '1px solid #111', textAlign: 'center' }}>
                                                                 {shift ? (
-                                                                    isEditingThis ? (
+                                                                    weekClosed ? (
+                                                                        <span
+                                                                            title="Semana cerrada — reábrela para editar"
+                                                                            style={{
+                                                                                display: 'inline-block',
+                                                                                padding: '3px 8px',
+                                                                                borderRadius: '4px',
+                                                                                border: cellBorder,
+                                                                                background: cellBg,
+                                                                                color: cellColor,
+                                                                                fontSize: '12px',
+                                                                                minWidth: '40px',
+                                                                            }}
+                                                                        >
+                                                                            {hasActual
+                                                                                ? `${shift.actual_hours}h`
+                                                                                : `(${scheduledHours(shift.start_time, shift.end_time).toFixed(0)}h)`}
+                                                                        </span>
+                                                                    ) : isEditingThis ? (
                                                                         <input
                                                                             type="number"
                                                                             min="0"
@@ -871,8 +1080,54 @@ function ScheduleAdminPage() {
                             </div>
 
                             {/* Pay summary */}
-                            <p style={sectionTitle}>Resumen de pago semanal</p>
-                            {(() => {
+                            <p style={sectionTitle}>Resumen de pago semanal{weekClosed ? ' — cerrada (snapshot)' : ''}</p>
+                            {weekClosed ? (() => {
+                                const empById = Object.fromEntries(employees.map(e => [e.id, e]))
+                                const snapRows = payrollRows
+                                    .map(r => ({ ...r, emp: empById[r.employee_id] }))
+                                    .sort((a, b) => (a.emp?.name || '').localeCompare(b.emp?.name || ''))
+                                if (snapRows.length === 0) {
+                                    return <p style={{ color: '#444', fontSize: '13px' }}>Sin filas de nómina en esta semana.</p>
+                                }
+                                const totalPay = snapRows.reduce((s, r) => s + Number(r.total_pay || 0), 0)
+                                const closedAt = payrollRows[0]?.created_at
+                                return (
+                                    <div style={{ overflowX: 'auto' }}>
+                                        <table style={{ borderCollapse: 'collapse', minWidth: '500px', width: '100%' }}>
+                                            <thead>
+                                                <tr style={{ borderBottom: '1px solid #1e1e1e' }}>
+                                                    {['Empleado', 'Puesto', '$/Hora', 'Planeadas', 'Reales', 'Sueldo'].map(h => (
+                                                        <th key={h} style={{ padding: '8px 10px', fontSize: '11px', color: '#555', textAlign: h === 'Empleado' || h === 'Puesto' ? 'left' : 'right', whiteSpace: 'nowrap' }}>
+                                                            {h}
+                                                        </th>
+                                                    ))}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {snapRows.map(r => (
+                                                    <tr key={r.id} style={{ borderBottom: '1px solid #111' }}>
+                                                        <td style={{ padding: '9px 10px', fontSize: '13px', color: '#c0c0c0', fontWeight: 500 }}>{r.emp?.name || '(baja)'}</td>
+                                                        <td style={{ padding: '9px 10px', fontSize: '12px', color: '#444' }}>{r.emp?.position || '—'}</td>
+                                                        <td style={{ padding: '9px 10px', fontSize: '12px', color: '#555', textAlign: 'right' }}>{Number(r.hourly_rate_snapshot) > 0 ? money(r.hourly_rate_snapshot) : '—'}</td>
+                                                        <td style={{ padding: '9px 10px', fontSize: '12px', color: '#444', textAlign: 'right' }}>{Number(r.planned_hours).toFixed(1)}h</td>
+                                                        <td style={{ padding: '9px 10px', fontSize: '12px', color: '#4ade80', textAlign: 'right', fontWeight: 600 }}>{Number(r.actual_hours).toFixed(1)}h</td>
+                                                        <td style={{ padding: '9px 10px', fontSize: '13px', textAlign: 'right', fontWeight: 600, color: '#e2e2e2' }}>{money(r.total_pay)}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                            <tfoot>
+                                                <tr style={{ borderTop: '1px solid #2a2a2a' }}>
+                                                    <td colSpan={5} style={{ padding: '10px 10px', fontSize: '12px', color: '#555', textAlign: 'right' }}>Total pagado semana</td>
+                                                    <td style={{ padding: '10px 10px', fontSize: '15px', fontWeight: 700, color: '#e2e2e2', textAlign: 'right' }}>{money(totalPay)}</td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                        <p style={{ margin: '8px 0 0 0', fontSize: '11px', color: '#333' }}>
+                                            Snapshot inmutable{closedAt ? ` cerrado el ${new Date(closedAt).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}. Sueldo = horas reales × tarifa vigente al cierre. Reábrela para recalcular.
+                                        </p>
+                                    </div>
+                                )
+                            })() : (() => {
                                 const rows = getPaySummary()
                                 if (rows.length === 0) {
                                     return <p style={{ color: '#444', fontSize: '13px' }}>Sin turnos programados esta semana.</p>
@@ -949,3 +1204,4 @@ function ScheduleAdminPage() {
 }
 
 export default ScheduleAdminPage
+// fase3: nómina (cierre/reapertura/navegación)

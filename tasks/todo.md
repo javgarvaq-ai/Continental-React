@@ -38,11 +38,37 @@
 - [ ] Smoke: (1) checa entrada/salida con tu sesión → en Horarios > Horas y pagos aparece `≈Xh` azul ese día; (2) click en la celda azul → Enter → queda verde; (3) "Aceptar sugeridas" con varios días; (4) en Empleados > Historial edita un log (cambia salida) → badge "editado" + nota; (5) celda ámbar si corriges horas distinto al checador.
 - [ ] Commit sugerido: `feat(checador): horas reales auto desde time logs + correccion de logs con auditoria (fase 2)`
 
-### Fase 3 — Historial y navegación
-- [ ] **Navegación libre de semanas** en `ScheduleAdminPage` (← → además de Esta/Próxima; semanas pasadas en solo-lectura para el grid, editables en horas/pagos).
-- [ ] **Migración `payroll_records`**: `id, employee_id, week_start, planned_hours, actual_hours, hourly_rate_snapshot, total_pay, notes, created_by, created_at` + UNIQUE `(employee_id, week_start)` + RLS `TO authenticated` (INSERT/SELECT; sin UPDATE/DELETE — snapshot inmutable, mismo patrón de audit trail del proyecto).
-- [ ] **Botón "Cerrar semana"** en tab pagos: persiste una fila por empleado con el cálculo vigente. Semana cerrada → celdas de horas bloqueadas (solo lectura).
-- [ ] **Vista historial de pagos**: por empleado (en `EmployeesAdminPage`, junto al historial de asistencia) y total por semana.
+### Fase 3 — Historial y navegación ✅ CODEADA 2026-07-13 (falta push + smoke de Javi)
+
+> #### Resultado (2026-07-13)
+> - [x] `supabase/migrations/20260713000003_payroll_records.sql`: tabla `payroll_records` (snapshot), índice único parcial `payroll_records_active_unique (employee_id, week_start) WHERE voided_at IS NULL`, índice `payroll_records_week_idx`, RLS admin-scoped (SELECT/INSERT + UPDATE solo activa→anulada), RPC `void_payroll_week(p_week_start)` SECURITY INVOKER. **Desviación vs. spec:** el RPC anula por SEMANA (no por empleado) — el bloqueo de celdas es a nivel de semana completa, así el botón "Reabrir semana" anula todas las filas de la semana de una. Más simple y coincide con la UI.
+> - [x] `src/services/payroll.js` (nuevo): `getWeekPayroll`, `closePayrollWeek` (maneja 23505 = semana ya cerrada), `reopenPayrollWeek` (RPC, ambos branches rpcError/rpcResult.ok), `getPayrollHistoryByEmployee`.
+> - [x] `src/pages/ScheduleAdminPage.jsx`: navegación libre ← → (helper `shiftWeek`), badges "Semana pasada"/"🔒 Nómina cerrada", editor de horario en solo-lectura para semanas pasadas, botón "🔒 Cerrar semana" (doble confirmación; valida que no queden celdas azules del checador sin confirmar; `total_pay = actual × tarifa`), botón "🔓 Reabrir semana" (doble confirmación), celdas de horas bloqueadas (render estático) cuando la semana está cerrada, resumen de pago desde el snapshot inmutable cuando está cerrada.
+> - [x] `src/pages/EmployeesAdminPage.jsx`: botón "Pagos" por tarjeta → modal con historial de semanas cerradas (semana, horas reales, $/hora snapshot, sueldo, total histórico).
+> - [x] **Verificación:** 11/11 asserts en node (`outputs/payroll_logic_test.mjs`: `total_pay = actual × tarifa` con casos borde, regla de celda azul pendiente). Estructura JSX de las 3 regiones anidadas de riesgo (ternario de pago, modal de pagos, span de bloqueo de celda) verificada leyendo el archivo REAL con la file-tool — el mount de bash quedó **stale/truncado** otra vez (errores falsos en EOF 1022/668; `payroll.js` nuevo sí parseó limpio; patrón ya documentado en `lessons.md`). Checklist RLS revisado contra el security-checklist del skill de Supabase.
+> - [ ] Pendiente: Javi corre `db push` + smoke.
+
+#### Spec original (con decisiones de Javi)
+
+#### Decisiones de Javi (2026-07-13)
+- **`total_pay = actual_hours × hourly_rate_snapshot`** (horas reales confirmadas, no planeadas). `planned_hours` se guarda también solo como referencia/comparación.
+- **Reabrir semana SÍ** (autónomo, sin SQL manual). Implica que la fila NO se borra: se **anula** con `voided_at`/`voided_by` y se puede volver a cerrar. Snapshot sigue siendo inmutable en sus valores; el "cambio" es marcar la fila como anulada, nunca editar montos.
+- **Cerrar bloquea si hay celdas azules sin confirmar** (sugeridas del checador). El botón "Cerrar semana" valida primero que no queden días con sugerencia pendiente; si los hay, no deja cerrar y señala cuáles.
+
+#### Pasos
+- [ ] **Navegación libre de semanas** en `ScheduleAdminPage` (← → además de Esta/Próxima; semanas pasadas en solo-lectura para el grid, editables en horas/pagos **solo si la semana no está cerrada**).
+- [ ] **Migración `20260713000003_payroll_records.sql`**:
+  - Columnas: `id, employee_id, week_start, planned_hours, actual_hours, hourly_rate_snapshot, total_pay, notes, created_by, created_at, voided_at, voided_by`.
+  - **Índice único parcial** `payroll_records_active_unique` sobre `(employee_id, week_start) WHERE voided_at IS NULL` → una sola fila activa por empleado+semana, pero el historial de cierres anulados se conserva (audit trail, patrón del proyecto).
+  - RLS `TO authenticated`: INSERT + SELECT. **Sin UPDATE/DELETE abierto** — la anulación se hace vía RPC.
+  - **RPC `void_payroll_week(p_employee_id, p_week_start)`** `SECURITY INVOKER`, `REVOKE FROM anon/public` + `GRANT TO authenticated`: setea `voided_at = now()`, `voided_by = auth.uid()` sobre la fila activa. Único camino para "reabrir" (evita UPDATE genérico sobre montos).
+- [ ] **Botón "Cerrar semana"** en tab "Horas y pagos": valida que no haya sugeridas azules sin confirmar (si las hay, bloquea y las marca); luego inserta una fila por empleado con `actual_hours` confirmadas, `hourly_rate_snapshot` = tarifa vigente, `total_pay = actual × tarifa`. Semana cerrada → celdas de horas bloqueadas (solo lectura) + indicador "Cerrada". Botón **"Reabrir"** (admin) → llama `void_payroll_week`, desbloquea las celdas.
+- [ ] **Vista historial de pagos**: por empleado (en `EmployeesAdminPage`, junto al historial de asistencia) y total por semana (en tab pagos). Solo muestra filas activas (`voided_at IS NULL`).
+
+#### Pendiente (Javi) — Fase 3
+- [ ] `npx supabase db push` (aplica `20260713000003_payroll_records.sql`)
+- [ ] Smoke: (1) ← → navega a semana pasada, grid en solo-lectura; (2) intentar cerrar con una celda azul pendiente → bloquea; (3) confirmar todo y cerrar → celdas bloqueadas, aparece en historial; (4) reabrir → celdas editables de nuevo, fila anterior queda anulada; (5) verificar que `total_pay = actual × tarifa` por empleado.
+- [ ] Commit sugerido: `feat(nomina): cierre semanal inmutable con reapertura + navegacion libre de semanas + historial de pagos (fase 3)`
 
 ### Fuera de alcance (explícito)
 - No se toca `cash_movements` ni el Ledger (decisión de Javi: solo historial).

@@ -13,6 +13,7 @@ import {
     updateTimeLog,
 } from '../services/employeesAdmin'
 import { getActiveUsers } from '../services/users'
+import { getPayrollHistoryByEmployee } from '../services/payroll'
 import { isStaleOpenLog } from '../utils/timeLogs'
 
 function formatTime(isoStr) {
@@ -40,6 +41,19 @@ function formatDuration(inIso, outIso) {
     const h = Math.floor(mins / 60)
     const m = mins % 60
     return m > 0 ? `${h}h ${m}m` : `${h}h`
+}
+
+function money(v) {
+    return `$${Number(v || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+/** week_start (YYYY-MM-DD, domingo) → "6 – 12 jul" */
+function formatWeekRange(weekStart) {
+    const start = new Date(weekStart + 'T12:00:00')
+    const end = new Date(start)
+    end.setDate(end.getDate() + 6)
+    const opts = { day: 'numeric', month: 'short' }
+    return `${start.toLocaleDateString('es-MX', opts)} – ${end.toLocaleDateString('es-MX', opts)}`
 }
 
 /** ISO → valor para <input type="datetime-local"> en hora local del navegador */
@@ -103,6 +117,9 @@ function EmployeesAdminPage() {
 
     // History modal
     const [historyDialog, setHistoryDialog] = useState({ open: false, employee: null, logs: [], loading: false })
+
+    // Payroll history modal
+    const [payrollDialog, setPayrollDialog] = useState({ open: false, employee: null, rows: [], loading: false })
 
     // Log correction (dentro del modal de historial)
     const [editingLog, setEditingLog] = useState(null)   // { id, inVal, outVal, note }
@@ -208,6 +225,17 @@ function EmployeesAdminPage() {
             return
         }
         setHistoryDialog(d => ({ ...d, logs: data || [], loading: false }))
+    }
+
+    async function handleOpenPayroll(emp) {
+        setPayrollDialog({ open: true, employee: emp, rows: [], loading: true })
+        const { data, error } = await getPayrollHistoryByEmployee({ employeeId: emp.id })
+        if (error) {
+            setPayrollDialog(d => ({ ...d, loading: false }))
+            setStatus('Error cargando historial de pagos.')
+            return
+        }
+        setPayrollDialog(d => ({ ...d, rows: data || [], loading: false }))
     }
 
     function startEditLog(log) {
@@ -582,6 +610,22 @@ function EmployeesAdminPage() {
                                         </button>
                                         <button
                                             type="button"
+                                            onClick={() => handleOpenPayroll(emp)}
+                                            style={{
+                                                flex: 1,
+                                                padding: '5px 0',
+                                                borderRadius: '5px',
+                                                border: '1px solid #2a2a2a',
+                                                background: 'transparent',
+                                                color: '#555',
+                                                fontSize: '11px',
+                                                cursor: 'pointer',
+                                            }}
+                                        >
+                                            Pagos
+                                        </button>
+                                        <button
+                                            type="button"
                                             onClick={() => handleDeactivate(emp)}
                                             title="Dar de baja"
                                             style={{
@@ -768,8 +812,72 @@ function EmployeesAdminPage() {
                     </div>
                 </div>
             )}
+
+            {/* ── Payroll History Modal ── */}
+            {payrollDialog.open && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+                    <div style={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: '12px', padding: '24px', width: '100%', maxWidth: '480px', maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.6)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+                            <div>
+                                <h3 style={{ margin: '0 0 2px 0', fontSize: '16px', fontWeight: 700, color: '#e8e8e8' }}>
+                                    {payrollDialog.employee?.name}
+                                </h3>
+                                <p style={{ margin: 0, fontSize: '12px', color: '#555' }}>
+                                    Historial de pagos por semana cerrada
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setPayrollDialog({ open: false, employee: null, rows: [], loading: false })}
+                                style={{ padding: '4px 8px', borderRadius: '5px', border: '1px solid #2a2a2a', background: 'transparent', color: '#555', cursor: 'pointer', fontSize: '14px' }}
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <div style={{ overflowY: 'auto', flex: 1 }}>
+                            {payrollDialog.loading ? (
+                                <p style={{ color: '#444', fontSize: '13px' }}>Cargando...</p>
+                            ) : payrollDialog.rows.length === 0 ? (
+                                <p style={{ color: '#444', fontSize: '13px' }}>Sin semanas cerradas aún. Cierra una semana en Horarios &gt; Horas y pagos.</p>
+                            ) : (
+                                <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+                                    <thead>
+                                        <tr style={{ borderBottom: '1px solid #1e1e1e' }}>
+                                            {['Semana', 'Reales', '$/Hora', 'Sueldo'].map(h => (
+                                                <th key={h} style={{ padding: '8px 8px', fontSize: '11px', color: '#555', textAlign: h === 'Semana' ? 'left' : 'right', whiteSpace: 'nowrap' }}>
+                                                    {h}
+                                                </th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {payrollDialog.rows.map(r => (
+                                            <tr key={r.id} style={{ borderBottom: '1px solid #111' }}>
+                                                <td style={{ padding: '9px 8px', fontSize: '12px', color: '#c0c0c0' }}>{formatWeekRange(r.week_start)}</td>
+                                                <td style={{ padding: '9px 8px', fontSize: '12px', color: '#4ade80', textAlign: 'right', fontWeight: 600 }}>{Number(r.actual_hours).toFixed(1)}h</td>
+                                                <td style={{ padding: '9px 8px', fontSize: '12px', color: '#555', textAlign: 'right' }}>{Number(r.hourly_rate_snapshot) > 0 ? money(r.hourly_rate_snapshot) : '—'}</td>
+                                                <td style={{ padding: '9px 8px', fontSize: '13px', color: '#e2e2e2', textAlign: 'right', fontWeight: 600 }}>{money(r.total_pay)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                    <tfoot>
+                                        <tr style={{ borderTop: '1px solid #2a2a2a' }}>
+                                            <td colSpan={3} style={{ padding: '10px 8px', fontSize: '12px', color: '#555', textAlign: 'right' }}>Total histórico</td>
+                                            <td style={{ padding: '10px 8px', fontSize: '14px', fontWeight: 700, color: '#e2e2e2', textAlign: 'right' }}>
+                                                {money(payrollDialog.rows.reduce((s, r) => s + Number(r.total_pay || 0), 0))}
+                                            </td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
 
 export default EmployeesAdminPage
+// fase3: historial de pagos por empleado
