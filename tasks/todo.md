@@ -1,4 +1,4 @@
-## Plan — Módulo Empleados/Horarios robusto + Checador en POS — 2026-07-13 ✅ FASE 1 APROBADA Y CODEADA (falta push + smoke de Javi) · Fases 2-3 pendientes
+## Plan — Módulo Empleados/Horarios robusto + Checador en POS — 2026-07-13 ✅ FASES 1-3 CODEADAS, DESPLEGADAS Y PROBADAS (db push + smoke OK, 2026-07-13)
 
 ### Decisiones de Javi (2026-07-13)
 - Checador en el **POS** (TopBar) — la tablet ya tiene sesión, RLS `authenticated` cubre las escrituras.
@@ -19,10 +19,10 @@
 - [x] **`TopBar.jsx`**: prop `onChecador` + botón "Checar" (verde). **`PosPage.jsx`**: estado `checadorOpen` + render del panel.
 - [x] Verificación: `@babel/parser` OK en los 5 archivos JS/JSX tocados (mount fresco esta vez, conteos de líneas consistentes).
 
-#### Pendiente (Javi) — Fase 1
-- [ ] `npx supabase db push` (aplica `20260713000001_checador_clock_self.sql`)
-- [ ] En Empleados (admin): ligar cada empleado a su usuario con el dropdown nuevo.
-- [ ] Smoke: (1) login como waiter → Checar → confirmar entrada → aparece "En turno"; (2) checar salida → muestra duración; (3) usuario sin empleado ligado → mensaje instructivo, sin crash; (4) el toggle manual del admin en Empleados sigue funcionando.
+#### Pendiente (Javi) — Fase 1 ✅ HECHO 2026-07-13
+- [x] `npx supabase db push` (aplica `20260713000001_checador_clock_self.sql`)
+- [x] En Empleados (admin): ligar cada empleado a su usuario con el dropdown nuevo.
+- [x] Smoke OK: checador por sesión funcionando.
 - [ ] Commit sugerido: `feat(checador): registro entrada/salida por sesión desde el POS (RPC clock_self + RLS empleado propio + link employees.user_id)`
 
 ### Fase 2 — Conectar checador ↔ horas reales ✅ CODEADA 2026-07-13
@@ -33,9 +33,9 @@
 - [x] **EmployeesAdminPage historial**: botón ✎ por registro → editor inline (datetime-local entrada/salida, salida vacía = abierta, nota obligatoria de contexto opcional), valida salida > entrada, guarda con `edited_by`/`edited_at`. Logs abiertos >16h en rojo "Abierta +16h — cerrar". Badges `manual`/`editado` + nota visible.
 - [x] **Verificación**: 24/24 asserts en node sobre `timeLogs.mjs` (madrugadas, límites 05:59/06:00, overnight con 2 logs, redondeos, retardos, semana fuera de rango). `@babel/parser` OK en los 5 archivos (mount de bash quedó stale otra vez — verificado con copias frescas en `outputs/verify/`, patrón de lessons.md).
 
-#### Pendiente (Javi) — Fase 2
-- [ ] `npx supabase db push` (aplica `20260713000002_time_logs_audit.sql` — y la 000001 de Fase 1 si aún no la aplicaste)
-- [ ] Smoke: (1) checa entrada/salida con tu sesión → en Horarios > Horas y pagos aparece `≈Xh` azul ese día; (2) click en la celda azul → Enter → queda verde; (3) "Aceptar sugeridas" con varios días; (4) en Empleados > Historial edita un log (cambia salida) → badge "editado" + nota; (5) celda ámbar si corriges horas distinto al checador.
+#### Pendiente (Javi) — Fase 2 ✅ HECHO 2026-07-13
+- [x] `npx supabase db push` (aplica `20260713000002_time_logs_audit.sql`)
+- [x] Smoke OK: horas reales desde el checador + corrección de logs funcionando.
 - [ ] Commit sugerido: `feat(checador): horas reales auto desde time logs + correccion de logs con auditoria (fase 2)`
 
 ### Fase 3 — Historial y navegación ✅ CODEADA 2026-07-13 (falta push + smoke de Javi)
@@ -46,7 +46,7 @@
 > - [x] `src/pages/ScheduleAdminPage.jsx`: navegación libre ← → (helper `shiftWeek`), badges "Semana pasada"/"🔒 Nómina cerrada", editor de horario en solo-lectura para semanas pasadas, botón "🔒 Cerrar semana" (doble confirmación; valida que no queden celdas azules del checador sin confirmar; `total_pay = actual × tarifa`), botón "🔓 Reabrir semana" (doble confirmación), celdas de horas bloqueadas (render estático) cuando la semana está cerrada, resumen de pago desde el snapshot inmutable cuando está cerrada.
 > - [x] `src/pages/EmployeesAdminPage.jsx`: botón "Pagos" por tarjeta → modal con historial de semanas cerradas (semana, horas reales, $/hora snapshot, sueldo, total histórico).
 > - [x] **Verificación:** 11/11 asserts en node (`outputs/payroll_logic_test.mjs`: `total_pay = actual × tarifa` con casos borde, regla de celda azul pendiente). Estructura JSX de las 3 regiones anidadas de riesgo (ternario de pago, modal de pagos, span de bloqueo de celda) verificada leyendo el archivo REAL con la file-tool — el mount de bash quedó **stale/truncado** otra vez (errores falsos en EOF 1022/668; `payroll.js` nuevo sí parseó limpio; patrón ya documentado en `lessons.md`). Checklist RLS revisado contra el security-checklist del skill de Supabase.
-> - [ ] Pendiente: Javi corre `db push` + smoke.
+> - [x] **Desplegado y probado 2026-07-13**: Javi corrió `db push` (aplicó las 3 migraciones) y smoke test — todo OK. Fase 3 en producción.
 
 #### Spec original (con decisiones de Javi)
 
@@ -65,9 +65,9 @@
 - [ ] **Botón "Cerrar semana"** en tab "Horas y pagos": valida que no haya sugeridas azules sin confirmar (si las hay, bloquea y las marca); luego inserta una fila por empleado con `actual_hours` confirmadas, `hourly_rate_snapshot` = tarifa vigente, `total_pay = actual × tarifa`. Semana cerrada → celdas de horas bloqueadas (solo lectura) + indicador "Cerrada". Botón **"Reabrir"** (admin) → llama `void_payroll_week`, desbloquea las celdas.
 - [ ] **Vista historial de pagos**: por empleado (en `EmployeesAdminPage`, junto al historial de asistencia) y total por semana (en tab pagos). Solo muestra filas activas (`voided_at IS NULL`).
 
-#### Pendiente (Javi) — Fase 3
-- [ ] `npx supabase db push` (aplica `20260713000003_payroll_records.sql`)
-- [ ] Smoke: (1) ← → navega a semana pasada, grid en solo-lectura; (2) intentar cerrar con una celda azul pendiente → bloquea; (3) confirmar todo y cerrar → celdas bloqueadas, aparece en historial; (4) reabrir → celdas editables de nuevo, fila anterior queda anulada; (5) verificar que `total_pay = actual × tarifa` por empleado.
+#### Pendiente (Javi) — Fase 3 ✅ HECHO 2026-07-13
+- [x] `npx supabase db push` (aplica `20260713000003_payroll_records.sql`)
+- [x] Smoke OK: navegación, cerrar/reabrir, bloqueo de celdas e historial de pagos funcionando.
 - [ ] Commit sugerido: `feat(nomina): cierre semanal inmutable con reapertura + navegacion libre de semanas + historial de pagos (fase 3)`
 
 ### Fuera de alcance (explícito)
