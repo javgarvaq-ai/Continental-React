@@ -28,7 +28,7 @@ export async function getAllEmployeesWithStatus() {
 export async function checkInEmployee({ employeeId }) {
     return await supabase
         .from('employee_time_logs')
-        .insert([{ employee_id: employeeId, checked_in_at: new Date().toISOString() }])
+        .insert([{ employee_id: employeeId, checked_in_at: new Date().toISOString(), source: 'admin' }])
         .select()
         .single()
 }
@@ -71,10 +71,35 @@ export async function updateEmployee({ id, name, position, hourlyRate, userId })
 export async function getEmployeeTimeLogs({ employeeId, limit = 30 }) {
     return await supabase
         .from('employee_time_logs')
-        .select('id, checked_in_at, checked_out_at')
+        .select('id, checked_in_at, checked_out_at, source, edited_at, note')
         .eq('employee_id', employeeId)
         .order('checked_in_at', { ascending: false })
         .limit(limit)
+}
+
+/**
+ * Corrección de un time log por el admin (ajustar in/out, cerrar log olvidado).
+ * Deja rastro: edited_by + edited_at + note. Los logs nunca se borran.
+ */
+export async function updateTimeLog({ id, checkedInAt, checkedOutAt, note, editedBy }) {
+    const { data, error } = await supabase
+        .from('employee_time_logs')
+        .update({
+            checked_in_at: checkedInAt,
+            checked_out_at: checkedOutAt || null,
+            note: note?.trim() || null,
+            edited_by: editedBy,
+            edited_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .select()
+        .single()
+
+    // 23505: reabrir este log chocaría con otro log abierto del mismo empleado
+    if (error && error.code === '23505') {
+        return { data: null, error: new Error('Ese empleado ya tiene otra checada abierta. Ciérrala primero.') }
+    }
+    return { data, error }
 }
 
 export async function deactivateEmployee({ id }) {

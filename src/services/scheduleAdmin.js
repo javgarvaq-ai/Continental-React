@@ -48,6 +48,24 @@ export async function upsertShift({ employeeId, weekStart, dayOfWeek, startTime,
         .single()
 }
 
+/**
+ * Time logs cuyo check-in cae dentro de la semana OPERACIONAL
+ * (domingo 06:00 -06:00 → siguiente domingo 06:00). Para sugerir horas reales.
+ */
+export async function getWeekTimeLogs({ weekStart }) {
+    const ws = typeof weekStart === 'string' ? weekStart : toDateString(weekStart)
+    const startMs = Date.parse(ws + 'T06:00:00-06:00')
+    const startIso = new Date(startMs).toISOString()
+    const endIso = new Date(startMs + 7 * 24 * 3600 * 1000).toISOString()
+
+    return await supabase
+        .from('employee_time_logs')
+        .select('id, employee_id, checked_in_at, checked_out_at')
+        .gte('checked_in_at', startIso)
+        .lt('checked_in_at', endIso)
+        .order('checked_in_at', { ascending: false })
+}
+
 /** Delete a single shift by id */
 export async function deleteShift({ id }) {
     return await supabase

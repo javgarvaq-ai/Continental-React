@@ -77,6 +77,7 @@ The `users` table has two SELECT policies: one `TO anon` (for the employee list 
 ## Infrastructure / Deployment
 
 - **Auto-print (receipt printer):** Add `--kiosk-printing` to Chrome shortcut Target field on the bar computer. This bypasses the print dialog and sends directly to the default printer.
+- **Edge Functions + localhost:** el secret `ALLOWED_ORIGIN` restringe CORS a la URL de prod (Vercel). Desde `localhost` los invokes fallan con "Failed to send a request to the Edge Function" (el navegador bloquea el preflight — el request nunca llega). No es bug: probar operaciones de usuarios (create-user, reset-pin, deactivate-user) directamente en prod. Confirmado 2026-07-13.
 
 ---
 

@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/authStore'
 import { getAllEmployeesWithStatus } from '../services/employeesAdmin'
 import {
     getWeekSchedule,
+    getWeekTimeLogs,
     upsertShift,
     deleteShift,
     updateActualHours,
@@ -12,6 +13,7 @@ import {
     getWeekStart,
     toDateString,
 } from '../services/scheduleAdmin'
+import { summarizeLogsByEmpDay, lateMinutes, isOperationalDayOver } from '../utils/timeLogs'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -134,9 +136,11 @@ function ScheduleAdminPage() {
     const [activeWeek, setActiveWeek] = useState(todayWeekStart)   // 'current' or 'next'
     const [employees, setEmployees] = useState([])
     const [shifts, setShifts] = useState([])                    // raw rows from DB
+    const [timeLogs, setTimeLogs] = useState([])                // checadas de la semana operacional
     const [loading, setLoading] = useState(true)
     const { status, statusColor, setStatus } = useStatus('')
     const [isCopying, setIsCopying] = useState(false)
+    const [isAccepting, setIsAccepting] = useState(false)
 
     // Editor state: which employee is open for editing
     const [editingEmpId, setEditingEmpId] = useState(null)
@@ -158,8 +162,12 @@ function ScheduleAdminPage() {
 
     const loadShifts = useCallback(async () => {
         setLoading(true)
-        const { data, error } = await getWeekSchedule({ weekStart: activeWeek })
-        if (!error) setShifts(data || [])
+        const [scheduleResult, logsResult] = await Promise.all([
+            getWeekSchedule({ weekStart: activeWeek }),
+            getWeekTimeLogs({ weekStart: activeWeek }),
+        ])
+        if (!scheduleResult.error) setShifts(scheduleResult.data || [])
+        if (!logsResult.error) setTimeLogs(logsResult.data || [])
         setLoading(false)
     }, [activeWeek])
 
@@ -177,6 +185,9 @@ function ScheduleAdminPage() {
     const shiftMap = Object.fromEntries(
         shifts.map(s => [`${s.employee_id}_${s.day_of_week}`, s])
     )
+
+    // Map: "empId_dayIdx" → { hours, firstInAt, hasOpen } desde el checador
+    const logSummary = summarizeLogsByEmpDay(timeLogs, activeWeek)
 
     // ── Editor helpers ────────────────────────────────────────────────────────
 
@@ -258,6 +269,33 @@ function ScheduleAdminPage() {
         if (error) { setStatus('Error guardando horas.'); return }
         setEditingActual(null)
         await loadShifts()
+    }
+
+    /** Acepta de golpe todas las horas sugeridas por el checador (días sin actual_hours) */
+    async function handleAcceptSuggested() {
+        if (isAccepting) return
+        const targets = shifts.filter(s => {
+            const sum = logSummary[`${s.employee_id}_${s.day_of_week}`]
+            return (s.actual_hours === null || s.actual_hours === undefined)
+                && sum && !sum.hasOpen && sum.hours > 0
+        })
+        if (targets.length === 0) {
+            setStatus('No hay horas sugeridas pendientes de aceptar.')
+            return
+        }
+        setIsAccepting(true)
+        const results = await Promise.all(targets.map(s =>
+            updateActualHours({
+                id: s.id,
+                actualHours: logSummary[`${s.employee_id}_${s.day_of_week}`].hours,
+            })
+        ))
+        const failed = results.find(r => r.error)
+        setStatus(failed
+            ? 'Error guardando algunas horas sugeridas.'
+            : `${targets.length} día${targets.length !== 1 ? 's' : ''} confirmado${targets.length !== 1 ? 's' : ''} desde el checador.`)
+        await loadShifts()
+        setIsAccepting(false)
     }
 
     // ── Copy previous week ────────────────────────────────────────────────────
@@ -668,7 +706,26 @@ function ScheduleAdminPage() {
                     {tab === 'pay' && (
                         <div>
                             {/* Actual hours entry grid */}
-                            <p style={sectionTitle}>Horas trabajadas por día</p>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                                <p style={{ ...sectionTitle, margin: 0 }}>Horas trabajadas por día</p>
+                                <button
+                                    type="button"
+                                    onClick={handleAcceptSuggested}
+                                    disabled={isAccepting}
+                                    style={{
+                                        padding: '6px 14px',
+                                        borderRadius: '6px',
+                                        border: '1px solid #2a4a6a',
+                                        background: '#0e1624',
+                                        color: isAccepting ? '#3a4a5a' : '#93c5fd',
+                                        fontSize: '12px',
+                                        fontWeight: 600,
+                                        cursor: isAccepting ? 'default' : 'pointer',
+                                    }}
+                                >
+                                    {isAccepting ? 'Aceptando...' : '✓ Aceptar sugeridas del checador'}
+                                </button>
+                            </div>
                             <div style={{ overflowX: 'auto', marginBottom: '28px' }}>
                                 <table style={{ borderCollapse: 'collapse', minWidth: '600px', width: '100%' }}>
                                     <thead>
@@ -702,6 +759,24 @@ function ScheduleAdminPage() {
                                                     {Array.from({ length: 7 }, (_, d) => {
                                                         const shift = shiftMap[`${emp.id}_${d}`]
                                                         const isEditingThis = editingActual?.shiftId === shift?.id
+                                                        const sum = logSummary[`${emp.id}_${d}`]
+                                                        const sugHours = sum && !sum.hasOpen && sum.hours > 0 ? sum.hours : null
+                                                        const hasActual = !!shift && shift.actual_hours !== null && shift.actual_hours !== undefined
+                                                        const editedDiff = hasActual && sugHours !== null && Number(shift.actual_hours) !== sugHours
+                                                        const late = shift && sum ? lateMinutes(sum.firstInAt, activeWeek, d, shift.start_time) : 0
+                                                        const isAbsent = !!shift && !sum && !hasActual && isOperationalDayOver(activeWeek, d)
+
+                                                        // Colores: confirmado (verde) / editado ≠ checador (ámbar) / sugerido (azul) / sin datos (gris)
+                                                        let cellBorder = '1px solid #222'
+                                                        let cellBg = '#111'
+                                                        let cellColor = '#333'
+                                                        if (hasActual && editedDiff) {
+                                                            cellBorder = '1px solid #5a4a2a'; cellBg = '#1e1a0e'; cellColor = '#fbbf24'
+                                                        } else if (hasActual) {
+                                                            cellBorder = '1px solid #2a5a3a'; cellBg = '#0e1e0e'; cellColor = '#4ade80'
+                                                        } else if (sugHours !== null) {
+                                                            cellBorder = '1px solid #2a4a6a'; cellBg = '#0e1624'; cellColor = '#93c5fd'
+                                                        }
 
                                                         return (
                                                             <td key={d} style={{ padding: '4px 4px', borderBottom: '1px solid #111', textAlign: 'center' }}>
@@ -723,33 +798,52 @@ function ScheduleAdminPage() {
                                                                             style={{ ...inputStyle, width: '52px', textAlign: 'center', padding: '4px' }}
                                                                         />
                                                                     ) : (
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => setEditingActual({ shiftId: shift.id, value: shift.actual_hours !== null && shift.actual_hours !== undefined ? String(shift.actual_hours) : '' })}
-                                                                            title="Click para editar horas"
-                                                                            style={{
-                                                                                padding: '3px 8px',
-                                                                                borderRadius: '4px',
-                                                                                border: shift.actual_hours !== null && shift.actual_hours !== undefined
-                                                                                    ? '1px solid #2a5a3a'
-                                                                                    : '1px solid #222',
-                                                                                background: shift.actual_hours !== null && shift.actual_hours !== undefined
-                                                                                    ? '#0e1e0e'
-                                                                                    : '#111',
-                                                                                color: shift.actual_hours !== null && shift.actual_hours !== undefined
-                                                                                    ? '#4ade80'
-                                                                                    : '#333',
-                                                                                fontSize: '12px',
-                                                                                cursor: 'pointer',
-                                                                                minWidth: '40px',
-                                                                            }}
-                                                                        >
-                                                                            {shift.actual_hours !== null && shift.actual_hours !== undefined
-                                                                                ? `${shift.actual_hours}h`
-                                                                                : `(${scheduledHours(shift.start_time, shift.end_time).toFixed(0)}h)`
-                                                                            }
-                                                                        </button>
+                                                                        <>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => setEditingActual({
+                                                                                    shiftId: shift.id,
+                                                                                    value: hasActual
+                                                                                        ? String(shift.actual_hours)
+                                                                                        : sugHours !== null ? String(sugHours) : '',
+                                                                                })}
+                                                                                title={sugHours !== null
+                                                                                    ? `Checador: ${sugHours}h — click para aceptar o corregir`
+                                                                                    : 'Click para editar horas'}
+                                                                                style={{
+                                                                                    padding: '3px 8px',
+                                                                                    borderRadius: '4px',
+                                                                                    border: cellBorder,
+                                                                                    background: cellBg,
+                                                                                    color: cellColor,
+                                                                                    fontSize: '12px',
+                                                                                    cursor: 'pointer',
+                                                                                    minWidth: '40px',
+                                                                                }}
+                                                                            >
+                                                                                {hasActual
+                                                                                    ? `${shift.actual_hours}h`
+                                                                                    : sugHours !== null
+                                                                                        ? `≈${sugHours}h`
+                                                                                        : `(${scheduledHours(shift.start_time, shift.end_time).toFixed(0)}h)`
+                                                                                }
+                                                                            </button>
+                                                                            {(late >= 15 || isAbsent || sum?.hasOpen) && (
+                                                                                <div style={{ fontSize: '9px', marginTop: '2px', lineHeight: 1.3, display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                                                                                    {late >= 15 && <span style={{ color: '#f87171' }}>+{late}m tarde</span>}
+                                                                                    {isAbsent && <span style={{ color: '#ef4444', fontWeight: 700 }}>FALTA</span>}
+                                                                                    {sum?.hasOpen && <span style={{ color: '#fb923c' }}>checada abierta</span>}
+                                                                                </div>
+                                                                            )}
+                                                                        </>
                                                                     )
+                                                                ) : sum ? (
+                                                                    <span
+                                                                        title="Checó sin turno programado ese día"
+                                                                        style={{ color: '#fb923c', fontSize: '11px' }}
+                                                                    >
+                                                                        {sum.hasOpen ? '⏱' : `${sum.hours}h`} <span style={{ color: '#5a3a1a', fontSize: '9px' }}>s/turno</span>
+                                                                    </span>
                                                                 ) : (
                                                                     <span style={{ color: '#222', fontSize: '11px' }}>—</span>
                                                                 )}
@@ -769,7 +863,10 @@ function ScheduleAdminPage() {
                                     </tbody>
                                 </table>
                                 <p style={{ margin: '8px 0 0 0', fontSize: '11px', color: '#333' }}>
-                                    Click en cualquier celda para ingresar horas reales. Los valores entre paréntesis son horas planeadas.
+                                    <span style={{ color: '#93c5fd' }}>≈ azul</span> = sugerido por el checador (click para aceptar o corregir) ·{' '}
+                                    <span style={{ color: '#4ade80' }}>verde</span> = confirmado ·{' '}
+                                    <span style={{ color: '#fbbf24' }}>ámbar</span> = editado distinto al checador ·{' '}
+                                    (gris) = horas planeadas sin checadas. Redondeo a 15 min, día operacional con corte 06:00.
                                 </p>
                             </div>
 

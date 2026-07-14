@@ -10,8 +10,10 @@ import {
     updateEmployee,
     deactivateEmployee,
     getEmployeeTimeLogs,
+    updateTimeLog,
 } from '../services/employeesAdmin'
 import { getActiveUsers } from '../services/users'
+import { isStaleOpenLog } from '../utils/timeLogs'
 
 function formatTime(isoStr) {
     if (!isoStr) return ''
@@ -38,6 +40,18 @@ function formatDuration(inIso, outIso) {
     const h = Math.floor(mins / 60)
     const m = mins % 60
     return m > 0 ? `${h}h ${m}m` : `${h}h`
+}
+
+/** ISO → valor para <input type="datetime-local"> en hora local del navegador */
+function isoToLocalInput(iso) {
+    if (!iso) return ''
+    const d = new Date(iso)
+    const pad = n => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function localInputToIso(value) {
+    return value ? new Date(value).toISOString() : null
 }
 
 const inputStyle = {
@@ -89,6 +103,11 @@ function EmployeesAdminPage() {
 
     // History modal
     const [historyDialog, setHistoryDialog] = useState({ open: false, employee: null, logs: [], loading: false })
+
+    // Log correction (dentro del modal de historial)
+    const [editingLog, setEditingLog] = useState(null)   // { id, inVal, outVal, note }
+    const [isSavingLog, setIsSavingLog] = useState(false)
+    const [logStatus, setLogStatus] = useState('')
 
     const load = useCallback(async () => {
         const [empResult, usersResult] = await Promise.all([
@@ -179,6 +198,8 @@ function EmployeesAdminPage() {
     }
 
     async function handleOpenHistory(emp) {
+        setEditingLog(null)
+        setLogStatus('')
         setHistoryDialog({ open: true, employee: emp, logs: [], loading: true })
         const { data, error } = await getEmployeeTimeLogs({ employeeId: emp.id })
         if (error) {
@@ -187,6 +208,43 @@ function EmployeesAdminPage() {
             return
         }
         setHistoryDialog(d => ({ ...d, logs: data || [], loading: false }))
+    }
+
+    function startEditLog(log) {
+        setLogStatus('')
+        setEditingLog({
+            id: log.id,
+            inVal: isoToLocalInput(log.checked_in_at),
+            outVal: isoToLocalInput(log.checked_out_at),
+            note: log.note || '',
+        })
+    }
+
+    async function handleSaveLog() {
+        if (!editingLog || isSavingLog) return
+        if (!editingLog.inVal) { setLogStatus('La entrada es obligatoria.'); return }
+        const inIso = localInputToIso(editingLog.inVal)
+        const outIso = localInputToIso(editingLog.outVal)
+        if (outIso && new Date(outIso) <= new Date(inIso)) {
+            setLogStatus('La salida debe ser posterior a la entrada.')
+            return
+        }
+        setIsSavingLog(true)
+        const { error } = await updateTimeLog({
+            id: editingLog.id,
+            checkedInAt: inIso,
+            checkedOutAt: outIso,
+            note: editingLog.note,
+            editedBy: currentUser?.id,
+        })
+        setIsSavingLog(false)
+        if (error) { setLogStatus(error.message || 'Error guardando corrección.'); return }
+        setEditingLog(null)
+        setLogStatus('Corrección guardada.')
+        // recargar logs del modal + estado de tarjetas (por si cerró un log abierto)
+        const { data } = await getEmployeeTimeLogs({ employeeId: historyDialog.employee.id })
+        setHistoryDialog(d => ({ ...d, logs: data || [] }))
+        load()
     }
 
     const onShift = employees.filter(e => e.isCheckedIn).length
@@ -569,6 +627,12 @@ function EmployeesAdminPage() {
                             </button>
                         </div>
 
+                        {logStatus && (
+                            <p style={{ margin: '0 0 10px 0', fontSize: '12px', color: logStatus.includes('guardada') ? '#4ade80' : '#f87171' }}>
+                                {logStatus}
+                            </p>
+                        )}
+
                         <div style={{ overflowY: 'auto', flex: 1 }}>
                             {historyDialog.loading ? (
                                 <p style={{ color: '#444', fontSize: '13px' }}>Cargando...</p>
@@ -579,17 +643,84 @@ function EmployeesAdminPage() {
                                     {historyDialog.logs.map(log => {
                                         const duration = formatDuration(log.checked_in_at, log.checked_out_at)
                                         const stillIn = !log.checked_out_at
+                                        const isStale = stillIn && isStaleOpenLog(log.checked_in_at)
+                                        const isEditingThis = editingLog?.id === log.id
+
+                                        if (isEditingThis) {
+                                            return (
+                                                <div
+                                                    key={log.id}
+                                                    style={{
+                                                        padding: '12px',
+                                                        borderRadius: '7px',
+                                                        background: '#0e0e0e',
+                                                        border: '1px solid #3a5a8a',
+                                                        display: 'flex',
+                                                        flexDirection: 'column',
+                                                        gap: '8px',
+                                                    }}
+                                                >
+                                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                                        <div>
+                                                            <label style={labelStyle}>Entrada</label>
+                                                            <input
+                                                                type="datetime-local"
+                                                                value={editingLog.inVal}
+                                                                onChange={e => setEditingLog(l => ({ ...l, inVal: e.target.value }))}
+                                                                style={inputStyle}
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label style={labelStyle}>Salida (vacío = abierta)</label>
+                                                            <input
+                                                                type="datetime-local"
+                                                                value={editingLog.outVal}
+                                                                onChange={e => setEditingLog(l => ({ ...l, outVal: e.target.value }))}
+                                                                style={inputStyle}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <label style={labelStyle}>Nota de la corrección</label>
+                                                        <input
+                                                            value={editingLog.note}
+                                                            onChange={e => setEditingLog(l => ({ ...l, note: e.target.value }))}
+                                                            placeholder="Ej. olvidó checar salida"
+                                                            style={inputStyle}
+                                                        />
+                                                    </div>
+                                                    <div style={{ display: 'flex', gap: '6px' }}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleSaveLog}
+                                                            disabled={isSavingLog}
+                                                            style={{ flex: 1, padding: '6px 0', borderRadius: '5px', border: '1px solid #2a5a3a', background: '#1a3a2a', color: '#4ade80', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+                                                        >
+                                                            {isSavingLog ? 'Guardando...' : 'Guardar corrección'}
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setEditingLog(null)}
+                                                            style={{ padding: '6px 12px', borderRadius: '5px', border: '1px solid #2a2a2a', background: 'transparent', color: '#555', fontSize: '12px', cursor: 'pointer' }}
+                                                        >
+                                                            Cancelar
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )
+                                        }
+
                                         return (
                                             <div
                                                 key={log.id}
                                                 style={{
                                                     padding: '10px 12px',
                                                     borderRadius: '7px',
-                                                    background: stillIn ? '#1a3a2a' : '#0e0e0e',
-                                                    border: `1px solid ${stillIn ? '#2a5a3a' : '#1e1e1e'}`,
+                                                    background: isStale ? '#3d1a1a' : stillIn ? '#1a3a2a' : '#0e0e0e',
+                                                    border: `1px solid ${isStale ? '#7f1d1d' : stillIn ? '#2a5a3a' : '#1e1e1e'}`,
                                                     display: 'grid',
-                                                    gridTemplateColumns: '1fr 1fr auto',
-                                                    gap: '4px 12px',
+                                                    gridTemplateColumns: '1fr 1fr auto auto',
+                                                    gap: '4px 10px',
                                                     alignItems: 'center',
                                                 }}
                                             >
@@ -601,19 +732,33 @@ function EmployeesAdminPage() {
                                                 <div>
                                                     <div style={{ fontSize: '10px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '2px' }}>Salida</div>
                                                     {stillIn ? (
-                                                        <div style={{ fontSize: '12px', color: '#4ade80', fontWeight: 600 }}>En turno</div>
+                                                        <div style={{ fontSize: '12px', color: isStale ? '#ef4444' : '#4ade80', fontWeight: 600 }}>
+                                                            {isStale ? 'Abierta +16h — cerrar' : 'En turno'}
+                                                        </div>
                                                     ) : (
                                                         <>
                                                             <div style={{ fontSize: '13px', color: '#e2e2e2', fontWeight: 600 }}>{formatTime(log.checked_out_at)}</div>
                                                             <div style={{ fontSize: '11px', color: '#444' }}>{formatDate(log.checked_out_at)}</div>
                                                         </>
                                                     )}
+                                                    {(log.source === 'admin' || log.edited_at) && (
+                                                        <div style={{ fontSize: '9px', color: '#5a4a2a', marginTop: '2px' }}>
+                                                            {log.source === 'admin' ? 'manual' : ''}{log.source === 'admin' && log.edited_at ? ' · ' : ''}{log.edited_at ? 'editado' : ''}
+                                                            {log.note ? ` — ${log.note}` : ''}
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                {duration && (
-                                                    <div style={{ fontSize: '12px', color: '#666', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                                                        {duration}
-                                                    </div>
-                                                )}
+                                                <div style={{ fontSize: '12px', color: '#666', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                                                    {duration || ''}
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => startEditLog(log)}
+                                                    title="Corregir registro"
+                                                    style={{ padding: '3px 7px', borderRadius: '4px', border: '1px solid #2a2a2a', background: 'transparent', color: '#444', fontSize: '12px', cursor: 'pointer' }}
+                                                >
+                                                    ✎
+                                                </button>
                                             </div>
                                         )
                                     })}

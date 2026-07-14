@@ -25,11 +25,18 @@
 - [ ] Smoke: (1) login como waiter → Checar → confirmar entrada → aparece "En turno"; (2) checar salida → muestra duración; (3) usuario sin empleado ligado → mensaje instructivo, sin crash; (4) el toggle manual del admin en Empleados sigue funcionando.
 - [ ] Commit sugerido: `feat(checador): registro entrada/salida por sesión desde el POS (RPC clock_self + RLS empleado propio + link employees.user_id)`
 
-### Fase 2 — Conectar checador ↔ horas reales
-- [ ] **Migración**: `employee_time_logs` + columnas `source text default 'clock'` (`clock`/`admin`), `edited_by uuid`, `edited_at`, `note text`. Vista o cálculo cliente que agrupa logs por día operacional (corte 06:00, convención del sistema) y semana (domingo).
-- [ ] **`ScheduleAdminPage` tab "Horas y pagos"**: cada celda muestra horas calculadas de los logs del día (redondeo a 15 min) como sugerencia; admin acepta con un click o corrige a mano → se guarda en `actual_hours` (columna existente, sin romper nada). Indicador visual: sugerido (gris) / confirmado (verde) / editado (ámbar).
-- [ ] **Corrección de logs (admin)**: en el historial del empleado, editar in/out de un log o cerrar un log olvidado (registra `edited_by`/`edited_at`/`note`). Detección de logs colgados: si un log abierto tiene >16h, marcarlo en rojo en admin.
-- [ ] **Plan vs. real**: en el mismo tab, junto a las horas, mostrar retardo (checó > X min después de start_time programado) y falta (día programado sin log).
+### Fase 2 — Conectar checador ↔ horas reales ✅ CODEADA 2026-07-13
+- [x] **Migración `20260713000002_time_logs_audit.sql`**: `employee_time_logs` + `source` (`clock`/`admin`, CHECK), `edited_by uuid REFERENCES users`, `edited_at`, `note`. Backfill: logs anteriores al día operacional 2026-07-13 → `source='admin'`.
+- [x] **`utils/timeLogs.js`** (nuevo, lógica pura sin React/Supabase): `operationalDayIndex` (corte 06:00, UTC-6 fijo), `summarizeLogsByEmpDay` (suma logs cerrados por emp+día, redondeo 15 min, detecta checada abierta, primera entrada), `lateMinutes` (retardo vs start_time; turnos de madrugada <06:00 mapean al día calendario siguiente), `isOperationalDayOver`, `isStaleOpenLog` (>16h).
+- [x] **Servicios**: `getWeekTimeLogs` en scheduleAdmin.js (semana operacional dom 06:00 → dom 06:00); `updateTimeLog` en employeesAdmin.js (corrección con rastro, maneja 23505 al reabrir); `checkInEmployee` marca `source='admin'`; `getEmployeeTimeLogs` trae source/edited_at/note.
+- [x] **ScheduleAdminPage tab "Horas y pagos"**: celdas con 4 estados — azul `≈Xh` sugerido del checador (click = input prellenado con la sugerencia), verde confirmado, ámbar editado ≠ checador, gris planeado sin checadas. Indicadores bajo la celda: `+Xm tarde` (≥15 min), `FALTA` (día operacional terminado sin checada ni horas), `checada abierta`. Checadas sin turno programado → `Xh s/turno` naranja. Botón **"✓ Aceptar sugeridas del checador"** (bulk: escribe actual_hours de todos los días con sugerencia y sin captura). Leyenda de colores actualizada.
+- [x] **EmployeesAdminPage historial**: botón ✎ por registro → editor inline (datetime-local entrada/salida, salida vacía = abierta, nota obligatoria de contexto opcional), valida salida > entrada, guarda con `edited_by`/`edited_at`. Logs abiertos >16h en rojo "Abierta +16h — cerrar". Badges `manual`/`editado` + nota visible.
+- [x] **Verificación**: 24/24 asserts en node sobre `timeLogs.mjs` (madrugadas, límites 05:59/06:00, overnight con 2 logs, redondeos, retardos, semana fuera de rango). `@babel/parser` OK en los 5 archivos (mount de bash quedó stale otra vez — verificado con copias frescas en `outputs/verify/`, patrón de lessons.md).
+
+#### Pendiente (Javi) — Fase 2
+- [ ] `npx supabase db push` (aplica `20260713000002_time_logs_audit.sql` — y la 000001 de Fase 1 si aún no la aplicaste)
+- [ ] Smoke: (1) checa entrada/salida con tu sesión → en Horarios > Horas y pagos aparece `≈Xh` azul ese día; (2) click en la celda azul → Enter → queda verde; (3) "Aceptar sugeridas" con varios días; (4) en Empleados > Historial edita un log (cambia salida) → badge "editado" + nota; (5) celda ámbar si corriges horas distinto al checador.
+- [ ] Commit sugerido: `feat(checador): horas reales auto desde time logs + correccion de logs con auditoria (fase 2)`
 
 ### Fase 3 — Historial y navegación
 - [ ] **Navegación libre de semanas** en `ScheduleAdminPage` (← → además de Esta/Próxima; semanas pasadas en solo-lectura para el grid, editables en horas/pagos).
