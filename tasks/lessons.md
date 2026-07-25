@@ -234,6 +234,29 @@ The remote schema dump (`20260508191907_remote_schema.sql`) created many policie
 
 ---
 
+## Reconciliación banco vs sistema: probar AMBAS direcciones y validar contra el agregado
+
+Al auditar el estado de cuenta de Mercado Pago contra el Ledger (2026-07-25), el primer cruce reportó **~$6,284 de salidas faltantes**. Era **falso** — todo cuadraba dentro de $452. Dos errores de método:
+
+1. **Comparar mes contra mes.** Los gastos de fin de junio se capturan el 1 de julio. Comparar "salidas de junio en el banco" vs "salidas de junio en el sistema" produce un hueco artificial que reaparece invertido en el mes siguiente. **Siempre comparar sobre el periodo completo**, o atribuir por fecha real del movimiento bancario, nunca por fecha de captura.
+
+2. **Matcher unidireccional.** Los pagos reales tienen tres formas de agregación distintas:
+   - **1 sistema = N banco** (Heineken: el POS captura un total, el banco descuenta a "Cerveza Heineken" + "Heineken Logistica" por separado).
+   - **1 banco = N sistema** (Eduardo Ibarra / "Negro", el socio de compras: el banco muestra una transferencia consolidada, el POS captura cada producto por separado).
+   - **1 banco = N sistema, con fondeo** (transferencias a "Javier Vaquera": MP no tiene cajeros, así que Javi se transfiere para retirar y pagar en efectivo; la transferencia equivale a la suma de los gastos capturados ese día).
+
+   Un matcher que solo prueba una dirección deja residuales enormes en ambos lados y parece un faltante.
+
+**Reglas:**
+- Probar 1:1, `1 banco = Σ sistema` y `1 sistema = Σ banco`, con ventana de fechas amplia (±10-14 días — la captura tardía llega a 13 días en este proyecto).
+- **Antes de reportar un faltante, validarlo contra el agregado** (total salidas banco vs total salidas sistema sobre el mismo periodo). Si el agregado no respalda el residual del matcher, el matcher está mal, no los datos.
+- Emparejar por monto exacto **sin** ventana de fecha genera parejas falsas. Siempre acotar por fecha.
+- Los apodos rompen la búsqueda por nombre: en las notas el socio aparece como "Negro", en el banco como "Eduardo Ibarra". Buscar por **monto y fecha**, no por nombre.
+
+**Contexto de negocio útil para futuras auditorías:** las salidas del banco no tienen comisión ni retraso, así que son el lado limpio para reconciliar. Las entradas sí (comisión ~4.06% + liberación diferida), por eso un gap en el "Real estimado" del Ledger casi siempre es ventas no liberadas, no dinero faltante. Ver `tasks/auditoria_banco_propinas_2026-07-25.md`.
+
+---
+
 ## RAISE EXCEPTION en RPC llega como rpcError, no rpcResult
 
 Cuando un RPC de Postgres usa `RAISE EXCEPTION '%', msg`, la excepción llega en el **branch `rpcError`** de `supabase.rpc(...)`, no como `rpcResult.ok = false`. Si el código solo maneja `rpcResult?.ok === false`, el error se pierde o muestra el string raw al usuario.
