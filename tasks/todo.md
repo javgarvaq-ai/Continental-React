@@ -1,3 +1,75 @@
+## Plan — Permitir cerrar turno con mesas abiertas (advertencia, no bloqueo) — 2026-08-06 ✅ CODEADO, PENDIENTE DE PROBAR EN VIVO
+
+### Contexto
+Javi quiere poder cerrar un turno aunque queden comandas abiertas (irse a casa sin obligar a cerrar cada mesa). Hoy `useShift.js` lo bloquea siempre.
+
+### Hallazgo clave (cambia el análisis)
+`comandas` **no tiene `shift_id`** (confirmado en schema, `20260508191907_remote_schema.sql:69`). El lazo con un turno solo existe en `payments.shift_id`, escrito hasta que se cobra (`finalize_comanda_payment`), usando el turno activo *al momento del cobro* — no el que abrió la mesa. Por eso quitar el guard no genera huérfanos ni rompe FKs; el efecto es solo de reporting/UX, no de integridad de datos.
+
+### Decisiones confirmadas con Javi (2026-08-06)
+1. Convertir el bloqueo en **advertencia + doble confirmación** (patrón ya usado en el proyecto para acciones destructivas), no quitarlo sin fricción.
+2. La excepción aplica **solo a comandas `status='open'`**. Las que están `pending_payment` o `processing_payment` (a mitad de cobro) **siguen bloqueando duro** — no se puede cortar un cobro en proceso.
+
+### Efectos secundarios ya identificados (para que Javi los tenga presentes, no requieren cambio de código)
+- El corte del turno que se cierra ya NO incluirá la venta de esa mesa — se le atribuirá al turno que esté abierto cuando finalmente se cobre. El efectivo en caja queda correcto (el dinero entra físicamente en ese turno), pero el cajero que se fue no verá esa venta en su corte.
+- Al cerrar turno, `PosPage.jsx` hace `clearAuth()` + redirige a `/login` (línea ~206). Nadie puede tocar esa comanda hasta que alguien abra un turno nuevo (con su propio conteo de fondo inicial).
+- Reportes diarios/mensuales (`reports.js`) agrupan por `cobrado_at`, no por turno — no se ven afectados.
+- Atribución por persona (`opened_by`, `cuenta_by`, `cobrado_by`) es a nivel usuario, no turno — no se pierde.
+
+### Cambios de código propuestos (aún NO implementados)
+1. **`src/services/shifts.js`** — `getOpenComandas()`: traer también `status` para poder separar en el caller entre mesas abiertas (`open`) y mesas a mitad de cobro (`pending_payment`/`processing_payment`).
+2. **`src/hooks/useShift.js`**:
+   - `fetchShiftPanelData()`: separar en `openTables` (solo `open`) y `blockingTables` (`pending_payment`/`processing_payment`), en vez del único booleano `hasOpenComandas`.
+   - `handleConfirmCloseShift(cashCounted, { forceCloseWithOpenTables } = {})`: bloqueo duro solo si hay `blockingTables`. Si hay `openTables` y no viene `forceCloseWithOpenTables`, no cerrar — devolver algo que la UI use para mostrar el paso de confirmación (mismo mensaje de mesas, pero como advertencia, no error fatal).
+3. **`src/components/ShiftPanel.jsx`**:
+   - Botón "Proceder al cierre": deshabilitado solo si hay `blockingTables` (no por `openTables`).
+   - Nuevo paso de doble confirmación cuando hay `openTables`: primer click arma el botón (rojo, texto de advertencia con la lista de mesas, timeout 3s como en otros lados del proyecto), segundo click cierra pasando `forceCloseWithOpenTables: true`.
+   - El banner de advertencia existente (línea 168-173) se separa: uno informativo para `openTables` (no bloquea) y uno de error para `blockingTables` (sigue bloqueando, mismo texto que hoy).
+
+### Fuera de alcance
+- No se toca el schema (`comandas` sigue sin `shift_id` — no hace falta).
+- No se toca `finalize_comanda_payment`, `getShiftSummary`, ni el cálculo de `expectedCash`.
+- No se toca `reports.js` ni dashboards — ya funcionan por `cobrado_at`.
+
+### Implementado (2026-08-06)
+- [x] `src/services/shifts.js` — `getOpenComandas()` ahora trae `status` además de `id`/`units(name)`.
+- [x] `src/hooks/useShift.js` — `fetchShiftPanelData()` separa `openTableNames` (status `open`) de `blockingTableNames` (`pending_payment`/`processing_payment`), con flags `hasOpenTables`/`hasBlockingTables`. `handleConfirmCloseShift(cashCounted, { forceCloseWithOpenTables })` bloquea duro solo por `hasBlockingTables`; con `hasOpenTables` exige el flag explícito o devuelve error.
+- [x] `src/components/ShiftPanel.jsx` — botón "Proceder al cierre" solo se deshabilita por `hasBlockingTables`. Banner rojo (bloqueo duro, mesas en cobro) separado del banner ámbar (informativo, mesas abiertas sin cobrar). Botón final "Confirmar cierre de turno" usa patrón armed+3s: si hay `openTables`, primer click arma (banner ámbar + texto de advertencia), segundo click cierra pasando `forceCloseWithOpenTables: true`.
+- [x] Verificado: único caller de `getOpenComandas` es `useShift.js` (sin romper otros consumidores). `PosPage.jsx` pasa `handleConfirmCloseShift` directo como `onConfirmClose`, el segundo argumento fluye sin problema. Sintaxis de los 3 archivos verificada con `@babel/parser` — sin errores.
+
+### Pendiente
+- [ ] **Javi prueba en vivo (no lo puedo correr yo, es UI):** abrir una mesa sin cobrar → intentar cerrar turno → debe verse el banner ámbar + permitir "Proceder al cierre" → en el paso final, primer click arma (texto cambia a "Confirmar de nuevo"), segundo click cierra el turno → confirmar que la mesa sigue visible/abierta al entrar con el siguiente turno.
+- [ ] Javi prueba: mesa en `pending_payment` o `processing_payment` (a mitad de cobro) → "Proceder al cierre" debe seguir deshabilitado, sin forma de saltárselo.
+
+---
+
+## Plan — Corrección pago mal capturado (efectivo → tarjeta) — 2026-08-04 ✅ HECHO Y VERIFICADO
+
+### Qué pasó
+Comanda `4a850cf2-d46c-4fca-a5f1-7834b30d9bae` (día operativo 2026-08-03) quedó capturada en `payments.efectivo`, pero el cobro real fue con tarjeta.
+
+### Diagnóstico del esquema (confirmado)
+- `payments` tiene **una sola fila por comanda** (`payments_comanda_id_unique`), con montos separados por método (`efectivo`, `tarjeta`, `transferencia`). Ledger, reportes y comisión de tarjeta (`utils/ledger.js`) leen esta fila directamente — es la fuente de verdad.
+- `shifts.total_efectivo` / `total_tarjeta` / `expected_cash` / `difference` son una **foto fija** escrita una sola vez al cerrar turno (`closeShift`, `services/shifts.js:199-219`) — NO se recalculan solas. Si el turno de esa comanda ya cerró, corregir solo `payments` no actualiza esa foto histórica.
+
+### Decisión: corregir `payments` (raíz), no "solo la caja"
+Cambiar la categoría en el registro real es la corrección de raíz — mueve el dinero a `tarjeta`, corrige el cálculo de comisión y evita que una futura conciliación banco-vs-sistema (patrón de `tasks/auditoria_banco_propinas_2026-07-25.md`) vuelva a tropezar con este mismo hueco. Ajustar solo el cajón físico dejaría el registro mintiendo hacia adelante.
+
+### Script generado
+`tasks/correccion_pago_efectivo_tarjeta_2026-08-04.sql` — 6 bloques (SELECT comanda → SELECT payment actual → SELECT turno → UPDATE payments (mueve efectivo→tarjeta, guard `efectivo > 0`) → UPDATE shifts **opcional** si el turno ya cerró y Javi quiere que la foto del cierre también quede consistente → SELECT final de verificación). **NO ejecutado — Javi lo corre en el SQL Editor de Supabase, bloque por bloque.**
+
+### Resultado (2026-08-04)
+- [x] BLOQUE 1: comanda folio 643, `final_total=1000`, `status='paid'`, `cobrado_at` 2026-08-03 — confirmada.
+- [x] BLOQUE 2: payment `0e241e4e-41aa-4370-b2c8-629474a04422` — `efectivo=1000, tarjeta=0` antes de corregir. `shift_id=00927641-5722-436d-ad36-593e44c0b52b`.
+- [x] BLOQUE 3: turno **aún abierto** (`status='open'`, `closed_at=null`) — Javi corrigió el pago antes de cerrar el turno a propósito, así que `total_efectivo`/`total_tarjeta`/`expected_cash` los calculará `closeShift()` en vivo desde `payments` al cerrar. **BLOQUE 5 (corrección de foto de turno cerrado) no aplicó — no hizo falta.**
+- [x] BLOQUE 4 corrido: `efectivo=0, tarjeta=1000, total_paid=1000` — confirmado en el resultado.
+- [x] Sin cambios de código, sin migración — corrección de datos puntual sobre `payments`, una sola fila.
+
+### Commit sugerido
+No aplica — archivo de corrección de datos en `tasks/`, no se toca código de la app. Si Javi quiere versionar el script: `docs(tasks): script corrección pago efectivo→tarjeta comanda 643 (2026-08-04)`.
+
+---
+
 ## Plan — Módulo Empleados/Horarios robusto + Checador en POS — 2026-07-13 ✅ FASES 1-3 CODEADAS, DESPLEGADAS Y PROBADAS (db push + smoke OK, 2026-07-13)
 
 ### Decisiones de Javi (2026-07-13)

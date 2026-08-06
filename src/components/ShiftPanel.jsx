@@ -21,13 +21,17 @@ function SummaryRow({ label, value, muted, accent, bold }) {
 function ShiftPanel({ open, onClose, currentUser, onFetchData, onConfirmClose, onOpenCashMovement, shiftId }) {
     const [step, setStep] = useState('review')
     const [summary, setSummary] = useState(null)
-    const [hasOpenComandas, setHasOpenComandas] = useState(false)
+    const [openTableNames, setOpenTableNames] = useState([])
+    const [blockingTableNames, setBlockingTableNames] = useState([])
     const [isLoading, setIsLoading] = useState(false)
     const [cashCounted, setCashCounted] = useState('')
     const [isClosing, setIsClosing] = useState(false)
     const [errorMsg, setErrorMsg] = useState(null)
+    const [closeArmed, setCloseArmed] = useState(false)
 
     const isManagerOrAdmin = currentUser?.role === 'manager' || currentUser?.role === 'admin'
+    const hasOpenTables = openTableNames.length > 0
+    const hasBlockingTables = blockingTableNames.length > 0
 
     useEffect(() => {
         if (open) {
@@ -35,9 +39,11 @@ function ShiftPanel({ open, onClose, currentUser, onFetchData, onConfirmClose, o
         } else {
             setStep('review')
             setSummary(null)
-            setHasOpenComandas(false)
+            setOpenTableNames([])
+            setBlockingTableNames([])
             setCashCounted('')
             setErrorMsg(null)
+            setCloseArmed(false)
         }
     }, [open])
 
@@ -53,17 +59,27 @@ function ShiftPanel({ open, onClose, currentUser, onFetchData, onConfirmClose, o
         }
 
         setSummary(data.summary)
-        setHasOpenComandas(data.hasOpenComandas)
+        setOpenTableNames(data.openTableNames || [])
+        setBlockingTableNames(data.blockingTableNames || [])
     }
 
     async function handleConfirmClose() {
         const counted = Number(cashCounted)
         if (isNaN(counted) || cashCounted === '') return
 
+        // Double-confirm pattern: first click arms, second click fires —
+        // only needed when there are open (unpaid) tables left behind.
+        if (hasOpenTables && !closeArmed) {
+            setCloseArmed(true)
+            setTimeout(() => setCloseArmed(false), 3000)
+            return
+        }
+
         setIsClosing(true)
         setErrorMsg(null)
-        const { error } = await onConfirmClose(counted)
+        const { error } = await onConfirmClose(counted, { forceCloseWithOpenTables: hasOpenTables })
         setIsClosing(false)
+        setCloseArmed(false)
 
         if (error) {
             setErrorMsg(error.message || 'No se pudo cerrar el turno.')
@@ -165,10 +181,17 @@ function ShiftPanel({ open, onClose, currentUser, onFetchData, onConfirmClose, o
                             <SummaryRow label="Caja esperada" value={money(summary.expectedCash)} bold />
                         </div>
 
-                        {/* Open comanda warning */}
-                        {hasOpenComandas && (
+                        {/* Blocking warning — mid-checkout, cannot be overridden */}
+                        {hasBlockingTables && (
+                            <div style={{ background: '#4a1c1c', border: '1px solid #c62828', borderRadius: '8px', padding: '12px', marginBottom: '16px', fontSize: '13px', color: '#ef9a9a' }}>
+                                ⚠️ Mesas en proceso de cobro: {blockingTableNames.join(', ')}. Termina el cobro antes de cerrar el turno.
+                            </div>
+                        )}
+
+                        {/* Informational warning — open/unpaid tables, close is allowed */}
+                        {hasOpenTables && (
                             <div style={{ background: '#4a2800', border: '1px solid #f57c00', borderRadius: '8px', padding: '12px', marginBottom: '16px', fontSize: '13px', color: '#ffb74d' }}>
-                                ⚠️ Hay mesas abiertas o en cobro. Ciérralas antes de proceder al cierre de turno.
+                                ⚠️ Mesas abiertas sin cobrar: {openTableNames.join(', ')}. Puedes cerrar el turno, pero esa venta se contará en el turno que las cobre.
                             </div>
                         )}
 
@@ -205,15 +228,15 @@ function ShiftPanel({ open, onClose, currentUser, onFetchData, onConfirmClose, o
                                     <button
                                         type="button"
                                         onClick={() => { setStep('close'); setErrorMsg(null) }}
-                                        disabled={hasOpenComandas}
+                                        disabled={hasBlockingTables}
                                         style={{
                                             flex: 1,
                                             padding: '10px',
                                             borderRadius: '8px',
                                             border: 'none',
-                                            background: hasOpenComandas ? '#555' : '#c62828',
+                                            background: hasBlockingTables ? '#555' : '#c62828',
                                             color: 'white',
-                                            cursor: hasOpenComandas ? 'default' : 'pointer',
+                                            cursor: hasBlockingTables ? 'default' : 'pointer',
                                             fontWeight: 'bold',
                                             fontSize: '13px',
                                         }}
@@ -280,10 +303,16 @@ function ShiftPanel({ open, onClose, currentUser, onFetchData, onConfirmClose, o
                                     </div>
                                 )}
 
+                                {hasOpenTables && closeArmed && (
+                                    <div style={{ background: '#4a2800', border: '1px solid #f57c00', borderRadius: '8px', padding: '10px', marginBottom: '12px', fontSize: '12px', color: '#ffb74d' }}>
+                                        Quedan mesas abiertas sin cobrar. Presiona de nuevo para confirmar y cerrar de todos modos.
+                                    </div>
+                                )}
+
                                 <div style={{ display: 'flex', gap: '8px' }}>
                                     <button
                                         type="button"
-                                        onClick={() => { setStep('review'); setErrorMsg(null) }}
+                                        onClick={() => { setStep('review'); setErrorMsg(null); setCloseArmed(false) }}
                                         style={{
                                             padding: '10px 16px',
                                             borderRadius: '8px',
@@ -304,14 +333,18 @@ function ShiftPanel({ open, onClose, currentUser, onFetchData, onConfirmClose, o
                                             padding: '10px',
                                             borderRadius: '8px',
                                             border: 'none',
-                                            background: (!validCounted || isClosing) ? '#555' : '#c62828',
+                                            background: (!validCounted || isClosing) ? '#555' : (hasOpenTables && closeArmed) ? '#f57c00' : '#c62828',
                                             color: 'white',
                                             fontWeight: 'bold',
                                             cursor: (!validCounted || isClosing) ? 'default' : 'pointer',
                                             fontSize: '14px',
                                         }}
                                     >
-                                        {isClosing ? 'Cerrando turno...' : '🔒 Confirmar cierre de turno'}
+                                        {isClosing
+                                            ? 'Cerrando turno...'
+                                            : (hasOpenTables && closeArmed)
+                                                ? '⚠️ Confirmar de nuevo — cerrar con mesas abiertas'
+                                                : '🔒 Confirmar cierre de turno'}
                                     </button>
                                 </div>
                             </div>

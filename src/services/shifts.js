@@ -107,13 +107,14 @@ export async function getShiftSummary(shiftId) {
 
 /**
  * Returns all comandas that are still open/pending/processing,
- * with their unit name. Used to block shift close and report
- * which tables need to be closed first.
+ * with their unit name and status. Used by useShift to split
+ * "open" (can close shift with a warning) from "mid-checkout"
+ * (hard-blocks shift close — see fetchShiftPanelData).
  */
 export async function getOpenComandas() {
     const { data, error } = await supabase
         .from('comandas')
-        .select('id, units(name)')
+        .select('id, status, units(name)')
         .in('status', ['open', 'pending_payment', 'processing_payment'])
 
     return { data, error }

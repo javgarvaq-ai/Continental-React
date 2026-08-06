@@ -42,22 +42,42 @@ export function useShift({ currentUser, currentShiftId, isOnline, setStatus, onS
 
         // Filter by status only — no date filter so ghost comandas
         // from before the shift can't slip past and block close.
+        // Split by status: 'open' can close the shift with a warning
+        // (the sale attaches to whichever shift is active when it's
+        // finally paid — see tasks/todo.md 2026-08-06). 'pending_payment'/
+        // 'processing_payment' are mid-checkout and hard-block close —
+        // never overridable, even with forceCloseWithOpenTables.
         const { data: openComandas } = await getOpenComandas()
-        const openUnitNames = (openComandas || [])
+        const openTableNames = (openComandas || [])
+            .filter(c => c.status === 'open')
+            .map(c => c.units?.name)
+            .filter(Boolean)
+        const blockingTableNames = (openComandas || [])
+            .filter(c => c.status === 'pending_payment' || c.status === 'processing_payment')
             .map(c => c.units?.name)
             .filter(Boolean)
 
         return {
             data: {
                 summary,
-                hasOpenComandas: openUnitNames.length > 0,
-                openUnitNames,
+                openTableNames,
+                blockingTableNames,
+                hasOpenTables: openTableNames.length > 0,
+                hasBlockingTables: blockingTableNames.length > 0,
             },
             error: null,
         }
     }
 
-    async function handleConfirmCloseShift(cashCounted) {
+    /**
+     * @param {number} cashCounted
+     * @param {object} [opts]
+     * @param {boolean} [opts.forceCloseWithOpenTables] - Must be true to close
+     *   the shift when there are 'open' (unpaid) comandas. Set by ShiftPanel
+     *   after the user double-confirms. Comandas mid-checkout (pending_payment/
+     *   processing_payment) always hard-block, regardless of this flag.
+     */
+    async function handleConfirmCloseShift(cashCounted, { forceCloseWithOpenTables = false } = {}) {
         if (!requireOnline(isOnline, setStatus)) return { error: new Error('Sin conexión.') }
         if (!currentShiftId || !currentUser?.id) {
             return { error: new Error('No hay turno activo.') }
@@ -68,9 +88,14 @@ export function useShift({ currentUser, currentShiftId, isOnline, setStatus, onS
             return { error: panelError || new Error('No se pudo calcular el cierre.') }
         }
 
-        if (panelData.hasOpenComandas) {
-            const names = panelData.openUnitNames.join(', ')
-            return { error: new Error(`Mesas abiertas: ${names}. Ciérralas antes de cerrar el turno.`) }
+        if (panelData.hasBlockingTables) {
+            const names = panelData.blockingTableNames.join(', ')
+            return { error: new Error(`Mesas en proceso de cobro: ${names}. Termina el cobro antes de cerrar el turno.`) }
+        }
+
+        if (panelData.hasOpenTables && !forceCloseWithOpenTables) {
+            const names = panelData.openTableNames.join(', ')
+            return { error: new Error(`Mesas abiertas sin cobrar: ${names}. Confirma de nuevo para cerrar el turno de todos modos.`) }
         }
 
         const { data: updatedShift, error: updateError } = await closeShift(
