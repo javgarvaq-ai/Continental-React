@@ -75,7 +75,9 @@ function InventoryDashboardPage() {
     const low      = activeItems.filter(i => stockStatus(i).label === 'Bajo')
     const ok       = activeItems.filter(i => stockStatus(i).label === 'OK')
 
-    const filteredItems = filter === 'critical' ? [...activeItems.filter(i => stockStatus(i).label === 'Agotado'), ...critical]
+    // `critical` ya incluye Agotado + Crítico (ver arriba). Los agotados salen
+    // primero de forma natural: getAllInventoryItems ordena por current_stock asc.
+    const filteredItems = filter === 'critical' ? critical
         : filter === 'low'      ? low
         : filter === 'ok'       ? ok
         : activeItems

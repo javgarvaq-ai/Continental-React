@@ -1552,3 +1552,88 @@ Javi confirmó que el movimiento de $805 **ya existía** en `cash_movements` (ca
 - Único detalle cosmético pendiente de observar (no de corregir): si el `created_at` de ese movimiento quedó fechado durante/después de la apertura del turno 1 (en vez de antes), el marcador de apertura de ESE turno específico podría mostrar una "diferencia vs. sistema" de $805 en el Ledger — es un artefacto de orden cronológico de un turno histórico de hace meses, no un error real ni algo que afecte turnos actuales. Javi puede confirmarlo mirando `/admin/ledger` filtrado a esa fecha; no amerita tocar timestamps de producción por algo puramente visual e histórico.
 
 **Lección capturada en `tasks/lessons.md`.**
+
+---
+
+# Revisión Inventario — 2026-08-16
+
+Revisión completa de las pantallas de inventario antes de tocar código. Se
+acordó trabajar **punto por punto**: estado actual → problema → solución →
+verificación → aprobación de Javi → implementación.
+
+## Mapa del módulo (estado al 2026-08-16)
+
+| Ruta | Archivo | Rol | Acceso |
+|---|---|---|---|
+| `/inventory/dashboard` | `InventoryDashboardPage.jsx` | Vista operativa (solo lectura): niveles de stock, top consumido 7 días, últimos 30 movimientos | `AuthRoute` · Nav "📦 Inventario" |
+| `/admin/inventory-items` | `InventoryItemsAdminPage.jsx` | CRUD de insumos + `unit_cost` + ajustes de stock vía RPC `adjust_inventory_stock` | `AuthRoute` + check `role === 'admin'` in-component · Nav "Inventario" |
+| `/inventory` | `InventoryPage.jsx` | **HUÉRFANA** — 477 líneas, `ManagerRoute`, cero enlaces en la app | inalcanzable |
+| `/admin/recipe-mappings` | `RecipeMappingAdminPage.jsx` | Recetas producto → insumo | admin |
+| `/admin/product-costing` | `ProductCostingPage.jsx` | Costo/margen calculado | admin |
+
+**Flujo de descuento de stock:** ocurre SOLO al cobrar, dentro de
+`finalize_comanda_payment` (migración `20260616000001`): itera `comanda_items`
+activos → `product_recipes` activas → `deduct_inventory_item` (valida
+`current_stock >= amount`, escribe `inventory_movements`, devuelve nuevo stock).
+El snapshot de COGS va en el mismo loop pero en bloque no-fatal.
+
+## Hallazgos (backlog de la revisión)
+
+- [x] **1. Filtro "🔴 Crítico" duplica ítems** — `InventoryDashboardPage.jsx:78`
+- [ ] **2. `getTopConsumedItems` sin `.limit()` ni paginación** — `reports.js:527`, riesgo de tope 1000 filas de PostgREST
+- [ ] **3. El descuento de inventario es FATAL al cobro** — `RAISE EXCEPTION` aborta el pago si falta stock (decisión de negocio pendiente)
+- [ ] **4. `capacity_oz` usado como si fuera stock máximo** — no existe punto de reorden / mínimo
+- [ ] **5. Tipos kg/g/L/ml son ciudadanos de segunda** — umbrales absolutos sin sentido, `formatStock` imprime "pzas"
+- [ ] **6. Tres lógicas de semáforo que no coinciden entre sí** — dashboard vs InventoryPage vs InventoryItemsAdmin
+- [ ] **7. No hay conteo físico / merma** — no se registra varianza teórico-vs-real ni categorías de merma
+- [ ] **8. No hay valuación de inventario** — `unit_cost` existe pero nadie muestra Σ `current_stock × unit_cost`
+- [ ] **9. Los movimientos no muestran quién** — `inventory_movements.user_id` se guarda pero no se selecciona ni despliega
+- [ ] **10. Movimientos: 30 fijos, sin filtros** — sin filtro por ítem/tipo/fecha ni paginación
+- [ ] **11. Dashboard sin buscador** — solo filtra por estado, lista con `maxHeight: 460px`
+- [ ] **12. Sin reversa** — cancelar un `comanda_item` después del cobro no regresa stock
+- [ ] **13. `InventoryPage.jsx` es código muerto** — candidato a borrarse
+- [ ] **14. Regla "Rolldown no soporta `??`" parece obsoleta** — 3 usos en producción sin problema (`InventoryItemsAdminPage.jsx:266`, `RecipeMappingAdminPage.jsx:132`, `ProductCostingPage.jsx:91`); el proyecto usa Vite 8
+
+---
+
+## Punto 1 — Filtro "🔴 Crítico" duplica ítems ✅ HECHO
+
+**Estado actual:** `InventoryDashboardPage.jsx:73-81`. El bucket `critical` se
+define como `Crítico || Agotado`, pero la expresión de `filteredItems` para el
+filtro `'critical'` hacía `[...activeItems.filter(label === 'Agotado'), ...critical]`.
+
+**Problema:** `critical` ya contenía los Agotados, así que entraban dos veces:
+1. Cada ítem agotado se pintaba dos veces en la lista.
+2. `key={item.id}` duplicada → warning de React.
+3. La card de resumen decía un número y la lista mostraba otro (con 3 agotados
+   + 2 críticos: card `5`, lista `8` renglones). Ese era el síntoma que más
+   confundía operativamente.
+
+**Solución aplicada (1 línea):** usar `critical` directamente.
+
+```js
+const filteredItems = filter === 'critical' ? critical
+    : filter === 'low'      ? low
+    : filter === 'ok'       ? ok
+    : activeItems
+```
+
+Se descartó consolidar los buckets con un `useMemo` que calcule `stockStatus`
+una sola vez por ítem (hoy se llama 4+ veces por ítem por render): son decenas
+de ítems, el costo es irrelevante, y meter ese refactor aquí viola "la solución
+más simple que funcione". Si se vuelve a tocar esta pantalla por otro punto, ahí
+se consolida.
+
+**Gratis:** `getAllInventoryItems` (`reports.js:514`) ordena por
+`current_stock ascending`, así que los agotados (stock 0) ya salen primero de
+forma natural — el orden que el spread intentaba forzar se conserva solo.
+
+**Verificación:** script aislado con la `stockStatus` copiada verbatim y datos
+sintéticos (3 agotados, 2 críticos, 4 bajos, 6 OK + 1 inactivo):
+- Reprodujo el bug: lista `critical` = 8 renglones (`Tequila, Vodka, Coca, Tequila, Vodka, Coca, Boost, Ron`).
+- Después del fix: 5 renglones, sin duplicados.
+- Invariante probada para los 4 filtros: `filteredItems.length === card.length` y `new Set(ids).size === ids.length`.
+- Agotados siguen apareciendo antes que Críticos.
+- Sintaxis JSX validada con `@babel/parser` (245 líneas, OK).
+
+**Riesgo:** nulo. Un archivo, una expresión, sin tocar servicios, queries ni DB.
