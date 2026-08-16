@@ -382,3 +382,27 @@ Detectado 2026-08-16 en `getTopConsumedItems`: propuse `.range(0, 4999)` como
 porque el stub de Supabase simulaba el cap del servidor en vez de asumir que el
 `.range()` mandaba. **Los stubs de prueba deben modelar los límites del servicio
 real, no la versión optimista.**
+
+---
+
+## Nunca concluir "no existe / no se usa" grepeando una copia parcial del repo
+
+En Cowork las herramientas de archivo (`Read`/`Grep`) solo ven los archivos que
+se copiaron explícitamente al sandbox. Un `grep` sobre esa copia **parece**
+recorrer todo `src/` pero solo recorre lo copiado — y devuelve "0 resultados"
+con total confianza.
+
+**Regla:** cualquier afirmación negativa sobre el código ("no hay enlaces a X",
+"solo hay N usos de Y", "esta función no se llama desde ningún lado") se hace
+**exclusivamente** con `device_bash` + `grep -rn` sobre el filesystem real del
+proyecto. Las afirmaciones positivas (encontré esto en tal línea) sí son
+confiables desde la copia.
+
+Falló dos veces el 2026-08-16:
+1. "Solo hay 3 usos de `??` en el proyecto" → son **30**, en 17 archivos.
+2. "`InventoryPage.jsx` es código muerto, cero enlaces" → **falso**, se llega
+   desde el botón "Inventario" del TopBar del POS (`PosPage.jsx:326`,
+   `navigate('/inventory')`), visible para `manager` y `admin`. Javi lo corrigió.
+
+El costo no es solo el error: casi propongo **borrar una página en producción**
+que los managers usan.

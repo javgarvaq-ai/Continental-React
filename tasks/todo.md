@@ -1581,17 +1581,19 @@ El snapshot de COGS va en el mismo loop pero en bloque no-fatal.
 
 - [x] **1. Filtro "🔴 Crítico" duplica ítems** — `InventoryDashboardPage.jsx:78`
 - [x] **2. `getTopConsumedItems` sin `.limit()` ni paginación** — `reports.js:527`, riesgo de tope 1000 filas de PostgREST
-- [ ] **3. El descuento de inventario es FATAL al cobro** — `RAISE EXCEPTION` aborta el pago si falta stock (decisión de negocio pendiente)
-- [ ] **4. `capacity_oz` usado como si fuera stock máximo** — no existe punto de reorden / mínimo
-- [ ] **5. Tipos kg/g/L/ml son ciudadanos de segunda** — umbrales absolutos sin sentido, `formatStock` imprime "pzas"
-- [ ] **6. Tres lógicas de semáforo que no coinciden entre sí** — dashboard vs InventoryPage vs InventoryItemsAdmin
-- [ ] **7. No hay conteo físico / merma** — no se registra varianza teórico-vs-real ni categorías de merma
-- [ ] **8. No hay valuación de inventario** — `unit_cost` existe pero nadie muestra Σ `current_stock × unit_cost`
-- [ ] **9. Los movimientos no muestran quién** — `inventory_movements.user_id` se guarda pero no se selecciona ni despliega
-- [ ] **10. Movimientos: 30 fijos, sin filtros** — sin filtro por ítem/tipo/fecha ni paginación
-- [ ] **11. Dashboard sin buscador** — solo filtra por estado, lista con `maxHeight: 460px`
+- [x] **3. El descuento de inventario es FATAL al cobro** — `RAISE EXCEPTION` aborta el pago si falta stock (decisión de negocio pendiente)
+- [x] **4. `capacity_oz` usado como si fuera stock máximo** — no existe punto de reorden / mínimo
+- [x] **5. Tipos kg/g/L/ml son ciudadanos de segunda** — umbrales absolutos sin sentido, `formatStock` imprime "pzas"
+- [x] **6. Tres lógicas de semáforo que no coinciden entre sí** — dashboard vs InventoryPage vs InventoryItemsAdmin
+- [~] **7. No hay conteo físico / merma** — DESCARTADO por Javi (2026-08-16): la nota libre ya carga el motivo y el teórico previo es reconstruible con `resulting_stock − quantity_change`. Solo sobrevivía la resta mental; no justifica migración.
+- [~] **8. Valuación de inventario** — POSPUESTO por Javi (2026-08-16): no urgente. Diseño ya validado (RPC `inventory_valuation_at` + índice compuesto), rescatable cuando se quiera.
+- [~] **OBSOLETO ↓** — no se registra varianza teórico-vs-real ni categorías de merma
+- [x] **8. No hay valuación de inventario** — `unit_cost` existe pero nadie muestra Σ `current_stock × unit_cost`
+- [x] **9. Los movimientos no muestran quién** — `inventory_movements.user_id` se guarda pero no se selecciona ni despliega
+- [x] **10. Movimientos: 30 fijos, sin filtros** — sin filtro por ítem/tipo/fecha ni paginación
+- [x] **11. Dashboard sin buscador** — solo filtra por estado, lista con `maxHeight: 460px`
 - [ ] **12. Sin reversa** — cancelar un `comanda_item` después del cobro no regresa stock
-- [ ] **13. `InventoryPage.jsx` es código muerto** — candidato a borrarse
+- [~] **13. ~~`InventoryPage.jsx` es código muerto~~ — FALSO.** Se llega desde el botón "Inventario" del TopBar del POS (`PosPage.jsx:326`), visible para manager+admin. Error mío por grepear una copia parcial del repo. Lección en `lessons.md`.
 - [ ] **14. Regla "Rolldown no soporta `??`" parece obsoleta** — 3 usos en producción sin problema (`InventoryItemsAdminPage.jsx:266`, `RecipeMappingAdminPage.jsx:132`, `ProductCostingPage.jsx:91`); el proyecto usa Vite 8
 
 ---
@@ -1686,3 +1688,125 @@ corriendo la versión vieja y la nueva sobre el mismo dataset:
 - A 185 filas (volumen real): suma completa. A 2400: **ambas truncan en 1000** — prueba de que el `.range()` no habría servido. ✅
 - Sigue devolviendo top 8 con 20 insumos. ✅
 - Sintaxis validada con `@babel/parser` (reports.js 717 líneas, InventoryDashboardPage.jsx 245).
+
+---
+
+# Rediseño de `/inventory` (pantalla de POS) — ✅ IMPLEMENTADO
+
+**Alcance acordado con Javi (2026-08-16):** se toca **solo** `InventoryPage.jsx`.
+`/inventory/dashboard` y `/admin/inventory-items` se quedan como están.
+
+**Quién la usa:** `manager` + `admin`, entrando por el botón "Inventario" del
+TopBar del POS (`PosPage.jsx:326` → `navigate('/inventory')`, guard `ManagerRoute`).
+
+**Para qué:** (a) consultar rápido cuánto hay de cada cosa, (b) registrar entrada
+de mercancía al recibirla.
+
+## Decisiones tomadas por Javi
+
+| Tema | Decisión |
+|---|---|
+| Unidad de captura | **Botellas/piezas con conversión automática** a la unidad base |
+| Alcance por captura | **Un insumo a la vez** |
+| Semáforo de colores | **Quitarlo** — solo cantidades claras |
+| "Solo agregar" para manager | **Solo UI**, sin tocar el RPC |
+
+## Tareas
+
+- [x] **1. Lista densa en vez de grid de cards.** Hoy es `repeat(auto-fit, minmax(260px,1fr))`; con ~50 insumos obliga a scrollear mucho. Pasa a tabla/lista compacta de una columna: nombre · existencia · botón Recibir.
+- [x] **2. Orden alfabético por nombre**, client-side. `getAllInventoryItems` ordena por `created_at` (arbitrario para buscar), pero ese servicio lo comparte `InventoryItemsAdminPage` — que NO se toca. Por eso el orden se aplica en el componente, no en el servicio.
+- [x] **3. Ocultar insumos inactivos.** Hoy la página los muestra (no filtra por `active`). Un manager recibiendo mercancía no debe verlos.
+- [x] **4. Arreglar `formatStock` para todos los tipos.** Hoy: si no es `oz` imprime "pzas" — un insumo en `kg` muestra "3 pzas". Nuevo: `unit`→"pzas", `oz` con capacity→"142.02 oz · 6.0 bot", `oz` sin capacity→"142.02 oz", y `kg`/`g`/`L`/`ml`→ su propia unidad. Se quita el "• ml", es ruido.
+- [x] **5. Quitar `getStockStatus`** y todo el semáforo (decisión de Javi). No arrastramos a una pantalla nueva la lógica que ya identificamos como engañosa en los puntos 4/5/6.
+- [x] **6. Simplificar cards de resumen.** Hoy: Items totales / Por piezas / Por onzas / Sin stock. "Por piezas" y "Por onzas" no responden ninguna pregunta real. Quedan: **Insumos activos** y **Sin stock**.
+- [x] **7. Quitar el filtro por tipo de unidad.** Con el buscador y una lista compacta no aporta. El buscador se queda — es esencial con ~50 insumos.
+- [x] **8. Flujo "Recibir mercancía"** (lo nuevo):
+    - Botón `Recibir` por renglón → panel inline.
+    - Insumos `oz` **con** `capacity_oz`: se captura en **botellas**. Vista previa en vivo: `6 botellas = 142.02 oz → nuevo total: 268.52 oz (11.3 bot)`.
+    - Los demás: captura directa en su unidad, con la misma vista previa del total resultante.
+    - Campo **Nota** opcional, placeholder sugiriendo proveedor/pedido (ej. "Pedido La Europea").
+    - Confirmar → `adjustInventoryStock({ type: 'entry', ... })`. **Nunca** se emite `remove` desde esta pantalla.
+- [x] **9. Redondeo a 2 decimales antes de enviar.** `capacity_oz`, `current_stock` y `quantity_change` son `numeric(12,2)`. En JS `6 * 23.67 = 142.01999999999998`; hay que mandar `142.02`. Sin esto se acumula basura de punto flotante en el log de movimientos.
+- [x] **10. Confirmación visible al recibir.** Hoy la página solo tiene `loadError`, no hay estado de éxito. Agregar línea de status con el stock resultante.
+- [x] **11. Verificación** (ver abajo).
+
+## Verificación
+
+1. Extraer las funciones puras (`formatStock`, conversión botellas→unidad base) y probarlas con valores reales del seed: Torres X (`capacity_oz` 23.67), un `unit` (Refresco), un `oz` sin capacity, un `kg`, y stock 0.
+2. **Redondeo:** `6 botellas × 23.67` debe producir exactamente `142.02`, no `142.01999999999998`.
+3. Asegurar que el payload al RPC lleva siempre `type: 'entry'` — ninguna ruta de esta pantalla puede emitir `adjustment_minus`.
+4. Insumos inactivos no aparecen; el orden es alfabético.
+5. Sintaxis con `@babel/parser`.
+
+**Riesgo:** bajo. Un solo archivo de UI. No toca servicios, RPCs, migraciones ni
+el flujo de cobro. El único efecto fuera de la pantalla son las filas `entry`
+que ya se podían crear desde el admin.
+
+---
+
+## Rediseño de `/inventory` — RESULTADO (2026-08-16)
+
+### Pregunta que abrió Javi a mitad del plan
+
+*"Las botellas no son todas del mismo tamaño — 700 ml, 900 ml, 1 L, 750 ml…"*
+
+`capacity_oz` guarda **un** tamaño por insumo (el seed ya mezcla: Torres X en
+700 ml, jarabes en 1 L). El problema es cuando el MISMO insumo llega en dos
+presentaciones distintas.
+
+**Solución sin migración:** selector de tamaño en la captura, con el habitual
+del insumo precargado (derivado de `capacity_oz`, round-trippea exacto:
+23.67 oz → 700.0 ml). En el caso normal el manager no toca el selector.
+Presets 700/750/900/1000/1750 ml + "Otro…". `capacity_oz` sigue siendo lo que
+ya era: el tamaño de referencia.
+
+**La nota se auto-compone** con la presentación (`"6 bot × 900 ml — Pedido La
+Europea"`), así queda registrado en `inventory_movements` en qué tamaño llegó
+cada entrega, sin que nadie lo escriba. Es el único lugar donde ese dato
+sobrevive.
+
+**Costo:** Javi cerró el tema — normalmente pide el mismo tamaño y las
+excepciones las resuelve poniendo costo promedio a mano. No se toca el costeo.
+
+### Archivos
+
+- **`src/utils/inventoryUnits.js`** (nuevo) — conversión y formato, funciones
+  puras sin React. Se extrajo a su propio archivo para poder probar el código
+  REAL desde node, en vez de verificar una copia pegada.
+- **`src/pages/InventoryPage.jsx`** — reescrita.
+
+### Verificación
+
+Suite de 34 aserciones importando el módulo real (`node test_inv.mjs`), todas OK:
+- **Redondeo:** `6 bot × 700 ml` crudo da `142.01889516765695`; se envía `142.02`.
+  Las columnas son `numeric(12,2)` — sin esto se acumula basura en el log.
+- **Tamaños distintos:** 700/750/900/1000/1750 ml dan resultados distintos para
+  el mismo insumo (142.02 / 152.16 / 182.60 / 202.88 / 59.17 oz).
+- **Round-trip:** `capacity_oz` 23.67 → 700 ml; 33.81 → 1000 ml.
+- **`formatStock`:** el bug de "3 pzas" para un insumo en kg quedó corregido
+  (`3.50 kg`). La equivalencia en botellas SIEMPRE nombra el tamaño de
+  referencia (`≈ 5.3 bot de 700 ml`) — sin eso sería una cifra falsa si el
+  stock se llenó con presentaciones mezcladas. Insumos sin `capacity_oz` no
+  muestran equivalencia.
+- **Entradas inválidas** (vacío, cero, negativo, texto, sin tamaño) → 0, nunca
+  generan movimiento.
+- **`grep` confirma que no existe ninguna ruta que emita `remove` /
+  `adjustment_minus`** desde esta pantalla: el único `type:` es `'entry'`.
+
+### Lint
+
+`npx eslint` sobre los archivos tocados: se corrigió un error **preexistente**
+(`loadInventory` accedido antes de declararse → ahora `useCallback`).
+
+Queda `react-hooks/set-state-in-effect` en el patrón "cargar datos al montar".
+**No es regresión:** dispara igual en `DashboardPage`, `LedgerPage`,
+`AnalyticsPage` e `InventoryDashboardPage`, todas sin tocar. Es
+`eslint-plugin-react-hooks` v7 marcando el patrón que usa todo el proyecto.
+Se dejó consistente con el resto del código en vez de inventar un patrón
+distinto para una sola página.
+
+### Pendiente para Javi
+
+- **Correr `npm run build`** — no cupo en el límite de 45s del sandbox.
+- **Borrar `_to_delete/__origcheck.jsx`** — archivo temporal que generé para
+  comparar el lint contra el original; el sandbox no tiene permiso de borrar.
