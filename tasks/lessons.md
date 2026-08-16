@@ -357,3 +357,28 @@ Al diseñar el cajón persistente asumí que el fondo inicial del negocio ($805,
 **Por qué importa:** de haberse corrido el script sin confirmar, se habría duplicado el $805 y desfasado el cajón persistente para siempre — exactamente el tipo de error silencioso que este feature busca prevenir.
 
 **Regla:** antes de escribir un script de backfill o corrección de datos (no solo migraciones de esquema), pedir al usuario que confirme el estado real de los datos en producción cuando no se tenga forma de consultarlos directamente (RLS bloquea el anon key sin sesión). No asumir un hueco solo porque la convención de código lo sugiere — la convención puede no aplicar a casos capturados manualmente fuera del flujo normal.
+
+---
+
+## `.limit()` / `.range()` NO pueden exceder el `Max rows` de Supabase
+
+El `Max rows` del proyecto (Settings → API, **1000 por defecto**) es un tope
+**duro del servidor** (`db-max-rows` de PostgREST). Pedir `.range(0, 4999)` o
+`.limit(5000)` **no devuelve 5000 filas** — devuelve 1000, sin error y sin
+ninguna señal de que faltó algo.
+
+**Corolario:** subir la cota en el cliente NUNCA arregla un truncamiento. Las
+únicas dos salidas reales son:
+1. Paginar con `.range()` en loop hasta que una página venga corta → ya existe
+   el helper `fetchAllPages` en `src/services/ledger.js:15`.
+2. Agregar server-side (vista o RPC) para no traer las filas crudas.
+
+**Además:** un `.range()` sin `.order()` por columna **única** puede repetir o
+saltarse filas entre páginas. `created_at` no sirve como orden de paginación en
+este proyecto — dos deducciones del mismo cobro comparten timestamp. Usar `id`.
+
+Detectado 2026-08-16 en `getTopConsumedItems`: propuse `.range(0, 4999)` como
+"margen 27x" y era falso. Lo cazó el test de verificación antes de aplicarlo,
+porque el stub de Supabase simulaba el cap del servidor en vez de asumir que el
+`.range()` mandaba. **Los stubs de prueba deben modelar los límites del servicio
+real, no la versión optimista.**

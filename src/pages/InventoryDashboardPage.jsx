@@ -179,7 +179,7 @@ function InventoryDashboardPage() {
                                 {topConsumed.length === 0 ? (
                                     <div style={{ color: '#475569', fontSize: '13px', textAlign: 'center', padding: '20px 0' }}>Sin movimientos</div>
                                 ) : topConsumed.map(item => (
-                                    <div key={item.name} style={{ marginBottom: '12px' }}>
+                                    <div key={item.id} style={{ marginBottom: '12px' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                                             <span style={{ fontSize: '13px', color: '#e2e8f0', maxWidth: '70%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
                                             <span style={{ fontSize: '13px', color: '#94a3b8', flexShrink: 0 }}>{Number(item.totalDeducted).toFixed(1)}</span>

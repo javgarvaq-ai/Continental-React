@@ -524,20 +524,32 @@ export async function getRecentInventoryMovements(limit = 30) {
     return { data: data || [], error }
 }
 
+// OJO — techo de filas: esta query trae TODOS los movimientos del período para
+// sumarlos en cliente. El `Max rows` del proyecto (1000 por defecto en Supabase)
+// es un tope DURO del servidor: ni `.limit()` ni `.range()` lo pueden exceder,
+// y al cortar no devuelve error — la suma simplemente sale baja en silencio.
+// Volumen real medido 2026-08-16: ~185 filas / 7 días → 5.4x de margen, no muerde.
+// El `.order('id')` hace que, el día que sí tope, el recorte sea determinista y
+// no arbitrario. La ÚNICA solución real es paginar: ver `fetchAllPages` en
+// services/ledger.js. Migrar a ese helper cuando el volumen se acerque a 1000.
 export async function getTopConsumedItems(days = 7) {
     const { data, error } = await supabase
         .from('inventory_movements')
         .select('inventory_item_id, quantity_change, inventory_items(name)')
         .eq('movement_type', 'sale_deduction')
         .gte('created_at', daysAgo(days).toISOString())
+        .order('id', { ascending: true })
 
     if (error || !data) return { data: [], error }
 
+    // Agrupado por inventory_item_id (no por nombre): dos insumos distintos con
+    // el mismo nombre son dos renglones, y los que no resuelvan el embed no se
+    // fusionan todos en un solo bucket 'Desconocido'.
     const byItem = {}
     data.forEach(m => {
-        const name = m.inventory_items?.name || 'Desconocido'
-        if (!byItem[name]) byItem[name] = { name, totalDeducted: 0 }
-        byItem[name].totalDeducted += Math.abs(Number(m.quantity_change || 0))
+        const key = m.inventory_item_id || 'unknown'
+        if (!byItem[key]) byItem[key] = { id: key, name: m.inventory_items?.name || 'Desconocido', totalDeducted: 0 }
+        byItem[key].totalDeducted += Math.abs(Number(m.quantity_change || 0))
     })
 
     return {

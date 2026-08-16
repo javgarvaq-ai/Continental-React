@@ -1580,7 +1580,7 @@ El snapshot de COGS va en el mismo loop pero en bloque no-fatal.
 ## Hallazgos (backlog de la revisión)
 
 - [x] **1. Filtro "🔴 Crítico" duplica ítems** — `InventoryDashboardPage.jsx:78`
-- [ ] **2. `getTopConsumedItems` sin `.limit()` ni paginación** — `reports.js:527`, riesgo de tope 1000 filas de PostgREST
+- [x] **2. `getTopConsumedItems` sin `.limit()` ni paginación** — `reports.js:527`, riesgo de tope 1000 filas de PostgREST
 - [ ] **3. El descuento de inventario es FATAL al cobro** — `RAISE EXCEPTION` aborta el pago si falta stock (decisión de negocio pendiente)
 - [ ] **4. `capacity_oz` usado como si fuera stock máximo** — no existe punto de reorden / mínimo
 - [ ] **5. Tipos kg/g/L/ml son ciudadanos de segunda** — umbrales absolutos sin sentido, `formatStock` imprime "pzas"
@@ -1637,3 +1637,52 @@ sintéticos (3 agotados, 2 críticos, 4 bajos, 6 OK + 1 inactivo):
 - Sintaxis JSX validada con `@babel/parser` (245 líneas, OK).
 
 **Riesgo:** nulo. Un archivo, una expresión, sin tocar servicios, queries ni DB.
+
+---
+
+## Punto 2 — `getTopConsumedItems` sin límite ni paginación ✅ HECHO (parcial, a propósito)
+
+**Volumen real medido por Javi (2026-08-16):**
+```sql
+select count(*) from inventory_movements
+where movement_type = 'sale_deduction' and created_at >= now() - interval '7 days';
+-- => 185
+```
+185 vs. techo de 1000 → **el truncamiento nunca se ha disparado.** La card
+"Más consumido — 7 días" ha mostrado datos correctos siempre. 5.4x de margen.
+
+**Error mío durante este punto (importante):** propuse `.range(0, 4999)` como
+"cota explícita 27x arriba del volumen". **Está mal.** El `Max rows` de Supabase
+es un tope DURO del servidor: `.limit()` y `.range()` NO lo pueden exceder. Lo
+cazó el propio test de verificación (el stub simulaba el cap del servidor) y se
+confirmó con la doc de Supabase (discussions #3765). El `.range()` se quitó de la
+solución antes de aplicar nada. **Lección → `tasks/lessons.md`.**
+
+**Lo que SÍ se arregló (bug real, independiente del volumen):** la agregación se
+hacía por `name` en vez de `inventory_item_id`. Dos insumos distintos con el
+mismo nombre se fusionaban en un renglón, y toda fila con el embed sin resolver
+caía en un único bucket `'Desconocido'`.
+
+```js
+const key = m.inventory_item_id || 'unknown'
+if (!byItem[key]) byItem[key] = { id: key, name: m.inventory_items?.name || 'Desconocido', totalDeducted: 0 }
+byItem[key].totalDeducted += Math.abs(Number(m.quantity_change || 0))
+```
+
+Más `.order('id', { ascending: true })` — no sube el techo, pero hace que el día
+que tope el recorte sea determinista en vez de arbitrario. Y `key={item.id}` en
+la barra del dashboard (antes `key={item.name}`, misma colisión).
+
+**Deuda consciente:** el techo de 1000 sigue ahí. La única solución real es
+paginar con `fetchAllPages` (`services/ledger.js:15`). Documentado en un comentario
+en la propia función. Migrar cuando el volumen se acerque a 1000/semana
+(hoy 185 → hay años de margen al ritmo actual).
+
+**Verificación:** suite con stub de Supabase que simula el cap del servidor,
+corriendo la versión vieja y la nueva sobre el mismo dataset:
+- Dos "Tequila" distintos: vieja los fusiona en 1 renglón de 35.0; nueva da 2 renglones (15.0 y 20.0). ✅
+- Embed nulo: vieja colapsa en 1 bucket de 10; nueva separa en 2. ✅
+- Forma de la query: order por `id`, filtros intactos, sin `.range()` engañoso. ✅
+- A 185 filas (volumen real): suma completa. A 2400: **ambas truncan en 1000** — prueba de que el `.range()` no habría servido. ✅
+- Sigue devolviendo top 8 con 20 insumos. ✅
+- Sintaxis validada con `@babel/parser` (reports.js 717 líneas, InventoryDashboardPage.jsx 245).
