@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useCallback, useEffect, useState } from 'react'
 import { useStatus } from '../hooks/useStatus'
 import {
     getRecipeMappingsAdminData,
@@ -9,10 +8,140 @@ import {
 } from '../services/recipeMappingsAdmin'
 import AdminNav from '../components/AdminNav'
 import { useAuthStore } from '../store/authStore'
+import {
+    CAPTURE_MODES,
+    amountFromCapture,
+    bottleEquivalent,
+    referenceSizeMl,
+    sizeOptionsFor,
+    unitLabel,
+    usesBottles,
+    usesOunces,
+} from '../utils/inventoryUnits'
+
+/** Tamaño de captura por defecto: la botella de referencia del insumo. */
+function defaultSizeMl(item) {
+    const options = sizeOptionsFor(item)
+    return options.length > 0 ? String(options[0].ml) : '700'
+}
+
+/**
+ * Campo de cantidad con selector de unidad opcional.
+ *
+ * `oz` es SIEMPRE el modo por defecto: ignorar el selector reproduce exactamente
+ * el comportamiento que tenía este formulario antes de que el selector existiera.
+ * `ml` y `bottle` son opt-in. Sea cual sea el modo, lo que se guarda en
+ * `product_recipes.deduct_amount` es la unidad base del insumo — la conversión
+ * ocurre solo al capturar.
+ */
+function AmountCapture({ item, mode, amount, sizeMl, onMode, onAmount, onSizeMl }) {
+    const byOunces = usesOunces(item)
+    const isBottle = byOunces && mode === CAPTURE_MODES.BOTTLE
+    const isMl = byOunces && mode === CAPTURE_MODES.ML
+
+    const computed = amountFromCapture({ item, mode, amount, sizeMl })
+    const equivalent = bottleEquivalent(item, computed)
+
+    const captureUnit = !byOunces
+        ? (unitLabel(item && item.unit_type) || 'units')
+        : isBottle ? 'bottles'
+        : isMl ? 'ml'
+        : 'oz'
+
+    return (
+        <div>
+            <label style={{ display: 'block', marginBottom: '8px' }}>
+                Deduct amount{item ? ` (${captureUnit})` : ''}
+            </label>
+
+            {byOunces && (
+                <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
+                    {[
+                        { key: CAPTURE_MODES.OZ, label: 'oz' },
+                        { key: CAPTURE_MODES.ML, label: 'ml' },
+                        { key: CAPTURE_MODES.BOTTLE, label: 'bottle' },
+                    ].map((option) => (
+                        <button
+                            key={option.key}
+                            type="button"
+                            onClick={() => onMode(option.key)}
+                            style={{
+                                flex: 1,
+                                padding: '8px 10px',
+                                borderRadius: '8px',
+                                border: '1px solid',
+                                borderColor: mode === option.key ? '#4a90d9' : '#333',
+                                background: mode === option.key ? '#1d3557' : 'transparent',
+                                color: mode === option.key ? '#e2e8f0' : '#777',
+                                cursor: 'pointer',
+                                fontSize: '13px',
+                                fontWeight: mode === option.key ? 700 : 400,
+                            }}
+                        >
+                            {option.label}
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+                <input
+                    type="number"
+                    min="0"
+                    step={isBottle ? '1' : '0.01'}
+                    inputMode="decimal"
+                    value={amount}
+                    onChange={(event) => onAmount(event.target.value)}
+                    placeholder={isBottle ? '1' : isMl ? '45' : '1.5'}
+                    style={{ ...inputStyle, flex: isBottle ? '0 0 110px' : '1' }}
+                />
+
+                {isBottle && (
+                    <select
+                        value={sizeMl}
+                        onChange={(event) => onSizeMl(event.target.value)}
+                        style={{ ...inputStyle, flex: 1 }}
+                    >
+                        {sizeOptionsFor(item).map((option) => (
+                            <option key={option.ml} value={String(option.ml)}>{option.label}</option>
+                        ))}
+                    </select>
+                )}
+            </div>
+
+            <div
+                style={{
+                    marginTop: '10px',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    background: computed > 0 ? '#13251a' : '#141414',
+                    border: `1px solid ${computed > 0 ? '#2e7d32' : '#2a2a2a'}`,
+                    fontSize: '13px',
+                    lineHeight: 1.5,
+                }}
+            >
+                {computed > 0 ? (
+                    <>
+                        <div>
+                            {isBottle && `${Number(amount)} × ${sizeMl} ml = `}
+                            {isMl && `${Number(amount)} ml = `}
+                            <strong>{computed} {unitLabel(item && item.unit_type)}</strong> per unit sold
+                        </div>
+                        {equivalent && !isBottle && (
+                            <div style={{ opacity: 0.7 }}>{equivalent}</div>
+                        )}
+                    </>
+                ) : (
+                    <span style={{ opacity: 0.55 }}>
+                        {item ? 'Enter an amount above zero.' : 'Select an inventory item first.'}
+                    </span>
+                )}
+            </div>
+        </div>
+    )
+}
 
 function RecipeMappingAdminPage() {
-    const navigate = useNavigate()
-
     const [products, setProducts] = useState([])
     const [categories, setCategories] = useState([])
     const [inventoryItems, setInventoryItems] = useState([])
@@ -25,6 +154,8 @@ function RecipeMappingAdminPage() {
     const [selectedProductId, setSelectedProductId] = useState('all')
     const [newInventoryItemId, setNewInventoryItemId] = useState('')
     const [newDeductAmount, setNewDeductAmount] = useState('')
+    const [newCaptureMode, setNewCaptureMode] = useState(CAPTURE_MODES.OZ)
+    const [newSizeMl, setNewSizeMl] = useState('700')
 
     // ── Filtros (cliente, sin tocar el servicio) ──────────────
     const [productSearch, setProductSearch] = useState('')
@@ -35,17 +166,15 @@ function RecipeMappingAdminPage() {
     const [editForm, setEditForm] = useState({
         inventory_item_id: '',
         deduct_amount: '',
+        capture_mode: CAPTURE_MODES.OZ,
+        size_ml: '700',
         active: true,
     })
 
     const currentUser = useAuthStore(state => state.user)
     const isAdmin = currentUser?.role === 'admin'
 
-    useEffect(() => {
-        loadData()
-    }, [])
-
-    async function loadData() {
+    const loadData = useCallback(async () => {
         setLoading(true)
         setStatus('Loading recipe mappings...')
 
@@ -57,22 +186,32 @@ function RecipeMappingAdminPage() {
             return
         }
 
-        const safeProducts = data?.products || []
-        const safeCategories = data?.categories || []
-        const safeInventoryItems = data?.inventoryItems || []
-        const safeRecipeRows = data?.recipeRows || []
-
-        setProducts(safeProducts)
-        setCategories(safeCategories)
-        setInventoryItems(safeInventoryItems)
-        setRecipeRows(safeRecipeRows)
-
-        if (!selectedProductId && safeProducts.length > 0) {
-            setSelectedProductId(safeProducts[0].id)
-        }
+        setProducts(data?.products || [])
+        setCategories(data?.categories || [])
+        setInventoryItems(data?.inventoryItems || [])
+        setRecipeRows(data?.recipeRows || [])
 
         setStatus('Recipe mappings loaded.')
         setLoading(false)
+    }, [setStatus])
+
+    useEffect(() => {
+        loadData()
+    }, [loadData])
+
+    function findInventoryItem(id) {
+        return inventoryItems.find((item) => item.id === id) || null
+    }
+
+    const newItem = findInventoryItem(newInventoryItemId)
+    const editItem = findInventoryItem(editForm.inventory_item_id)
+
+    function handleNewInventoryItem(id) {
+        setNewInventoryItemId(id)
+        // El modo vuelve a oz al cambiar de insumo: nunca se hereda un modo de
+        // captura que pertenecía a un insumo distinto.
+        setNewCaptureMode(CAPTURE_MODES.OZ)
+        setNewSizeMl(defaultSizeMl(findInventoryItem(id)))
     }
 
     async function handleCreateRecipe(event) {
@@ -93,11 +232,14 @@ function RecipeMappingAdminPage() {
             return
         }
 
-        if (
-            newDeductAmount === '' ||
-            Number.isNaN(Number(newDeductAmount)) ||
-            Number(newDeductAmount) <= 0
-        ) {
+        const deductAmount = amountFromCapture({
+            item: newItem,
+            mode: newCaptureMode,
+            amount: newDeductAmount,
+            sizeMl: newSizeMl,
+        })
+
+        if (deductAmount <= 0) {
             setStatus('Deduct amount must be greater than 0.')
             return
         }
@@ -108,7 +250,7 @@ function RecipeMappingAdminPage() {
         const { error } = await createRecipeMapping({
             productId: selectedProductId,
             inventoryItemId: newInventoryItemId,
-            deductAmount: Number(newDeductAmount),
+            deductAmount,
         })
 
         if (error) {
@@ -119,6 +261,7 @@ function RecipeMappingAdminPage() {
 
         setNewInventoryItemId('')
         setNewDeductAmount('')
+        setNewCaptureMode(CAPTURE_MODES.OZ)
         setIsSaving(false)
 
         await loadData()
@@ -126,10 +269,16 @@ function RecipeMappingAdminPage() {
     }
 
     function startEdit(row) {
+        const item = findInventoryItem(row.inventory_item_id)
+        // Se abre SIEMPRE en oz con el valor guardado tal cual. No se intenta
+        // inferir que "esto eran 1.5 botellas": adivinarlo reescribiría valores
+        // en silencio al guardar.
         setEditingId(row.id)
         setEditForm({
             inventory_item_id: row.inventory_item_id || '',
-            deduct_amount: String(row.deduct_amount ?? ''),
+            deduct_amount: String(row.deduct_amount == null ? '' : row.deduct_amount),
+            capture_mode: CAPTURE_MODES.OZ,
+            size_ml: defaultSizeMl(item),
             active: Boolean(row.active),
         })
     }
@@ -139,6 +288,8 @@ function RecipeMappingAdminPage() {
         setEditForm({
             inventory_item_id: '',
             deduct_amount: '',
+            capture_mode: CAPTURE_MODES.OZ,
+            size_ml: '700',
             active: true,
         })
     }
@@ -154,11 +305,14 @@ function RecipeMappingAdminPage() {
             return
         }
 
-        if (
-            editForm.deduct_amount === '' ||
-            Number.isNaN(Number(editForm.deduct_amount)) ||
-            Number(editForm.deduct_amount) <= 0
-        ) {
+        const deductAmount = amountFromCapture({
+            item: editItem,
+            mode: editForm.capture_mode,
+            amount: editForm.deduct_amount,
+            sizeMl: editForm.size_ml,
+        })
+
+        if (deductAmount <= 0) {
             setStatus('Deduct amount must be greater than 0.')
             return
         }
@@ -168,7 +322,7 @@ function RecipeMappingAdminPage() {
         const { error } = await updateRecipeMapping({
             recipeId,
             inventoryItemId: editForm.inventory_item_id,
-            deductAmount: Number(editForm.deduct_amount),
+            deductAmount,
             active: editForm.active,
         })
 
@@ -211,16 +365,11 @@ function RecipeMappingAdminPage() {
     )
 
     const coveredProducts = requiredInventoryProducts.filter((product) =>
-        recipeRows.some(
-            (row) => row.product_id === product.id && row.active
-        )
+        recipeRows.some((row) => row.product_id === product.id && row.active)
     )
 
     const missingRecipeProducts = requiredInventoryProducts.filter(
-        (product) =>
-            !recipeRows.some(
-                (row) => row.product_id === product.id && row.active
-            )
+        (product) => !recipeRows.some((row) => row.product_id === product.id && row.active)
     )
 
     // ── Filtros (cliente) ─────────────────────────────────────
@@ -247,20 +396,11 @@ function RecipeMappingAdminPage() {
     })
 
     function getCategoryName(categoryId) {
-        return (
-            categories.find((category) => category.id === categoryId)?.name ||
-            'Sin categoría'
-        )
-    }
-    function getProductName(productId) {
-        return products.find((product) => product.id === productId)?.name || 'Unknown product'
+        return categories.find((category) => category.id === categoryId)?.name || 'Sin categoría'
     }
 
-    function getInventoryItemName(inventoryItemId) {
-        return (
-            inventoryItems.find((item) => item.id === inventoryItemId)?.name ||
-            'Unknown inventory item'
-        )
+    function getProductName(productId) {
+        return products.find((product) => product.id === productId)?.name || 'Unknown product'
     }
 
     if (!currentUser) {
@@ -294,60 +434,57 @@ function RecipeMappingAdminPage() {
 
                 <AdminNav currentPath="/admin/recipe-mappings" />
 
-                <h1 style={{ marginTop: 0 }}>Recipe Mapping Administration</h1>
-                <p style={{ opacity: 0.85, color: statusColor }}>{status}</p>
+                <h1 style={{ margin: '0 0 6px', fontSize: '26px' }}>Recipe Mapping Administration</h1>
+                <p style={{ margin: '0 0 12px', fontSize: '13px', color: '#8b8b8b', lineHeight: 1.5 }}>
+                    Every product marked <strong>requires inventory</strong> needs at least one active
+                    recipe mapping — otherwise POS sales will not deduct inventory.
+                </p>
+                <p style={{ margin: '0 0 16px', fontSize: '13px', color: statusColor }}>{status}</p>
+
+                {/* Coverage summary: fila delgada, no tarjeta */}
                 <div
                     style={{
-                        display: 'grid',
-                        gridTemplateColumns: '1fr 1fr',
-                        gap: '16px',
-                        marginBottom: '24px',
+                        display: 'flex',
+                        gap: '28px',
+                        flexWrap: 'wrap',
+                        alignItems: 'baseline',
+                        background: '#181818',
+                        border: '1px solid #2f2f2f',
+                        borderRadius: '12px',
+                        padding: '14px 20px',
+                        marginBottom: '16px',
                     }}
                 >
-                    <div
-                        style={{
-                            background: '#181818',
-                            border: '1px solid #2f2f2f',
-                            borderRadius: '16px',
-                            padding: '20px',
-                        }}
-                    >
-                        <h2 style={{ marginTop: 0, marginBottom: '12px' }}>Recipe Coverage Summary</h2>
-
-                        <div style={{ opacity: 0.9, lineHeight: 1.6 }}>
-                            <div>Total active products requiring inventory: <strong>{requiredInventoryProducts.length}</strong></div>
-                            <div style={{ color: '#8fe388' }}>
-                                Covered with active recipe: <strong>{coveredProducts.length}</strong>
-                            </div>
-                            <div style={{ color: '#ff8a8a' }}>
-                                Missing active recipe: <strong>{missingRecipeProducts.length}</strong>
-                            </div>
+                    {[
+                        { value: requiredInventoryProducts.length, label: 'require inventory', color: 'white' },
+                        { value: coveredProducts.length, label: 'with recipe', color: '#8fe388' },
+                        { value: missingRecipeProducts.length, label: 'missing recipe', color: '#ff8a8a' },
+                    ].map((stat) => (
+                        <div key={stat.label}>
+                            <span style={{ fontSize: '22px', fontWeight: 700, color: stat.color }}>{stat.value}</span>
+                            <span
+                                style={{
+                                    fontSize: '12px',
+                                    color: '#8b8b8b',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.07em',
+                                    marginLeft: '8px',
+                                }}
+                            >
+                                {stat.label}
+                            </span>
                         </div>
-                    </div>
-
-                    <div
-                        style={{
-                            background: '#181818',
-                            border: '1px solid #2f2f2f',
-                            borderRadius: '16px',
-                            padding: '20px',
-                        }}
-                    >
-                        <h2 style={{ marginTop: 0, marginBottom: '12px' }}>Operational Note</h2>
-                        <div style={{ opacity: 0.9, lineHeight: 1.6 }}>
-                            Products marked with <strong>requires inventory</strong> should have at least one
-                            active recipe mapping. Otherwise, POS sales may not deduct inventory as expected.
-                        </div>
-                    </div>
+                    ))}
                 </div>
 
+                {/* Filtros */}
                 <div
                     style={{
                         background: '#181818',
                         border: '1px solid #2f2f2f',
                         borderRadius: '16px',
                         padding: '16px 20px',
-                        marginBottom: '24px',
+                        marginBottom: '20px',
                         display: 'flex',
                         gap: '12px',
                         flexWrap: 'wrap',
@@ -381,171 +518,163 @@ function RecipeMappingAdminPage() {
                     </label>
                 </div>
 
-                <div
-                    style={{
-                        background: '#181818',
-                        border: '1px solid #2f2f2f',
-                        borderRadius: '16px',
-                        padding: '20px',
-                        marginBottom: '24px',
-                    }}
-                >
-                    <h2 style={{ marginTop: 0, marginBottom: '12px' }}>
-                        Products Missing Active Recipe
-                    </h2>
+                {/* Módulo de trabajo: arriba, visible sin scroll */}
+                <div style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: '24px', alignItems: 'start' }}>
 
-                    {missingRecipeProducts.length === 0 ? (
-                        <div
-                            style={{
-                                padding: '12px 14px',
-                                borderRadius: '10px',
-                                background: '#17351f',
-                                border: '1px solid #2e7d32',
-                                color: '#d8ffe6',
-                                fontWeight: 'bold',
-                            }}
-                        >
-                            All active products that require inventory currently have at least one active recipe mapping.
+                    <div>
+                        <div style={{ ...panelStyle, marginBottom: '16px' }}>
+                            <h2 style={{ marginTop: 0, fontSize: '18px' }}>Create Recipe Mapping</h2>
+
+                            <form onSubmit={handleCreateRecipe}>
+                                <div style={{ marginBottom: '14px' }}>
+                                    <label style={{ display: 'block', marginBottom: '8px' }}>Product</label>
+                                    <select
+                                        value={selectedProductId}
+                                        onChange={(event) => setSelectedProductId(event.target.value)}
+                                        style={inputStyle}
+                                    >
+                                        <option value="">Select product</option>
+                                        {visibleProducts.map((product) => (
+                                            <option key={product.id} value={product.id}>{product.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div style={{ marginBottom: '14px' }}>
+                                    <label style={{ display: 'block', marginBottom: '8px' }}>Inventory item</label>
+                                    <select
+                                        value={newInventoryItemId}
+                                        onChange={(event) => handleNewInventoryItem(event.target.value)}
+                                        style={inputStyle}
+                                    >
+                                        <option value="">Select inventory item</option>
+                                        {inventoryItems.map((item) => (
+                                            <option key={item.id} value={item.id}>
+                                                {item.name} ({item.unit_type}
+                                                {usesBottles(item) ? `, ${referenceSizeMl(item)} ml` : ''})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div style={{ marginBottom: '16px' }}>
+                                    <AmountCapture
+                                        item={newItem}
+                                        mode={newCaptureMode}
+                                        amount={newDeductAmount}
+                                        sizeMl={newSizeMl}
+                                        onMode={setNewCaptureMode}
+                                        onAmount={setNewDeductAmount}
+                                        onSizeMl={setNewSizeMl}
+                                    />
+                                </div>
+
+                                <button type="submit" disabled={isSaving} style={primaryButtonStyle}>
+                                    {isSaving ? 'Creating...' : 'Create Mapping'}
+                                </button>
+                            </form>
                         </div>
-                    ) : visibleMissingRecipeProducts.length === 0 ? (
-                        <div style={{ padding: '12px 14px', color: '#888', fontSize: '13px' }}>
-                            Sin resultados con estos filtros.
-                        </div>
-                    ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                            {visibleMissingRecipeProducts.map((product) => (
-                                <div
-                                    key={product.id}
+
+                        {/* Pendientes: chips, pegados al formulario que alimentan */}
+                        <div style={panelStyle}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                                <span
                                     style={{
-                                        border: '1px solid #6b2a2a',
-                                        borderRadius: '12px',
-                                        padding: '14px',
-                                        background: '#2a1414',
+                                        fontSize: '11px',
+                                        fontWeight: 700,
+                                        letterSpacing: '0.1em',
+                                        textTransform: 'uppercase',
+                                        color: '#6b6b6b',
                                     }}
                                 >
-                                    <div style={{ fontSize: '17px', fontWeight: 'bold', color: '#ffd7d7' }}>
-                                        {product.name}
-                                    </div>
-                                    <div style={{ opacity: 0.9 }}>
-                                        Category: {getCategoryName(product.category_id)}
-                                    </div>
-                                    <div style={{ opacity: 0.9 }}>
-                                        Status: Missing recipe mapping
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setSelectedProductId(product.id)}
+                                    Missing recipe
+                                </span>
+                                {missingRecipeProducts.length > 0 && (
+                                    <span
                                         style={{
-                                            marginTop: '10px',
-                                            padding: '10px 14px',
-                                            borderRadius: '8px',
-                                            border: '1px solid #555',
-                                            background: '#5a3d1e',
-                                            color: 'white',
-                                            cursor: 'pointer',
-                                            fontWeight: 'bold',
+                                            padding: '2px 8px',
+                                            borderRadius: '20px',
+                                            fontSize: '11px',
+                                            fontWeight: 700,
+                                            background: '#3a1414',
+                                            color: '#ff9a9a',
+                                            border: '1px solid #6b2a2a',
                                         }}
                                     >
-                                        Select in mapping form
-                                    </button>
+                                        {missingRecipeProducts.length}
+                                    </span>
+                                )}
+                            </div>
+
+                            {missingRecipeProducts.length === 0 ? (
+                                <div
+                                    style={{
+                                        padding: '10px 12px',
+                                        borderRadius: '8px',
+                                        background: '#17351f',
+                                        border: '1px solid #2e7d32',
+                                        color: '#d8ffe6',
+                                        fontSize: '13px',
+                                    }}
+                                >
+                                    Every active product requiring inventory has a recipe.
                                 </div>
-                            ))}
+                            ) : visibleMissingRecipeProducts.length === 0 ? (
+                                <div style={{ color: '#888', fontSize: '13px' }}>Sin resultados con estos filtros.</div>
+                            ) : (
+                                <>
+                                    <div
+                                        style={{
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            gap: '6px',
+                                            maxHeight: '260px',
+                                            overflowY: 'auto',
+                                        }}
+                                    >
+                                        {visibleMissingRecipeProducts.map((product) => (
+                                            <button
+                                                key={product.id}
+                                                type="button"
+                                                onClick={() => setSelectedProductId(product.id)}
+                                                style={{
+                                                    display: 'flex',
+                                                    justifyContent: 'space-between',
+                                                    gap: '8px',
+                                                    width: '100%',
+                                                    textAlign: 'left',
+                                                    padding: '7px 10px',
+                                                    borderRadius: '7px',
+                                                    border: '1px solid',
+                                                    borderColor: selectedProductId === product.id ? '#b8574f' : '#4a2020',
+                                                    background: selectedProductId === product.id ? '#3a1a1a' : '#1e1212',
+                                                    color: '#ffc9c9',
+                                                    cursor: 'pointer',
+                                                    fontSize: '12.5px',
+                                                }}
+                                            >
+                                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                    {product.name}
+                                                </span>
+                                                <span style={{ color: '#8b6b6b', fontSize: '11.5px', whiteSpace: 'nowrap' }}>
+                                                    {getCategoryName(product.category_id)}
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <p style={{ margin: '12px 0 0', fontSize: '12px', color: '#777', lineHeight: 1.5 }}>
+                                        Click one to load it into the form above.
+                                    </p>
+                                </>
+                            )}
                         </div>
-                    )}
-                </div>
-
-                <div
-                    style={{
-                        display: 'grid',
-                        gridTemplateColumns: '400px 1fr',
-                        gap: '24px',
-                        alignItems: 'start',
-                    }}
-                >
-                    <div
-                        style={{
-                            background: '#181818',
-                            border: '1px solid #2f2f2f',
-                            borderRadius: '16px',
-                            padding: '20px',
-                        }}
-                    >
-                        <h2 style={{ marginTop: 0 }}>Create Recipe Mapping</h2>
-
-                        <form onSubmit={handleCreateRecipe}>
-                            <div style={{ marginBottom: '14px' }}>
-                                <label style={{ display: 'block', marginBottom: '8px' }}>Product</label>
-                                <select
-                                    value={selectedProductId}
-                                    onChange={(event) => setSelectedProductId(event.target.value)}
-                                    style={inputStyle}
-                                >
-                                    <option value="">Select product</option>
-                                    {visibleProducts.map((product) => (
-                                        <option key={product.id} value={product.id}>
-                                            {product.name}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div style={{ marginBottom: '14px' }}>
-                                <label style={{ display: 'block', marginBottom: '8px' }}>
-                                    Inventory item
-                                </label>
-                                <select
-                                    value={newInventoryItemId}
-                                    onChange={(event) => setNewInventoryItemId(event.target.value)}
-                                    style={inputStyle}
-                                >
-                                    <option value="">Select inventory item</option>
-                                    {inventoryItems.map((item) => (
-                                        <option key={item.id} value={item.id}>
-                                            {item.name} ({item.unit_type})
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div style={{ marginBottom: '14px' }}>
-                                <label style={{ display: 'block', marginBottom: '8px' }}>
-                                    Deduct amount
-                                </label>
-                                <input
-                                    type="number"
-                                    min="0.01"
-                                    step="0.01"
-                                    value={newDeductAmount}
-                                    onChange={(event) => setNewDeductAmount(event.target.value)}
-                                    placeholder="Example: 1 or 1.5"
-                                    style={inputStyle}
-                                />
-                            </div>
-
-                            <button
-                                type="submit"
-                                disabled={isSaving}
-                                style={primaryButtonStyle}
-                            >
-                                {isSaving ? 'Creating...' : 'Create Mapping'}
-                            </button>
-                        </form>
                     </div>
 
-                    <div
-                        style={{
-                            background: '#181818',
-                            border: '1px solid #2f2f2f',
-                            borderRadius: '16px',
-                            padding: '20px',
-                        }}
-                    >
-                        <h2 style={{ marginTop: 0 }}>Current Mappings</h2>
+                    <div style={panelStyle}>
+                        <h2 style={{ marginTop: 0, fontSize: '18px' }}>Current Mappings</h2>
 
                         <div style={{ marginBottom: '16px' }}>
-                            <label style={{ display: 'block', marginBottom: '8px' }}>
-                                Filter by product
-                            </label>
+                            <label style={{ display: 'block', marginBottom: '8px' }}>Filter by product</label>
                             <select
                                 value={selectedProductId}
                                 onChange={(event) => setSelectedProductId(event.target.value)}
@@ -554,9 +683,7 @@ function RecipeMappingAdminPage() {
                                 <option value="all">Todos los productos</option>
                                 <option value="">— Seleccionar para crear —</option>
                                 {visibleProducts.map((product) => (
-                                    <option key={product.id} value={product.id}>
-                                        {product.name}
-                                    </option>
+                                    <option key={product.id} value={product.id}>{product.name}</option>
                                 ))}
                             </select>
                         </div>
@@ -564,7 +691,7 @@ function RecipeMappingAdminPage() {
                         {loading ? (
                             <div>Loading...</div>
                         ) : filteredRecipeRows.length === 0 ? (
-                            <div>
+                            <div style={{ color: '#888', fontSize: '13px' }}>
                                 {selectedProductId === 'all'
                                     ? 'No recipe mappings found for these filters.'
                                     : <>No recipe mappings found for <strong>{getProductName(selectedProductId)}</strong>.</>}
@@ -572,9 +699,11 @@ function RecipeMappingAdminPage() {
                         ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                                 {filteredRecipeRows.map((row) => {
-                                    const isEditing = editingId === row.id
+                                    const item = findInventoryItem(row.inventory_item_id)
+                                    const amount = Number(row.deduct_amount || 0)
+                                    const equivalent = bottleEquivalent(item, amount)
 
-                                    if (isEditing) {
+                                    if (editingId === row.id) {
                                         return (
                                             <div key={row.id} style={cardStyle}>
                                                 <div style={{ width: '100%' }}>
@@ -582,66 +711,57 @@ function RecipeMappingAdminPage() {
                                                         {getProductName(row.product_id)}
                                                     </div>
 
+                                                    <label style={{ display: 'block', marginBottom: '8px' }}>Inventory item</label>
                                                     <select
                                                         value={editForm.inventory_item_id}
-                                                        onChange={(event) =>
+                                                        onChange={(event) => {
+                                                            const id = event.target.value
                                                             setEditForm((prev) => ({
                                                                 ...prev,
-                                                                inventory_item_id: event.target.value,
+                                                                inventory_item_id: id,
+                                                                capture_mode: CAPTURE_MODES.OZ,
+                                                                size_ml: defaultSizeMl(findInventoryItem(id)),
                                                             }))
-                                                        }
-                                                        style={{ ...inputStyle, marginBottom: '10px' }}
+                                                        }}
+                                                        style={{ ...inputStyle, marginBottom: '14px' }}
                                                     >
                                                         <option value="">Select inventory item</option>
-                                                        {inventoryItems.map((item) => (
-                                                            <option key={item.id} value={item.id}>
-                                                                {item.name} ({item.unit_type})
+                                                        {inventoryItems.map((option) => (
+                                                            <option key={option.id} value={option.id}>
+                                                                {option.name} ({option.unit_type}
+                                                                {usesBottles(option) ? `, ${referenceSizeMl(option)} ml` : ''})
                                                             </option>
                                                         ))}
                                                     </select>
 
-                                                    <input
-                                                        type="number"
-                                                        min="0.01"
-                                                        step="0.01"
-                                                        value={editForm.deduct_amount}
-                                                        onChange={(event) =>
-                                                            setEditForm((prev) => ({
-                                                                ...prev,
-                                                                deduct_amount: event.target.value,
-                                                            }))
-                                                        }
-                                                        style={{ ...inputStyle, marginBottom: '10px' }}
-                                                    />
+                                                    <div style={{ marginBottom: '14px' }}>
+                                                        <AmountCapture
+                                                            item={editItem}
+                                                            mode={editForm.capture_mode}
+                                                            amount={editForm.deduct_amount}
+                                                            sizeMl={editForm.size_ml}
+                                                            onMode={(mode) => setEditForm((prev) => ({ ...prev, capture_mode: mode }))}
+                                                            onAmount={(value) => setEditForm((prev) => ({ ...prev, deduct_amount: value }))}
+                                                            onSizeMl={(value) => setEditForm((prev) => ({ ...prev, size_ml: value }))}
+                                                        />
+                                                    </div>
 
                                                     <label style={checkboxRowStyle}>
                                                         <input
                                                             type="checkbox"
                                                             checked={editForm.active}
                                                             onChange={(event) =>
-                                                                setEditForm((prev) => ({
-                                                                    ...prev,
-                                                                    active: event.target.checked,
-                                                                }))
+                                                                setEditForm((prev) => ({ ...prev, active: event.target.checked }))
                                                             }
                                                         />
                                                         Active
                                                     </label>
 
                                                     <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => saveEdit(row.id)}
-                                                            style={primaryButtonStyle}
-                                                        >
+                                                        <button type="button" onClick={() => saveEdit(row.id)} style={primaryButtonStyle}>
                                                             Save
                                                         </button>
-
-                                                        <button
-                                                            type="button"
-                                                            onClick={cancelEdit}
-                                                            style={secondaryButtonStyle}
-                                                        >
+                                                        <button type="button" onClick={cancelEdit} style={secondaryButtonStyle}>
                                                             Cancel
                                                         </button>
                                                     </div>
@@ -653,36 +773,29 @@ function RecipeMappingAdminPage() {
                                     return (
                                         <div key={row.id} style={cardStyle}>
                                             <div>
-                                                <div style={{ fontSize: '18px', fontWeight: 'bold' }}>
+                                                <div style={{ fontSize: '17px', fontWeight: 'bold' }}>
                                                     {getProductName(row.product_id)}
                                                 </div>
-                                                <div style={{ opacity: 0.85 }}>
-                                                    Inventory item: {getInventoryItemName(row.inventory_item_id)}
+                                                <div style={{ opacity: 0.85, fontSize: '13px', marginTop: '3px' }}>
+                                                    Inventory item: {item ? item.name : 'Unknown inventory item'}
                                                 </div>
-                                                <div style={{ opacity: 0.85 }}>
-                                                    Deduct amount: {Number(row.deduct_amount || 0)}
+                                                <div style={{ opacity: 0.85, fontSize: '13px' }}>
+                                                    Deducts: <strong>{amount} {unitLabel(item && item.unit_type)}</strong>
+                                                    {equivalent && <span style={{ opacity: 0.65 }}> ({equivalent})</span>}
                                                 </div>
-                                                <div style={{ opacity: 0.85 }}>
-                                                    Status: {row.active ? 'Active' : 'Inactive'}
-                                                </div>
+                                                {!row.active && (
+                                                    <div style={{ fontSize: '12px', color: '#ff8a8a', marginTop: '3px' }}>Inactive</div>
+                                                )}
                                             </div>
 
                                             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => startEdit(row)}
-                                                    style={secondaryButtonStyle}
-                                                >
+                                                <button type="button" onClick={() => startEdit(row)} style={secondaryButtonStyle}>
                                                     Edit
                                                 </button>
-
                                                 <button
                                                     type="button"
                                                     onClick={() => handleToggleActive(row)}
-                                                    style={{
-                                                        ...secondaryButtonStyle,
-                                                        background: row.active ? '#7a1c1c' : '#1f4d32',
-                                                    }}
+                                                    style={{ ...secondaryButtonStyle, background: row.active ? '#7a1c1c' : '#1f4d32' }}
                                                 >
                                                     {row.active ? 'Deactivate' : 'Activate'}
                                                 </button>
@@ -710,6 +823,24 @@ const inputStyle = {
     boxSizing: 'border-box',
 }
 
+const panelStyle = {
+    background: '#181818',
+    border: '1px solid #2f2f2f',
+    borderRadius: '16px',
+    padding: '20px',
+}
+
+const cardStyle = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    gap: '10px',
+    alignItems: 'flex-start',
+    border: '1px solid #2f2f2f',
+    borderRadius: '12px',
+    padding: '14px',
+    background: '#141414',
+}
+
 const checkboxRowStyle = {
     display: 'flex',
     alignItems: 'center',
@@ -728,24 +859,13 @@ const primaryButtonStyle = {
 }
 
 const secondaryButtonStyle = {
-    padding: '10px 14px',
+    padding: '8px 12px',
     borderRadius: '8px',
-    border: '1px solid #555',
-    background: '#222',
-    color: 'white',
+    border: '1px solid #444',
+    background: '#242424',
+    color: '#ddd',
     cursor: 'pointer',
-    fontWeight: 'bold',
-}
-
-const cardStyle = {
-    border: '1px solid #333',
-    borderRadius: '12px',
-    padding: '14px',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: '12px',
-    background: '#121212',
+    fontSize: '12px',
 }
 
 export default RecipeMappingAdminPage

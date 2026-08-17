@@ -1810,3 +1810,105 @@ distinto para una sola página.
 - **Correr `npm run build`** — no cupo en el límite de 45s del sandbox.
 - **Borrar `_to_delete/__origcheck.jsx`** — archivo temporal que generé para
   comparar el lint contra el original; el sandbox no tiene permiso de borrar.
+
+---
+
+# Pantalla de Recetas (`/admin/recipe-mappings`) — ✅ IMPLEMENTADO
+
+Se juntan en UNA tarea dos cosas que tocan los mismos formularios: la conversión
+de unidades y el reordenamiento del layout. Hacerlo en dos pasadas implicaría
+reescribir el formulario dos veces.
+
+**Se queda en inglés** — decisión de Javi: todo el módulo de admin está en inglés.
+
+## Contexto verificado
+
+- `recipeMappingsAdmin.js` lo consume **solo** `RecipeMappingAdminPage.jsx` → agregar `capacity_oz` al select es contenido.
+- `product_recipes.deduct_amount` es `numeric(12,2)` y lo leen: `finalize_comanda_payment` (descuento al cobrar), `productCosting.js` y `reports.js` (COGS). **No es cosmético.**
+- Hoy la unidad del campo **no se muestra en ningún lado**: el form de crear dice solo "Deduct amount"; el de editar no tiene ni label; la lista dice "Deduct amount: 23.67". Se puede teclear `1` pensando "1 botella" y guardar `1 oz` sin ninguna señal.
+
+## A. Conversión de unidades
+
+- [x] Agregar `capacity_oz` al select de `inventory_items` en `getRecipeMappingsAdminData`.
+- [x] Selector de unidad junto a la cantidad, solo para insumos `oz`: **oz** (default) / **ml** / **botella**.
+    - `botella` → cantidad × tamaño (default = `capacity_oz` del insumo, cambiable) ÷ `ML_PER_OZ`
+    - Reutiliza `ozFromBottles` / `round2` de `utils/inventoryUnits.js` — el MISMO helper que la recepción de mercancía, para que 1 botella recibida y 1 botella vendida se cancelen sin residuo.
+- [x] **El default es `oz`: comportamiento idéntico al actual.** Quien ignore el selector obtiene lo mismo que hoy. Los otros modos son opt-in. (Decisión de seguridad principal.)
+- [x] Vista previa en vivo antes de guardar: `1 bot × 700 ml = 23.67 oz`.
+- [x] **Al editar, abre en modo `oz` con el valor guardado.** NO se intenta inferir que "esto eran 1.5 botellas" — adivinar reescribiría valores en silencio. La equivalencia se muestra como info de solo lectura.
+- [x] Insumos que no son `oz` (unit/kg/g/L/ml): sin selector, captura directa, **con la unidad visible**.
+- [x] Mostrar la unidad en los 3 lugares donde hoy no aparece: form de crear, form de editar, lista de recetas (`23.67 oz (≈ 1 bot de 700 ml)`).
+
+## B. Layout
+
+- [x] Módulo de configuración (Create + Current Mappings) **hasta arriba**, visible sin scroll.
+- [x] "Products Missing Active Recipe" → **chips de una línea** (`Cubanito · Cocteles`), todo el chip clicable (hace lo mismo que el botón "Select in mapping form" de hoy), con `max-height` + scroll interno. Van en la **columna izquierda, debajo del formulario**, no al fondo: así el ciclo clic→llenar→guardar no requiere scrollear.
+- [x] Quitar la línea redundante `Status: Missing recipe mapping`.
+- [x] Quitar la tarjeta **"Operational Note"** (párrafo estático que nunca cambia y come media pantalla sobre el pliegue) → pasa a subtítulo de una línea.
+- [x] **"Recipe Coverage Summary"** → fila delgada de 3 números en vez de tarjeta.
+- [x] La barra de filtros se queda; los pendientes siguen respetando los filtros (`visibleMissingRecipeProducts`).
+
+## Verificación
+
+1. Tests sobre `inventoryUnits.js` extendido (`ozFromMl`, modos de captura) importando el archivo real desde node.
+2. **Prueba de no-regresión del default:** con el selector en `oz`, la cantidad enviada debe ser byte-idéntica a la que manda el código actual, para una batería de valores (1, 1.5, 23.67, 0.25).
+3. **Round-trip contra la recepción de mercancía:** `ozFromBottles(1, 700)` en recetas === el mismo valor que suma la pantalla de inventario. Sin deriva.
+4. Redondeo a `numeric(12,2)`: 45 ml → `1.52`.
+5. Entradas inválidas (vacío, 0, negativo, texto, sin tamaño) → bloqueadas, nunca guardan.
+6. `@babel/parser` + `npx eslint` sobre los archivos tocados.
+
+**Riesgo:** bajo. Layout = cero. Servicio = casi cero (consumidor único). El riesgo
+vive en el selector de unidad, contenido por el default en `oz` y por reutilizar el
+helper ya probado. Sin migración ni backfill: las recetas existentes no se tocan.
+
+**Caveat conocido:** `numeric(12,2)` — un shot de 45 ml se guarda como `1.52 oz`
+(= 44.95 ml). 0.05 ml de pérdida por trago, irrelevante en la práctica.
+
+---
+
+## Recetas — RESULTADO (2026-08-16)
+
+### Archivos
+
+- `src/services/recipeMappingsAdmin.js` — `capacity_oz` agregado al select de `inventory_items` (consumidor único: esta página).
+- `src/utils/inventoryUnits.js` — nuevos `ozFromMl`, `CAPTURE_MODES`, `amountFromCapture`, `usesOunces`, `bottleEquivalent`.
+- `src/pages/RecipeMappingAdminPage.jsx` — reescrita (872 líneas).
+
+### Componente `AmountCapture`
+
+Compartido por el form de crear y el de editar, así la validación y la vista
+previa no pueden divergir entre los dos. Modos `oz` / `ml` / `bottle`, solo
+visibles cuando el insumo se mide en onzas.
+
+### Verificación — 60+ aserciones, todas OK
+
+**La prueba central (no-regresión):** se replicó el cálculo del código anterior
+(`Number(newDeductAmount)`) y se comparó contra el nuevo con el selector en `oz`,
+para 10 valores × 4 tipos de insumo (oz con capacity, oz sin capacity, unit, kg).
+**Resultado idéntico en los 40 casos.** Quien no toque el selector no puede verse
+afectado por este cambio.
+
+**Round-trip contra la recepción de mercancía:** `ozFromBottles(b, ml)` da el
+mismo valor en las dos pantallas para 1/6/1/3 botellas × 700/700/1000/750 ml.
+1 botella recibida suma exactamente lo que 1 botella vendida descuenta: cero deriva.
+
+**El modo se ignora en insumos que no son `oz`:** para un `unit` o un `kg`, los
+tres modos devuelven el mismo número. Es imposible convertir por error un insumo
+que no está en onzas.
+
+**Entradas inválidas** (vacío, cero, negativo, texto, espacios, botella sin
+tamaño) → 0 en los tres modos → guardado bloqueado.
+
+**Equivalencia en la lista:** `23.67 oz (≈ 1.0 bot de 700 ml)`. Un trago de
+1.5 oz NO muestra "≈ 0.06 bot" — por debajo de 0.1 bot se omite, sería ruido.
+Insumos sin `capacity_oz` nunca muestran equivalencia falsa.
+
+### Lint
+
+Solo queda el `react-hooks/set-state-in-effect` preexistente y repo-wide (mismo
+que Dashboard, Ledger, Analytics). Cero errores nuevos.
+
+### Pendiente para Javi
+
+- `npm run build`
+- Borrar `_to_delete/__origcheck.jsx`

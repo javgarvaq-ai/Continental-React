@@ -31,6 +31,7 @@ export async function getRecipeMappingsAdminData() {
             id,
             name,
             unit_type,
+            capacity_oz,
             active
         `)
         .order('name', { ascending: true })

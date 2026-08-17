@@ -54,6 +54,66 @@ export function ozFromBottles(bottles, sizeMl) {
     return round2((count * ml) / ML_PER_OZ)
 }
 
+/** Convierte mililitros a onzas, redondeado a 2 decimales. */
+export function ozFromMl(ml) {
+    const value = Number(ml)
+    if (!Number.isFinite(value) || value <= 0) return 0
+    return round2(value / ML_PER_OZ)
+}
+
+/**
+ * Modos de captura de una cantidad para insumos medidos en `oz`.
+ * `oz` es el default en toda la UI: replica exactamente el comportamiento previo
+ * a que existiera este selector, así que quien lo ignore obtiene lo de siempre.
+ */
+export const CAPTURE_MODES = {
+    OZ: 'oz',
+    ML: 'ml',
+    BOTTLE: 'bottle',
+}
+
+/**
+ * Cantidad final en la unidad base del insumo, según el modo de captura.
+ *
+ * `mode` solo aplica a insumos `oz`; para cualquier otro tipo la cantidad se
+ * toma tal cual (redondeada). Devuelve 0 ante cualquier entrada inválida —
+ * el llamador usa eso para bloquear el guardado.
+ */
+export function amountFromCapture({ item, mode, amount, sizeMl }) {
+    if (!usesOunces(item)) {
+        const direct = Number(amount)
+        if (!Number.isFinite(direct) || direct <= 0) return 0
+        return round2(direct)
+    }
+
+    if (mode === CAPTURE_MODES.BOTTLE) return ozFromBottles(amount, sizeMl)
+    if (mode === CAPTURE_MODES.ML) return ozFromMl(amount)
+
+    const oz = Number(amount)
+    if (!Number.isFinite(oz) || oz <= 0) return 0
+    return round2(oz)
+}
+
+/** ¿El insumo se mide en onzas? (independiente de si tiene capacity_oz) */
+export function usesOunces(item) {
+    return Boolean(item) && item.unit_type === 'oz'
+}
+
+/**
+ * Equivalencia en botellas de una cantidad en oz, para mostrar junto al número
+ * guardado. Siempre nombra el tamaño de referencia — sin él, "1.0 bot" sería
+ * una cifra sin sentido cuando el insumo llega en varias presentaciones.
+ * Devuelve '' si el insumo no tiene tamaño de referencia.
+ */
+export function bottleEquivalent(item, amountOz) {
+    if (!usesBottles(item)) return ''
+    const oz = Number(amountOz)
+    if (!Number.isFinite(oz) || oz <= 0) return ''
+    const bottles = oz / Number(item.capacity_oz)
+    if (bottles < 0.1) return ''
+    return `≈ ${bottles.toFixed(bottles < 1 ? 2 : 1)} bot de ${referenceSizeMl(item)} ml`
+}
+
 /**
  * Cantidad a sumar al stock, en la unidad base del insumo.
  * Insumos en botellas → convierte. El resto → la cantidad tal cual.
