@@ -2,10 +2,13 @@
  * Conversión de unidades de inventario — funciones puras (sin React, sin imports).
  *
  * Contexto: los destilados se almacenan en ONZAS, pero la mercancía llega en
- * BOTELLAS, y no todas las botellas del mismo insumo son del mismo tamaño
- * (700 ml, 750 ml, 900 ml, 1 L…). `inventory_items.capacity_oz` guarda el tamaño
- * de REFERENCIA de cada insumo — el habitual, del que se derivó su `unit_cost`.
- * En la captura ese tamaño es solo el default: se puede cambiar por entrega.
+ * BOTELLAS, y no todas las botellas del mismo insumo son del mismo tamaño.
+ * Tamaños reales en la base al 2026-08-16: 695, 700, 750, 950, 1000 y 1750 ml —
+ * incluidas presentaciones fuera de lo estándar, por eso el tamaño SIEMPRE se
+ * puede escribir libre y los presets son solo un atajo.
+ * `inventory_items.capacity_oz` guarda el tamaño de REFERENCIA de cada insumo —
+ * el habitual, del que se derivó su `unit_cost`. En la captura ese tamaño es
+ * solo el default: se puede cambiar por entrega.
  *
  * Todo lo que se manda a la base pasa por `round2`: `current_stock`,
  * `capacity_oz` y `quantity_change` son `numeric(12,2)`, y en JS
@@ -14,8 +17,14 @@
 
 export const ML_PER_OZ = 29.5735296
 
-/** Presentaciones comunes ofrecidas en el selector, además de la habitual del insumo. */
-export const BOTTLE_SIZES_ML = [700, 750, 900, 1000, 1750]
+/**
+ * Presentaciones ofrecidas como atajo, además de la habitual del insumo.
+ * Tomadas de los tamaños que EXISTEN en la base (verificado 2026-08-16):
+ * 695(2) · 700(21) · 750(25) · 950(1) · 1000(8) · 1750(1).
+ * No son una lista cerrada — el tamaño siempre se puede escribir libre, porque
+ * hay presentaciones fuera de lo estándar (las de 695 ml son reales).
+ */
+export const BOTTLE_SIZES_ML = [700, 750, 950, 1000, 1750]
 
 /** Redondea a 2 decimales — las columnas de inventario son numeric(12,2). */
 export function round2(value) {
@@ -150,6 +159,44 @@ export function sizeOptionsFor(item) {
         if (ml !== reference) options.push({ ml, label: `${ml} ml` })
     })
     return options
+}
+
+/**
+ * Convierte onzas a mililitros, redondeado al entero.
+ * Verificado 2026-08-16: el viaje redondo ml → capacity_oz (numeric(12,2)) → ml
+ * es exacto para TODO el rango 100–2000 ml, así que capturar en ml no pierde
+ * información y abrir/guardar un insumo existente no corre su capacidad.
+ */
+export function mlFromOz(oz) {
+    const value = Number(oz)
+    if (!Number.isFinite(value) || value <= 0) return 0
+    return Math.round(value * ML_PER_OZ)
+}
+
+/**
+ * Capacidad a guardar en `inventory_items.capacity_oz` a partir de ml.
+ *
+ * Devuelve `null` —y no 0— cuando no aplica o viene vacío: `0` apagaría en
+ * silencio el modo botella en recetas y recepción (`usesBottles` exige > 0) y
+ * además miente ("botella de cero onzas" vs "no capturado").
+ */
+export function capacityOzFromMl(ml, unitType) {
+    if (unitType !== 'oz') return null
+    const value = Number(ml)
+    if (!Number.isFinite(value) || value <= 0) return null
+    return round2(value / ML_PER_OZ)
+}
+
+/**
+ * Costo por unidad base a partir del precio de una botella completa.
+ * `unit_cost` es numeric(12,4), así que se conserva a 4 decimales:
+ * $290 de una botella de 700 ml → 12.2518 / oz.
+ */
+export function unitCostFromBottlePrice(price, capacityOz) {
+    const p = Number(price)
+    const cap = Number(capacityOz)
+    if (!Number.isFinite(p) || !Number.isFinite(cap) || p <= 0 || cap <= 0) return 0
+    return Math.round((p / cap) * 10000) / 10000
 }
 
 /**

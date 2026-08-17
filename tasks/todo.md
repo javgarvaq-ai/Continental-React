@@ -1912,3 +1912,121 @@ que Dashboard, Ledger, Analytics). Cero errores nuevos.
 
 - `npm run build`
 - Borrar `_to_delete/__origcheck.jsx`
+
+---
+
+# `/admin/inventory-items` — ✅ IMPLEMENTADO
+
+**Contexto:** Javi va a hacer un inventario completo grande (recetas y costos
+incluidos) y va a **capturar los ~80 insumos a mano en esta pantalla, uno por
+uno**. Eso hace que la velocidad de captura sea el criterio de diseño principal:
+cada campo de más se paga 80 veces.
+
+**Decisiones de Javi (2026-08-16):**
+
+| Tema | Decisión |
+|---|---|
+| Carga | A mano en la pantalla, uno por uno |
+| Cajas para items `unit` | **No** — piezas directo (evita migración) |
+| Captura de costo | **Ambas con toggle**: precio por botella ÷ capacidad, o costo por oz directo |
+| Costeo (precedencia receta/manual) | **Aparcado** — se retoma después |
+
+**Sin migración.** Todo es UI + `services/inventoryAdmin.js`.
+
+## Datos verificados antes de diseñar
+
+- **Capturar en ml es lossless.** `capacity_oz` es `numeric(12,2)`; se probaron TODOS los valores de 100 a 2000 ml: **0 no round-trippean**. 695 → 23.50 → 695. 950 → 32.12 → 950.
+- **`unit_cost` es `numeric(12,4)`** → `290 ÷ 23.67 = 12.2518` se guarda con precisión completa.
+- **`name` tiene índice único** `ux_inventory_items_name_unique`; hoy el form escupe el error crudo de Postgres.
+- **Estado actual de los datos (58 oz / 20 unit):** 0 con `capacity_oz` nulo, 0 en cero. Capacidades reales: 695(2), 700(21), 750(25), 950(1), 1000(8), 1750(1). **Javi confirmó que las de 695 ml son reales** — por eso el tamaño debe ser libre, no una lista fija.
+- **`ON DELETE RESTRICT`** desde `product_recipes` e `inventory_movements` → no se puede ni conviene borrar insumos. No hace falta: los datos están limpios.
+
+## A. Formulario de crear
+
+- [x] **Capacidad en ml**, no en oz. Input libre (Javi tiene 695) + chips de acceso rápido `700 / 750 / 950 / 1000 / 1750` tomados de sus tamaños reales. Vista previa: `700 ml = 23.67 oz`.
+- [x] Quitar el placeholder `e.g. 25` — son 739 ml, una botella que no existe. Invitaba a meter basura.
+- [x] **Toggle de costo**: `por botella` / `por oz`. En modo botella escribes `290` y muestra `= $12.2518 / oz`. Para insumos no-`oz` no hay toggle: costo directo en su unidad.
+- [x] **`capacity_oz` vacío → `NULL`, no `0`.** Hoy `Number('' || 0) === 0`, lo que apaga en silencio el modo botella en recetas y en recepción, y miente semánticamente (0 = "botella de cero onzas").
+- [x] **Campos pegajosos entre capturas:** al crear, se conservan `unit_type` y tamaño (se repiten en rachas: 21 botellas de 700 seguidas), se limpian nombre y costo, y el foco vuelve a Nombre. Los valores conservados quedan a la vista para que no sorprendan.
+- [x] **Nombre duplicado → mensaje entendible** (`Ya existe un insumo con ese nombre.`) en vez del error crudo de Postgres, **sin limpiar el formulario** para poder corregir.
+- [x] *(Opcional, dilo si lo quieres)* **Stock inicial en el alta**: ahorra un paso por insumo × 80. Requiere `.select()` en `createInventoryItem` para obtener el id y luego llamar al RPC de ajuste — así el movimiento queda registrado y el log sigue siendo autoritativo. Caso borde a manejar: insumo creado pero el ajuste falla.
+
+## B. Formulario de editar
+
+- [x] Mismos controles (ml + toggle de costo), hoy el input de capacidad ni siquiera dice en qué unidad está.
+
+## C. Lista
+
+- [x] `cap: 700 ml` en vez de `cap: 23.67oz` — ml es el idioma común del resto del sistema.
+
+## D. Ajustar stock
+
+- [x] Aceptar **botellas / ml / unidad base**, igual que la pantalla de recepción del POS, reutilizando `amountFromCapture`. Es el "choque" que señaló Javi: hoy el manager captura "6 botellas" desde el POS y aquí hay que capturar "142.02 oz". Y para el inventario grande va a usar este panel ~80 veces para fijar existencias iniciales.
+
+## Verificación
+
+1. Round-trip ml → `capacity_oz` → ml sobre el rango 100–2000 (ya corrido: 0 fallas), incluido en la suite permanente.
+2. Costo: `290 / 700 ml` → `12.2518` exacto en `numeric(12,4)`.
+3. Capacidad vacía en item `oz` → se envía `null`, NUNCA `0`.
+4. Ninguna ruta de esta pantalla emite `remove` por accidente al ajustar.
+5. Los chips de tamaño coinciden con los tamaños reales en la base (no 900).
+6. `@babel/parser` + `npx eslint`.
+
+**Riesgo:** bajo. Un archivo de UI + dos líneas de servicio. Sin migración, sin
+backfill, sin tocar el flujo de cobro ni el descuento de inventario.
+
+---
+
+## `/admin/inventory-items` — RESULTADO (2026-08-16)
+
+**Descartado por Javi:** stock inicial en el alta. Lo carga a mano por insumo con
+el panel de Ajustar stock (que ahora acepta botellas/ml).
+
+### Archivos
+- `src/utils/inventoryUnits.js` — nuevos `mlFromOz`, `capacityOzFromMl`, `unitCostFromBottlePrice`. `BOTTLE_SIZES_ML` corregido a `[700, 750, 950, 1000, 1750]`.
+- `src/services/inventoryAdmin.js` — `capacity_oz` vacío ahora guarda `NULL`, no `0`.
+- `src/pages/InventoryItemsAdminPage.jsx` — reescrita (676 líneas), con `CapacityField` y `CostField` compartidos entre crear y editar.
+
+### Error mío corregido
+Los presets eran `700/750/900/1000/1750`. **La base no tiene ninguna botella de
+900 ml — tiene una de 950.** Me guié por lo que Javi recordó de memoria en vez de
+mirar los datos. Corregido y con prueba que verifica que ningún chip esté inventado.
+
+### Verificación — 45 aserciones, todas OK
+
+**La prueba central (idempotencia de edición):** abrir un insumo existente y
+guardarlo sin tocarlo NO debe correr su capacidad, porque el form muestra ml
+derivados de un `capacity_oz` que es `numeric(12,2)`. Se probó contra las
+capacidades REALES de la base:
+
+```
+695 ml: 23.5  oz → muestra  695 ml → guarda 23.5  oz  ( 2 insumos)
+700 ml: 23.67 oz → muestra  700 ml → guarda 23.67 oz  (21 insumos)
+750 ml: 25.36 oz → muestra  750 ml → guarda 25.36 oz  (25 insumos)
+950 ml: 32.12 oz → muestra  950 ml → guarda 32.12 oz  ( 1 insumo )
+1000 ml:33.81 oz → muestra 1000 ml → guarda 33.81 oz  ( 8 insumos)
+1750 ml:59.17 oz → muestra 1750 ml → guarda 59.17 oz  ( 1 insumo )
+→ las 58 botellas sobreviven un ciclo editar→guardar sin cambiar un valor
+```
+Más el rango completo 100–2000 ml: 0 derivan.
+
+**`capacity_oz` → NULL nunca 0:** probado con vacío, cero, negativo, texto, null,
+undefined, y con insumos `unit`/`kg`. Se verifica además que un insumo con
+capacidad `null` NO ofrezca modo botella (que es justo lo que el `0` rompía).
+
+**Costo por botella → por oz** en `numeric(12,4)`: $290/700ml → `12.2518`,
+$450/1L → `13.3097`, $380/750ml → `14.9842`. Entradas inválidas → 0.
+*(Una aserción mía estaba mal calculada — 14.9843 en vez de 14.9842. Falló el
+test, no el código.)*
+
+**Convergencia admin ↔ POS:** los tres modos de captura (6 botellas / 4200 ml /
+142.02 oz) dan el mismo valor. Admin y POS no pueden divergir.
+
+Suites previas de inventario y recetas re-corridas: sin regresiones.
+
+### Lint
+Solo el `react-hooks/set-state-in-effect` preexistente y repo-wide. Cero errores nuevos.
+
+### Pendiente para Javi
+- **Borrar `.git/index.lock`** — lo dejó un `git status` mío; el sandbox no puede borrarlo y bloquea el próximo commit.
+- `npm run build`

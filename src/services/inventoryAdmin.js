@@ -18,7 +18,10 @@ export async function createInventoryItem({
         {
             name: name.trim(),
             unit_type: unitType,
-            capacity_oz: unitType === 'oz' ? Number(capacityOz || 0) : null,
+            // NULL, nunca 0: `Number('' || 0)` daba 0, lo que apagaba en silencio
+            // el modo botella en recetas y recepción (usesBottles exige > 0) y
+            // además miente — 0 dice "botella de cero onzas", NULL dice "sin capturar".
+            capacity_oz: unitType === 'oz' && Number(capacityOz) > 0 ? Number(capacityOz) : null,
             // NULL preserva "sin capturar" (distinto de 0 real)
             unit_cost: unitCost === '' || unitCost == null ? null : Number(unitCost),
             active: true,
@@ -40,7 +43,10 @@ export async function updateInventoryItem({
         .update({
             name: name.trim(),
             unit_type: unitType,
-            capacity_oz: unitType === 'oz' ? Number(capacityOz || 0) : null,
+            // NULL, nunca 0: `Number('' || 0)` daba 0, lo que apagaba en silencio
+            // el modo botella en recetas y recepción (usesBottles exige > 0) y
+            // además miente — 0 dice "botella de cero onzas", NULL dice "sin capturar".
+            capacity_oz: unitType === 'oz' && Number(capacityOz) > 0 ? Number(capacityOz) : null,
             // NULL preserva "sin capturar" (distinto de 0 real)
             unit_cost: unitCost === '' || unitCost == null ? null : Number(unitCost),
             active: Boolean(active),
