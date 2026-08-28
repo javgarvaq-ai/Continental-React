@@ -406,3 +406,69 @@ Falló dos veces el 2026-08-16:
 
 El costo no es solo el error: casi propongo **borrar una página en producción**
 que los managers usan.
+
+---
+
+## `utils/inventoryUnits.js` es la ÚNICA fuente de conversión oz ↔ ml ↔ botellas
+
+Tres pantallas dependen de las mismas conversiones y **no pueden divergir**:
+
+| Pantalla | Qué convierte |
+|---|---|
+| `InventoryPage` (POS) | recibir mercancía: botellas → oz |
+| `RecipeMappingAdminPage` | receta: oz / ml / botella → oz |
+| `InventoryItemsAdminPage` | capacidad ml → `capacity_oz`; precio de botella → `unit_cost`; ajuste de stock |
+
+Si una recalcula por su cuenta, una botella **recibida** deja de cancelar
+exactamente con una botella **vendida** y el stock deriva sin que nada avise.
+La suite de pruebas incluye una aserción explícita de convergencia: 6 botellas /
+4200 ml / 142.02 oz deben dar el mismo número en todas.
+
+**Regla:** nunca escribir `x / 29.5735296` suelto en un componente. Importar de
+`utils/inventoryUnits.js`; si falta una conversión, agregarla ahí.
+
+Ese archivo es JS puro sin React a propósito: permite importar el **código real**
+desde node para probarlo, en vez de verificar una copia pegada en un test.
+
+### Redondeos que hay que respetar
+
+- `capacity_oz`, `current_stock`, `quantity_change`, `product_recipes.deduct_amount` → `numeric(12,2)`
+- `inventory_items.unit_cost` → `numeric(12,4)`
+- `products.manual_cost` → `numeric(12,2)`
+
+Verificado: ml → `capacity_oz` → ml round-trippea exacto en TODO el rango
+100–2000 ml, así que capturar en ml no pierde información y abrir/guardar un
+insumo existente no le corre la capacidad.
+
+---
+
+## No diseñar con lo que el usuario recuerda de memoria — consultar los datos
+
+Javi mencionó de pasada "hay de 700 ml, 900 ml, 1 lt, 750 ml, etc" y con eso armé
+los presets `[700, 750, 900, 1000, 1750]`. Al consultar la base:
+**695(2), 700(21), 750(25), 950(1), 1000(8), 1750(1)**. No existe ninguna de 900,
+sí una de 950, y las de 695 —que yo había marcado como "error de captura
+probable"— son reales.
+
+**Regla:** antes de convertir un dato en configuración (presets, umbrales,
+categorías, defaults), pedirle a Javi el `select ... group by` correspondiente.
+Él las corre sin problema y contesta rápido. Un `count(*)` ahorra rediseñar.
+
+Aplicado con buen resultado el mismo día: antes de paginar `getTopConsumedItems`
+se midió el volumen real (185 filas/semana vs. techo de 1000) y resultó que el
+bug nunca se había disparado — lo que bajó la prioridad de toda esa tarea.
+
+---
+
+## El sandbox no puede borrar archivos, y git deja `index.lock`
+
+`device_bash` no tiene permiso de `rm` sobre el disco de Javi. Dos consecuencias:
+
+1. Cualquier archivo temporal creado dentro del repo hay que **moverlo** a
+   `_to_delete/` y avisarle para que lo borre él. Peor: si Javi commitea con
+   `git add .` antes de eso, el archivo temporal se va al commit (pasó el
+   2026-08-16 con `__origcheck.jsx`, 477 líneas basura dentro de `ae4c71b`).
+   → **No crear archivos temporales dentro del repo.** Usar `/tmp` del sandbox.
+2. Un `git status` desde `device_bash` puede dejar `.git/index.lock` colgado y
+   **bloquear el siguiente commit de Javi**. Después de correr comandos git,
+   verificar `ls .git/index.lock` y avisarle si quedó.
