@@ -472,3 +472,21 @@ bug nunca se había disparado — lo que bajó la prioridad de toda esa tarea.
 2. Un `git status` desde `device_bash` puede dejar `.git/index.lock` colgado y
    **bloquear el siguiente commit de Javi**. Después de correr comandos git,
    verificar `ls .git/index.lock` y avisarle si quedó.
+
+---
+
+## 2026-09-06 — No cerrar un descuadre con una explicación cómoda
+
+**Corrección de Javi:** pidió verificar a fondo el gap banco-vs-ledger que en la auditoría general cerré como "rezago normal de liquidación de tarjeta / dinero en tránsito". No era eso.
+
+**Qué salió mal:**
+1. Escribí "rezago normal de liquidación" sin medir el rezago. Al emparejar cada liberación de Mercado Pago con su venta: **0 días de rezago en 267 de 269 casos**. La terminal 1 deposita el mismo día. La explicación era falsa.
+2. Analicé por semana/mes en vez de por transacción, y con eso me perdí que las transferencias entre la cuenta del negocio y la personal de Javi van en DOS sentidos: entraron $68,642.91 (25 movs) pero también salieron **$56,423.00 (16 movs)**. Conté solo la mitad.
+3. Reporté el gap como "~12%" sin despejar la comisión. Al dividir el neto entre 0.9594 (4.06% = 3.5% + IVA), 341 de 353 liberaciones dan un bruto que es múltiplo exacto de $0.05 — o sea la comisión explicaba TODO ese pedazo y sobraba dato para separar las dos terminales con precisión.
+
+**Reglas para mí:**
+- "Rezago", "en tránsito" y "comisión" son **hipótesis medibles**, no conclusiones. Medirlas antes de escribirlas: distribución de días para el rezago, bruto implícito (`neto ÷ (1−tasa)`) para la comisión. Si el bruto implícito cae en montos reales del menú, la tasa es correcta.
+- **Bajar a nivel transacción antes de agregar.** El promedio semanal esconde justo el patrón que se está buscando.
+- **Siempre netear los dos sentidos de un flujo entre dos cuentas.** Si entran transferencias de alguien, buscar las que salen hacia esa persona.
+- **Un reporte de conciliación no está listo hasta que la identidad cierra en $0.00** (saldo del sistema − saldo real = suma de partidas nombradas). Si queda residuo, falta un hallazgo, no "es ruido".
+- Cuando Javi hace pushback sobre una conclusión mía, **casi siempre tiene razón sobre el negocio** — su corrección ("la terminal 2 cobra menos, no más") fue la que destrabó todo: llevó a medir la tasa real de T2 (2.17%) y a aislar el gap.
