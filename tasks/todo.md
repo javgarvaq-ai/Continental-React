@@ -32,10 +32,17 @@ Javi pidio plantear antes de trabajar. Tres iniciativas para hoy, en este orden 
 - [ ] Probar capturar costo + nota en 2-3 productos, tabular fuera del campo, confirmar el badge "✓ Guardado" y que el margen/margen% se ven correctos.
 - [ ] Ir capturando el resto de los productos a su ritmo — no hay limite ni bloqueo por productos sin costo.
 
-**Fase 2 — Reportes usan el costo nuevo, siempre en vivo (despues de Fase 1, riesgo bajo)**
-- [ ] `reports.js`: el costo de cada producto para COGS/margen (WeeklyReportPage, ProductSalesReportPage) deja de leer `unit_cost_at_sale` y receta/manual_cost — usa `reference_cost` de HOY para todo el rango de fechas del reporte, pasado o presente.
-- [ ] `productCosting.js` (o lo que quede de esa logica): mismo cambio, o se retira si ya no lo usa nadie.
-- [ ] No se toca `finalize_comanda_payment` ni ningun codigo que corra durante el cobro. El campo `unit_cost_at_sale` se sigue escribiendo (logica vieja) pero deja de leerse en reportes.
+**Fase 2 — Reportes usan el costo nuevo, siempre en vivo — ✅ CODEADA 2026-09-06**
+- [x] `src/services/reports.js` → `getProductSalesForPeriod` (alimenta tanto ProductSalesReportPage como el COGS de WeeklyReportPage — es la UNICA funcion que calculaba costo en reports.js, confirmado por grep): ya no lee `unit_cost_at_sale` ni receta/manual_cost — usa `products.reference_cost` de HOY para todo el rango de fechas del reporte. Se quito tambien del `.select()` de `comanda_items` (ya no se usa). Se quito el import de `computeProductCost`.
+- [x] `src/services/productCosting.js` (motor viejo de `/admin/product-costing`, sin importadores desde que Fase 1 reemplazo esa pantalla — confirmado por grep) — movido a `_to_delete/productCosting.js` (el sandbox no puede borrar archivos del disco de Javi; puede borrar esa carpeta el mismo cuando guste).
+- [x] `src/pages/ProductSalesReportPage.jsx`: tooltip de "costo incompleto" reescrito para hablar de costo de referencia en vez de receta/insumos.
+- [x] No se toco `finalize_comanda_payment` ni ningun codigo que corra durante el cobro. El campo `unit_cost_at_sale` se sigue escribiendo en cada venta (logica vieja, sin cambios) pero ya no lo lee nadie en reportes — queda vivo pero sin lectores.
+- [x] Verificado con `@babel/parser` — `reports.js` y `ProductSalesReportPage.jsx` parsean sin errores.
+
+#### Pendiente (Javi) — Fase 2
+- [ ] Nota: quedo un `.git/index.lock` colgado en el repo (0 bytes, visto 2026-09-06 ~19:45) — el sandbox no lo puede borrar (sin permiso de borrado). Borralo tu antes de tu proximo commit si `git add`/`git commit` te da error de lock.
+- [ ] Recargar "Ventas por producto" y el "Reporte financiero" (COGS) y confirmar que el margen ahora sale del costo de referencia que capturaste en Fase 1, no de receta.
+- [ ] Confirmar que puedes borrar `_to_delete/productCosting.js` sin falta (era el motor viejo de Costeo, ya sin usar).
 
 **Fuera de alcance:**
 - No se borra `manual_cost` de `products` todavia (queda como campo muerto).
@@ -52,7 +59,7 @@ Pendiente — Javi explica que es "la pagina del menu" cuando lleguemos a ese pu
 - Se deja para el final de la sesion, como pidio Javi.
 
 ### Siguiente paso
-Fase 1 codeada (2026-09-06) — ver checklist arriba y "Pendiente (Javi)". Una vez que Javi confirme que la pantalla funciona en vivo con la migracion corrida, sigue Fase 2 (reports.js/productCosting.js usan `reference_cost` en vez de receta/manual_cost).
+Fase 1 y Fase 2 codeadas (2026-09-06). Javi confirmo que Fase 1 funciona en vivo. Costeo (Sesion 2026-09-06, iniciativa 1) queda COMPLETO en este punto — ver "Pendiente (Javi)" de Fase 2 para el smoke test final. Siguen las iniciativas 2 (cross menu) y 3 (auditoria banco) de esta misma sesion, en ese orden.
 
 ---
 

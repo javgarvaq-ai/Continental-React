@@ -159,7 +159,7 @@ function VentasTable({ rows, groupByCategory, sortKey, setSortKey }) {
                             <td style={{ padding: '8px 12px', fontSize: '13px', textAlign: 'right', color: '#4ade80', fontWeight: 600 }}>{money(r.revenue)}</td>
                             <td
                                 style={{ padding: '8px 12px', fontSize: '13px', textAlign: 'right', color: r.costMissing ? '#f59e0b' : MUTED }}
-                                title={r.costMissing ? 'Costo incompleto: falta capturar el costo de algún componente' : ''}
+                                title={r.costMissing ? 'Falta capturar el costo de referencia de este producto (o de algún componente incluido) en Costeo' : ''}
                             >
                                 {r.costMissing ? '≈ ' : ''}{money(r.cost || 0)}
                             </td>

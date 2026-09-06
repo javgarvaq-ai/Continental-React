@@ -1,5 +1,4 @@
 import { supabase } from './supabase'
-import { computeProductCost } from '../utils/cost'
 
 // ── Date helpers ──────────────────────────────────────────────
 export function daysAgo(n) {
@@ -196,36 +195,29 @@ export async function getProductSalesForPeriod({ startDate, endDate }) {
 
     const { data: items, error } = await supabase
         .from('comanda_items')
-        .select('quantity, unit_price, unit_cost_at_sale, is_free_benefit, is_free_mixer, product_id, source_shot_product_id, products:products!comanda_items_product_id_fkey(name, categories(name))')
+        .select('quantity, unit_price, is_free_benefit, is_free_mixer, product_id, source_shot_product_id, products:products!comanda_items_product_id_fkey(name, categories(name))')
         .in('comanda_id', comandas.map(c => c.id))
         .eq('status', 'active')
 
     if (error || !items) return { data: [], error }
 
-    // ── Costo en vivo por producto (fallback cuando el snapshot es NULL) ──
-    const [prodCostRes, recipeRes, invRes] = await Promise.all([
-        supabase.from('products').select('id, manual_cost'),
-        supabase.from('product_recipes').select('product_id, inventory_item_id, deduct_amount, active').eq('active', true),
-        supabase.from('inventory_items').select('id, unit_cost'),
-    ])
-    const invById = {}
-    for (const ii of invRes.data || []) invById[ii.id] = ii
-    const recipesByProduct = {}
-    for (const r of recipeRes.data || []) {
-        if (!recipesByProduct[r.product_id]) recipesByProduct[r.product_id] = []
-        recipesByProduct[r.product_id].push(r)
-    }
+    // ── Costo de referencia manual por producto (Fase 2, 2026-09-06) ──
+    // Reemplaza el modelo híbrido receta/manual_cost. Ya NO se lee
+    // `unit_cost_at_sale` (snapshot congelado del cobro — se deja de usar a
+    // propósito, ver tasks/todo.md sección Costeo) ni recetas/insumos.
+    // Siempre el `reference_cost` capturado HOY, para cualquier rango de
+    // fechas del reporte (decisión de Javi: versión simple, sin congelar
+    // costo histórico por venta).
+    const { data: costProducts } = await supabase.from('products').select('id, reference_cost')
     const liveCostByProduct = {}
-    for (const p of prodCostRes.data || []) {
-        liveCostByProduct[p.id] = computeProductCost(p, recipesByProduct[p.id] || [], invById)
+    for (const p of costProducts || []) {
+        liveCostByProduct[p.id] = p.reference_cost == null ? null : Number(p.reference_cost)
     }
 
-    // Costo unitario de una línea: snapshot congelado, o costo en vivo si está
-    // completo; null = no costeable (se marca "sin costo").
+    // Costo unitario de una línea: reference_cost de hoy; null = sin capturar
+    // (se marca "sin costo").
     function lineUnitCost(item) {
-        if (item.unit_cost_at_sale != null) return Number(item.unit_cost_at_sale)
-        const lc = liveCostByProduct[item.product_id]
-        return lc && lc.complete ? lc.cost : null
+        return liveCostByProduct[item.product_id] ?? null
     }
 
     // Lookups por product_id (nombre + categoría) — para combos y roll-up.
