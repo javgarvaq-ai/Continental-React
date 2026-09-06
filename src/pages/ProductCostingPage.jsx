@@ -1,8 +1,8 @@
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 import AdminNav from '../components/AdminNav'
 import { useStatus } from '../hooks/useStatus'
-import { getProductCostingData } from '../services/productCosting'
+import { getProductReferenceCostingData, updateProductReferenceCost } from '../services/productReferenceCost'
 import { money } from '../utils/money'
 
 const MUTED = '#94a3b8'
@@ -15,24 +15,28 @@ const sectionCard = {
     marginBottom: '14px',
 }
 
-const SOURCE_LABEL = {
-    recipe: 'Receta',
-    manual: 'Costo manual',
-    estimated_mixers_avg: '≈ Estimado (mixers)',
-    none: 'Sin costo',
+const inputStyle = {
+    width: '100%',
+    background: '#111',
+    border: '1px solid #333',
+    borderRadius: '6px',
+    color: 'white',
+    padding: '6px 8px',
+    fontSize: '13px',
+    boxSizing: 'border-box',
 }
 
 function downloadCsv(rows) {
-    const headers = ['Producto', 'Categoría', 'Precio', 'Costo', 'Fuente', 'Margen', 'Margen %']
+    const headers = ['Producto', 'Categoría', 'Precio', 'Costo', 'Nota', 'Margen', 'Margen %']
     const lines = [headers.join(',')]
     rows.forEach(r => {
         const cols = [
             r.productName,
             r.categoryName,
             r.price.toFixed(2),
-            r.cost.toFixed(2),
-            SOURCE_LABEL[r.costSource] || r.costSource,
-            r.margin.toFixed(2),
+            r.cost == null ? '' : r.cost.toFixed(2),
+            r.note,
+            r.margin == null ? '' : r.margin.toFixed(2),
             r.marginPct == null ? '' : r.marginPct.toFixed(1),
         ]
         lines.push(cols.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
@@ -42,7 +46,7 @@ function downloadCsv(rows) {
     const url  = URL.createObjectURL(blob)
     const a    = document.createElement('a')
     a.href = url
-    a.download = `costeo_productos_${Date.now()}.csv`
+    a.download = `costos_productos_${Date.now()}.csv`
     a.click()
     URL.revokeObjectURL(url)
 }
@@ -57,43 +61,125 @@ function ProductCostingPage() {
 
     const [loading, setLoading] = useState(false)
     const { status, statusColor, setStatus } = useStatus('')
-    const [rows, setRows] = useState([])
+    const [rows, setRows] = useState([]) // fuente "guardada" (última respuesta del servidor)
+
+    // Estado local editable, separado de `rows` — se guarda por fila al perder
+    // foco (onBlur). Sin botón "guardar todo" ni doble confirmación: no es
+    // destructivo, es la misma acción que editar cualquier campo de un producto.
+    const [editValues, setEditValues] = useState({}) // { [productId]: { cost, note } }
+    const [rowStatus, setRowStatus] = useState({})   // { [productId]: 'saving' | 'saved' | 'error' }
+    const savedTimers = useRef({})
 
     const load = useCallback(async () => {
         setLoading(true)
         setStatus('Cargando...')
-        const { data, error } = await getProductCostingData()
+        const { data, error } = await getProductReferenceCostingData()
         if (error) {
             setStatus(`Error: ${error.message}`)
             setLoading(false)
             return
         }
         setRows(data)
+        const initialEdits = {}
+        data.forEach(r => {
+            initialEdits[r.productId] = {
+                cost: r.cost == null ? '' : String(r.cost),
+                note: r.note || '',
+            }
+        })
+        setEditValues(initialEdits)
         setStatus(data.length === 0 ? 'Sin productos.' : 'Costeo cargado.')
         setLoading(false)
     }, [])
 
     useEffect(() => { load() }, [load])
 
+    // Limpia timers de "✓ Guardado" pendientes si la pantalla se desmonta.
+    useEffect(() => () => {
+        Object.values(savedTimers.current).forEach(clearTimeout)
+    }, [])
+
     const categories = useMemo(() => {
         const set = new Set(rows.map(r => r.categoryName))
         return Array.from(set).sort()
     }, [rows])
 
+    // Margen calculado en vivo sobre el valor EDITADO (no el guardado), para
+    // que el margen reaccione mientras Javi teclea, antes de que se guarde.
+    const displayRows = useMemo(() => {
+        return rows.map(r => {
+            const edit = editValues[r.productId] || { cost: '', note: '' }
+            const cost = edit.cost === '' ? null : Number(edit.cost)
+            const price = r.price
+            const validCost = cost != null && !Number.isNaN(cost)
+            const margin = validCost ? price - cost : null
+            const marginPct = margin == null || price <= 0 ? null : (margin / price) * 100
+            return { ...r, cost: validCost ? cost : null, note: edit.note, margin, marginPct }
+        })
+    }, [rows, editValues])
+
     const filteredRows = useMemo(() => {
         const q = search.trim().toLowerCase()
-        const filtered = rows.filter(r => {
+        const filtered = displayRows.filter(r => {
             if (hideInactive && !r.active) return false
             if (categoryFilter && r.categoryName !== categoryFilter) return false
             if (q && !r.productName.toLowerCase().includes(q)) return false
             return true
         })
         return [...filtered].sort((a, b) => (b[sortKey] ?? -Infinity) - (a[sortKey] ?? -Infinity))
-    }, [rows, search, categoryFilter, hideInactive, sortKey])
+    }, [displayRows, search, categoryFilter, hideInactive, sortKey])
 
-    function thStyle(key, sortable) {
+    function setEdit(productId, field, value) {
+        setEditValues(prev => ({
+            ...prev,
+            [productId]: { ...prev[productId], [field]: value },
+        }))
+    }
+
+    async function saveRow(productId) {
+        const edit = editValues[productId]
+        if (!edit) return
+
+        // No guardar si no cambió nada respecto a lo ya guardado — evita
+        // escrituras de más al simplemente tabular por la fila sin tocarla.
+        const original = rows.find(r => r.productId === productId)
+        const originalCost = original?.cost == null ? '' : String(original.cost)
+        const originalNote = original?.note || ''
+        if (edit.cost === originalCost && edit.note === originalNote) return
+
+        setRowStatus(prev => ({ ...prev, [productId]: 'saving' }))
+        const { error } = await updateProductReferenceCost({
+            productId,
+            cost: edit.cost,
+            note: edit.note,
+        })
+
+        if (error) {
+            setRowStatus(prev => ({ ...prev, [productId]: 'error' }))
+            setStatus(`Error guardando "${original?.productName || productId}": ${error.message}`)
+            return
+        }
+
+        // Refleja en `rows` (fuente "guardada") para que el próximo blur sin
+        // cambios no dispare otro guardado idéntico.
+        setRows(prev => prev.map(r => r.productId === productId
+            ? { ...r, cost: edit.cost === '' ? null : Number(edit.cost), note: edit.note }
+            : r))
+
+        setRowStatus(prev => ({ ...prev, [productId]: 'saved' }))
+        clearTimeout(savedTimers.current[productId])
+        savedTimers.current[productId] = setTimeout(() => {
+            setRowStatus(prev => {
+                const next = { ...prev }
+                delete next[productId]
+                return next
+            })
+        }, 1500)
+    }
+
+    function thStyle(key, sortable, align) {
         return {
-            textAlign: key === 'productName' || key === 'categoryName' || key === 'costSource' ? 'left' : 'right',
+            textAlign: align || 'right',
             padding: '8px 12px',
             fontSize: '11px',
             fontWeight: 700,
@@ -105,28 +191,16 @@ function ProductCostingPage() {
         }
     }
 
-    function costCellStyle(row) {
-        if (!row.costComplete) return { color: '#f59e0b' }
-        if (row.costSource === 'estimated_mixers_avg') return { color: '#60a5fa' }
-        return { color: MUTED }
-    }
-
-    function costTitle(row) {
-        if (!row.costComplete) return 'Sin costo: falta receta activa o costo manual.'
-        if (row.costSource === 'estimated_mixers_avg') {
-            return 'Estimado: promedio de costo de los mixers elegibles × cantidad incluida en el combo. El costo real depende de lo elegido en cada venta — ver "Ventas por producto".'
-        }
-        return ''
-    }
-
-    function costPrefix(row) {
-        if (!row.costComplete) return '— '
-        if (row.costSource === 'estimated_mixers_avg') return '≈ '
-        return ''
+    function rowStatusBadge(productId) {
+        const s = rowStatus[productId]
+        if (s === 'saving') return <span style={{ fontSize: '11px', color: MUTED }}>Guardando…</span>
+        if (s === 'saved')  return <span style={{ fontSize: '11px', color: '#4ade80' }}>✓ Guardado</span>
+        if (s === 'error')  return <span style={{ fontSize: '11px', color: '#f87171' }}>Error al guardar</span>
+        return null
     }
 
     return (
-        <div style={{ padding: '20px', paddingLeft: '216px', color: 'white', maxWidth: '1000px', minHeight: '100vh', background: '#111', boxSizing: 'border-box' }}>
+        <div style={{ padding: '20px', paddingLeft: '216px', color: 'white', maxWidth: '1100px', minHeight: '100vh', background: '#111', boxSizing: 'border-box' }}>
 
             <AdminNav currentPath={location.pathname} />
 
@@ -134,8 +208,8 @@ function ProductCostingPage() {
                 🧮 Costeo de productos
             </h2>
             <p style={{ margin: '0 0 20px', fontSize: '13px', color: MUTED }}>
-                Costo y margen calculados con los datos actuales (receta/insumos o costo manual) — sin depender de ventas.
-                Para el costo real de lo ya vendido, usa "Ventas por producto".
+                Costo de referencia manual por producto — independiente de recetas/inventario (que solo descuentan stock).
+                Escribe el costo y una nota opcional; se guarda solo al salir del campo (Tab o click fuera). El margen se calcula en vivo.
             </p>
 
             {/* Filters */}
@@ -214,15 +288,15 @@ function ProductCostingPage() {
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                         <tr style={{ borderBottom: '1px solid #2a2a2a' }}>
-                            <th style={thStyle('productName')}>Producto</th>
-                            <th style={thStyle('categoryName')}>Categoría</th>
+                            <th style={thStyle('productName', false, 'left')}>Producto</th>
+                            <th style={thStyle('categoryName', false, 'left')}>Categoría</th>
                             <th style={thStyle('price', true)} onClick={() => setSortKey('price')}>
                                 Precio {sortKey === 'price' ? '▾' : ''}
                             </th>
-                            <th style={thStyle('cost', true)} onClick={() => setSortKey('cost')}>
+                            <th style={{ ...thStyle('cost', true), width: '110px' }} onClick={() => setSortKey('cost')}>
                                 Costo {sortKey === 'cost' ? '▾' : ''}
                             </th>
-                            <th style={thStyle('costSource')}>Fuente</th>
+                            <th style={{ ...thStyle('note', false, 'left'), width: '220px' }}>Nota</th>
                             <th style={thStyle('margin', true)} onClick={() => setSortKey('margin')}>
                                 Margen {sortKey === 'margin' ? '▾' : ''}
                             </th>
@@ -241,12 +315,35 @@ function ProductCostingPage() {
                                 <td style={{ padding: '8px 12px', fontSize: '13px' }}>{r.productName}</td>
                                 <td style={{ padding: '8px 12px', fontSize: '13px', color: MUTED }}>{r.categoryName}</td>
                                 <td style={{ padding: '8px 12px', fontSize: '13px', textAlign: 'right' }}>{money(r.price)}</td>
-                                <td style={{ padding: '8px 12px', fontSize: '13px', textAlign: 'right', ...costCellStyle(r) }} title={costTitle(r)}>
-                                    {costPrefix(r)}{money(r.cost)}
+                                <td style={{ padding: '6px 12px' }}>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        placeholder="—"
+                                        value={editValues[r.productId]?.cost ?? ''}
+                                        onChange={e => setEdit(r.productId, 'cost', e.target.value)}
+                                        onBlur={() => saveRow(r.productId)}
+                                        style={{ ...inputStyle, textAlign: 'right' }}
+                                    />
                                 </td>
-                                <td style={{ padding: '8px 12px', fontSize: '12px', color: MUTED }}>{SOURCE_LABEL[r.costSource] || r.costSource}</td>
-                                <td style={{ padding: '8px 12px', fontSize: '13px', textAlign: 'right', color: r.margin >= 0 ? '#4ade80' : '#f87171', fontWeight: 600 }}>{money(r.margin)}</td>
-                                <td style={{ padding: '8px 12px', fontSize: '13px', textAlign: 'right', color: MUTED }}>{r.marginPct == null ? '—' : r.marginPct.toFixed(1) + '%'}</td>
+                                <td style={{ padding: '6px 12px' }}>
+                                    <input
+                                        type="text"
+                                        placeholder="Nota de referencia (opcional)"
+                                        value={editValues[r.productId]?.note ?? ''}
+                                        onChange={e => setEdit(r.productId, 'note', e.target.value)}
+                                        onBlur={() => saveRow(r.productId)}
+                                        style={inputStyle}
+                                    />
+                                    <div style={{ minHeight: '14px', marginTop: '2px' }}>{rowStatusBadge(r.productId)}</div>
+                                </td>
+                                <td style={{ padding: '8px 12px', fontSize: '13px', textAlign: 'right', color: r.margin == null ? MUTED : (r.margin >= 0 ? '#4ade80' : '#f87171'), fontWeight: 600 }}>
+                                    {r.margin == null ? '— sin costo' : money(r.margin)}
+                                </td>
+                                <td style={{ padding: '8px 12px', fontSize: '13px', textAlign: 'right', color: MUTED }}>
+                                    {r.marginPct == null ? '—' : r.marginPct.toFixed(1) + '%'}
+                                </td>
                             </tr>
                         ))}
                     </tbody>

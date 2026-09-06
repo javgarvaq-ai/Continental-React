@@ -1,3 +1,61 @@
+## Plan — Sesion 2026-09-06: Costeo manual por producto, cross menu, auditoria banco (3 iniciativas) — PENDIENTE DE APROBACION, NO CODEADO
+
+### Contexto
+Javi pidio plantear antes de trabajar. Tres iniciativas para hoy, en este orden de prioridad (auditoria al final, por decision suya):
+1. Pantalla de Costos manual (hoy, prioridad alta)
+2. Cross menu vs productos/precios del sistema (hoy)
+3. Auditoria ledger/pagos/gastos vs banco, 3 meses (al final)
+
+### 1. Pantalla de Costos manual — reemplaza receta como fuente de margen/COGS
+
+**Decision confirmada con Javi (2026-09-06):** el costo manual capturado en la nueva pantalla pasa a ser la UNICA fuente de margen/COGS de aqui en adelante. Recetas + inventario quedan 100% para descuento de stock — dejan de tener rol en costeo.
+
+**Aclaracion importante (2026-09-06, correccion a la version anterior de este plan):** el costo de referencia (`reference_cost`) NUNCA participa en el cobro. Lo que se le cobra al cliente sigue siendo 100% `products.price`, sin ningun cambio — el costo es un dato interno, solo para calcular margen (precio − costo), invisible para el cliente y el ticket.
+
+**Decision de precision historica (confirmada con Javi):** version SIMPLE — los reportes de margen/COGS (de esta semana o de hace 2 meses) siempre usan el costo de referencia capturado HOY, no el que estaba vigente cuando se hizo cada venta. Consecuencia aceptada: si Javi cambia el costo de un producto el mes que viene, los reportes de meses pasados se recalculan con el costo nuevo la proxima vez que se abran (no quedan "congelados" al costo real de ese momento). Por esto NO se toca el codigo/RPC de cobro (`finalize_comanda_payment`) en ningun punto de este plan — cero riesgo sobre codigo de pago en produccion. (La alternativa "precisa" — congelar el costo en cada venta via `unit_cost_at_sale`, que si requeria una migracion dentro del RPC de cobro solo para anotar el dato — se descarto por ahora; queda documentada por si se necesita mas adelante.)
+
+**Estado actual (el "antes"):**
+- Modelo hibrido en `utils/cost.js` (`computeProductCost`): receta activa y completa -> costo = suma(deduct_amount x unit_cost); si no -> `products.manual_cost`.
+- Se usa en 3 lugares: `/admin/product-costing` (pantalla Costeo actual, solo lectura), `reports.js` (fallback de costo en vivo cuando el snapshot de una venta es NULL, para WeeklyReportPage/ProductSalesReportPage), y el snapshot congelado por venta (`comanda_items.unit_cost_at_sale`), calculado 100% en SQL dentro de `20260616000001_cogs_snapshot_on_payment.sql` (misma logica receta>manual, duplicada en SQL — no llama a la funcion JS). **Ese snapshot sigue existiendo tal cual, sin tocarse** — el campo `unit_cost_at_sale` se sigue llenando con la logica vieja (receta>manual) en cada venta nueva, pero los reportes de margen dejan de leerlo (ver Fase 2) y usan siempre `reference_cost` de hoy. El campo queda vivo pero sin uso — no hace falta borrarlo ni migrar nada de el.
+
+**Fase 1 — Captura — ✅ CODEADA 2026-09-06, PENDIENTE DE QUE JAVI CORRA LA MIGRACION**
+- [x] Migracion `supabase/migrations/20260906000001_add_product_reference_cost.sql`: columnas `products.reference_cost numeric(12,2)` y `products.reference_cost_note text`. Totalmente separadas de `manual_cost` (se deja intacta, codigo muerto una vez lista Fase 2, no se borra por ahora).
+- [x] Seed incluido en la misma migracion: copia `manual_cost` -> `reference_cost` donde `manual_cost` no sea NULL y `reference_cost` siga vacio (idempotente).
+- [x] Pantalla nueva: `src/services/productReferenceCost.js` (nuevo) + `src/pages/ProductCostingPage.jsx` (reescrita) — misma ruta `/admin/product-costing`, mismo lugar en el nav "Costeo". Tabla de TODOS los productos (activos + inactivos con filtro), costo editable inline (input numerico, guarda al perder foco/Tab), nota editable igual, precio, margen y margen % calculados en vivo (precio − reference_cost). Sin ninguna referencia a receta/inventario — no importa `product_recipes` ni `inventory_items`.
+- [x] Se conservan filtros/orden ya existentes (buscador, categoria, ocultar inactivos, orden por margen, exportar CSV — columnas actualizadas a Costo/Nota en vez de Costo/Fuente).
+- [x] Guardado por fila al `onBlur` (no hay boton "guardar todo"): si no cambio nada respecto a lo ya guardado, no dispara escritura. Badge inline "Guardando.../✓ Guardado/Error al guardar" por fila, se borra solo a los 1.5s.
+- [x] Verificado con `@babel/parser` (sourceType module + plugin jsx) — ambos archivos nuevos/modificados parsean sin errores. `npm run build` no cabe en el limite de 45s del sandbox — lo corre Javi.
+
+#### Pendiente (Javi)
+- [ ] Correr `npx supabase db push` (aplica `20260906000001_add_product_reference_cost.sql` — agrega columnas + corre el seed).
+- [ ] Abrir `/admin/product-costing` y confirmar que los productos que ya tenian `manual_cost` capturado aparecen con ese mismo valor en "Costo" (el seed).
+- [ ] Probar capturar costo + nota en 2-3 productos, tabular fuera del campo, confirmar el badge "✓ Guardado" y que el margen/margen% se ven correctos.
+- [ ] Ir capturando el resto de los productos a su ritmo — no hay limite ni bloqueo por productos sin costo.
+
+**Fase 2 — Reportes usan el costo nuevo, siempre en vivo (despues de Fase 1, riesgo bajo)**
+- [ ] `reports.js`: el costo de cada producto para COGS/margen (WeeklyReportPage, ProductSalesReportPage) deja de leer `unit_cost_at_sale` y receta/manual_cost — usa `reference_cost` de HOY para todo el rango de fechas del reporte, pasado o presente.
+- [ ] `productCosting.js` (o lo que quede de esa logica): mismo cambio, o se retira si ya no lo usa nadie.
+- [ ] No se toca `finalize_comanda_payment` ni ningun codigo que corra durante el cobro. El campo `unit_cost_at_sale` se sigue escribiendo (logica vieja) pero deja de leerse en reportes.
+
+**Fuera de alcance:**
+- No se borra `manual_cost` de `products` todavia (queda como campo muerto).
+- No se toca `/admin/recipe-mappings` ni `/admin/inventory-items` — quedan exactamente igual, solo para inventario.
+- No se toca el RPC de cobro (`finalize_comanda_payment`) en ningun punto de este plan.
+
+### 2. Cross menu vs productos/precios del sistema
+Pendiente — Javi explica que es "la pagina del menu" cuando lleguemos a ese punto ("te explico cuando lleguemos a ese punto", 2026-09-06). Una vez definido, el cruce es sencillo: leer productos activos + precio de Supabase y compararlos 1:1 contra lo que muestra el menu (nombre, precio, existencia). Reporta discrepancias (falta en un lado u otro, precio distinto).
+
+### 3. Auditoria banco — Junio–Julio–Agosto 2026
+- Metodologia: la misma de `tasks/auditoria_banco_propinas_2026-07-25.md` (cruce estado de cuenta vs Ledger/`payments`/`cash_movements`/`shifts`), solo lectura, sin tocar codigo ni datos.
+- **Traslape con auditoria anterior:** esa auditoria ya cubrio y valido jun 1 – jul 24 (todo cuadro dentro de <1%). Plan: tratar ese tramo como validado y enfocar la verificacion nueva en jul 25 – ago 31, con spot-check ligero de jun-jul si algo se ve raro. Si Javi prefiere re-auditar los 3 meses completos desde cero, se hace asi en vez — confirmar cuando lleguemos a esa parte.
+- Estados de cuenta: Javi los sube cuando lleguemos a esa parte (confirmado, listos para subir, 2026-09-06).
+- Se deja para el final de la sesion, como pidio Javi.
+
+### Siguiente paso
+Fase 1 codeada (2026-09-06) — ver checklist arriba y "Pendiente (Javi)". Una vez que Javi confirme que la pantalla funciona en vivo con la migracion corrida, sigue Fase 2 (reports.js/productCosting.js usan `reference_cost` en vez de receta/manual_cost).
+
+---
+
 ## Plan — Permitir cerrar turno con mesas abiertas (advertencia, no bloqueo) — 2026-08-06 ✅ CODEADO, PENDIENTE DE PROBAR EN VIVO
 
 ### Contexto
