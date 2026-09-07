@@ -1,0 +1,1011 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gastos por semana · Bar Continental</title>
+<style>
+  :root{
+    color-scheme: light;
+    --plane:#f9f9f7; --surface:#fcfcfb; --border:#e1e0d9;
+    --ink:#0b0b0b; --ink2:#52514e; --muted:#898781; --grid:#e1e0d9;
+    --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
+    --pos:#008300; --neg:#e34948;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      color-scheme: dark;
+      --plane:#0d0d0d; --surface:#1a1a19; --border:#2c2c2a;
+      --ink:#ffffff; --ink2:#c3c2b7; --muted:#898781; --grid:#2c2c2a;
+      --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+      --pos:#3faa3f; --neg:#e66767;
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --plane:#0d0d0d; --surface:#1a1a19; --border:#2c2c2a;
+    --ink:#ffffff; --ink2:#c3c2b7; --muted:#898781; --grid:#2c2c2a;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+    --pos:#3faa3f; --neg:#e66767;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--plane);color:var(--ink);
+    font:15px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:940px;margin:0 auto;padding:32px 20px 72px}
+  h1{font-size:26px;line-height:1.2;margin:0 0 6px;letter-spacing:-.01em}
+  h2{font-size:17px;margin:38px 0 4px;letter-spacing:-.005em}
+  h2:first-of-type{margin-top:30px}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 4px}
+  .lede{color:var(--ink2);font-size:14px;margin:6px 0 0;max-width:64ch}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px;margin-top:14px}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:20px}
+  .tile{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px}
+  .tile .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:7px}
+  .tile .val{font-size:25px;font-weight:650;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .tile .foot{font-size:12px;color:var(--ink2);margin-top:5px}
+  .hero{border-left:3px solid var(--pos)}
+  table{border-collapse:collapse;width:100%;font-size:13.5px;font-variant-numeric:tabular-nums}
+  th,td{padding:7px 9px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;
+     position:sticky;top:0;background:var(--surface);z-index:1}
+  th:first-child,td:first-child{text-align:left}
+  tbody tr:last-child td{border-bottom:none}
+  tr.tot td{font-weight:650;border-top:2px solid var(--border);border-bottom:none}
+  .scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .scroll table{min-width:820px}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:7px;vertical-align:baseline}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--ink2);margin-bottom:14px}
+  .z{color:var(--muted)}
+  .note{font-size:13px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);
+    border-left:3px solid var(--s2);border-radius:8px;padding:13px 15px;margin-top:14px}
+  .note b{color:var(--ink)}
+  svg{display:block;width:100%;height:auto;overflow:visible}
+  .bar{transition:opacity .12s}
+  .bar:hover{opacity:.78;cursor:default}
+  #tip{position:fixed;pointer-events:none;opacity:0;transition:opacity .1s;z-index:50;
+    background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 11px;
+    font-size:12.5px;box-shadow:0 6px 22px rgba(0,0,0,.18);font-variant-numeric:tabular-nums;max-width:250px}
+  #tip .t{font-weight:650;margin-bottom:3px}
+  #tip .r{display:flex;justify-content:space-between;gap:16px;color:var(--ink2)}
+  ul{padding-left:19px;margin:9px 0} li{margin:5px 0;color:var(--ink2);font-size:14px}
+  li b{color:var(--ink)}
+  .foot-note{font-size:12.5px;color:var(--muted);margin-top:9px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Gastos por semana</h1>
+  <p class="sub">Bar Continental · 10-jun a 6-sep-2026 · 14 semanas · 309 movimientos de gasto</p>
+  <p class="lede">Clasificado a partir del texto de las notas de cada gasto, porque el sistema
+  solo guarda cuatro categorías (Pago proveedor, Gasto operativo, Nómina, Renta).</p>
+
+  <div class="tiles">
+    <div class="tile"><div class="lbl">Vendiste</div><div class="val" id="t-ven"></div><div class="foot">sin propina</div></div>
+    <div class="tile"><div class="lbl">Gastaste</div><div class="val" id="t-gas"></div><div class="foot" id="t-gasf"></div></div>
+    <div class="tile hero"><div class="lbl">Te quedó</div><div class="val" id="t-que" style="color:var(--pos)"></div><div class="foot" id="t-quef"></div></div>
+    <div class="tile"><div class="lbl">Gasto por semana</div><div class="val" id="t-sem"></div><div class="foot">promedio de 14 semanas</div></div>
+  </div>
+
+  <h2>Lo que salta a la vista</h2>
+  <ul>
+    <li><b>El permiso: $10,300 al mes, dos veces idéntico.</b> Julio y agosto, mismo monto exacto, y la nota dice
+      «permiso provisional». Si es recurrente son <b>$123,600 al año</b> por algo que sigue siendo provisional.</li>
+    <li><b>Renta + préstamo + permiso = $97,600 en tres meses.</b> Eso es el <b>25.5% de todo lo que vendes</b>
+      en tres partidas que no tienen que ver con operar el bar.</li>
+    <li><b>Tu costo de venta va en 37%</b> (destilados, cerveza, refrescos, cocina, hielo). Para un bar es alto
+      pero no escandaloso — se puede apretar, pero ahí no está el problema.</li>
+    <li><b>Más de la mitad del gasto no baja aunque vendas menos.</b> Los costos fijos son el 54%: si una semana
+      vendes la mitad, sigues pagando casi lo mismo.</li>
+  </ul>
+
+  <h2>En qué se va el dinero</h2>
+  <p class="sub">Total por categoría en las 14 semanas. La barra es el monto; a la derecha, qué porcentaje de tus ventas representa.</p>
+  <div class="card">
+    <div class="legend" id="leg1"></div>
+    <div id="chart1"></div>
+  </div>
+
+  <h2>Semana por semana</h2>
+  <p class="sub">Semana operacional domingo → sábado, como el resto del sistema. Miles de pesos.</p>
+  <div class="card">
+    <div class="legend" id="leg2"></div>
+    <div id="chart2"></div>
+  </div>
+
+  <h2>El desglose completo</h2>
+  <p class="sub">Cada categoría, cada semana. Se desliza a los lados. Los ceros van como «·» para que resalte lo que sí tuvo movimiento.</p>
+  <div class="card" style="padding:0">
+    <div class="scroll"><table id="matriz"></table></div>
+  </div>
+
+  <h2>Nómina, por persona</h2>
+  <div class="card" style="padding:0"><table id="nomina"></table></div>
+
+  <h2>Los 20 gastos más grandes</h2>
+  <div class="card" style="padding:0"><table id="top"></table></div>
+
+  <h2>Lo que no pude clasificar</h2>
+  <p class="sub">Si me dices qué son, los acomodo y el reporte queda al 100%.</p>
+  <div class="card" style="padding:0"><table id="sc"></table></div>
+
+  <div class="note">
+    <b>Cómo leer esto.</b> Las categorías salen de las notas que escribes al registrar cada gasto, no de un campo
+    del sistema. Funciona bien para lo que ya pasó porque el 100% de tus 309 gastos tiene nota — pero de aquí en
+    adelante depende de que sigas escribiendo notas descriptivas. Si un día pones «pago» a secas, ese gasto cae
+    en «sin clasificar». La versión robusta sería agregar una subcategoría real al registrar el gasto.
+    <br><br>
+    <b>Un detalle de las ventas.</b> Los $383,219 son ventas sin propina, tomados de las pantallas de Cierre
+    Mensual. La última semana (6-sep) trae un solo día, por eso se ve tan corta.
+  </div>
+
+</div>
+<div id="tip"></div>
+
+<script>
+const DATA = {
+ "periodo": {
+  "desde": "2026-06-10",
+  "hasta": "2026-09-06",
+  "semanas": 14
+ },
+ "ventas_sin_propina": 383218.6,
+ "ventas_mes": {
+  "Junio": 130138.1,
+  "Julio": 125629.3,
+  "Agosto": 107422.7,
+  "Septiembre": 20028.5
+ },
+ "gastos_mes": {
+  "Junio": 91709.59,
+  "Julio": 133428.11,
+  "Agosto": 129462.9,
+  "Septiembre": 6369.8
+ },
+ "total_gastos": 360970.4,
+ "n_movimientos": 309,
+ "semanas": [
+  "2026-06-07",
+  "2026-06-14",
+  "2026-06-21",
+  "2026-06-28",
+  "2026-07-05",
+  "2026-07-12",
+  "2026-07-19",
+  "2026-07-26",
+  "2026-08-02",
+  "2026-08-09",
+  "2026-08-16",
+  "2026-08-23",
+  "2026-08-30",
+  "2026-09-06"
+ ],
+ "cobrado_semana": {
+  "2026-06-07": 22322.85,
+  "2026-06-14": 36279.03,
+  "2026-06-21": 57601.93,
+  "2026-06-28": 46375.52,
+  "2026-07-05": 40503.83,
+  "2026-07-12": 24752.84,
+  "2026-07-19": 26925.53,
+  "2026-07-26": 29026.0,
+  "2026-08-02": 28307.18,
+  "2026-08-09": 30551.35,
+  "2026-08-16": 31709.95,
+  "2026-08-23": 20577.75,
+  "2026-08-30": 23952.4,
+  "2026-09-06": 2480.25
+ },
+ "categorias": [
+  {
+   "cat": "Nómina",
+   "grupo": "Fijos",
+   "total": 86286.0,
+   "n": 46,
+   "semanal": {
+    "2026-06-07": 0.0,
+    "2026-06-14": 8680.0,
+    "2026-06-21": 12025.0,
+    "2026-06-28": 6435.0,
+    "2026-07-05": 12685.0,
+    "2026-07-12": 5055.0,
+    "2026-07-19": 6571.0,
+    "2026-07-26": 4600.0,
+    "2026-08-02": 6535.0,
+    "2026-08-09": 6375.0,
+    "2026-08-16": 2675.0,
+    "2026-08-23": 9075.0,
+    "2026-08-30": 3100.0,
+    "2026-09-06": 2475.0
+   }
+  },
+  {
+   "cat": "Renta",
+   "grupo": "Fijos",
+   "total": 46000.0,
+   "n": 4,
+   "semanal": {
+    "2026-06-07": 0.0,
+    "2026-06-14": 0.0,
+    "2026-06-21": 10000.0,
+    "2026-06-28": 0.0,
+    "2026-07-05": 0.0,
+    "2026-07-12": 0.0,
+    "2026-07-19": 18000.0,
+    "2026-07-26": 0.0,
+    "2026-08-02": 0.0,
+    "2026-08-09": 0.0,
+    "2026-08-16": 0.0,
+    "2026-08-23": 5000.0,
+    "2026-08-30": 13000.0,
+    "2026-09-06": 0.0
+   }
+  },
+  {
+   "cat": "Destilados",
+   "grupo": "Insumos",
+   "total": 44729.7,
+   "n": 39,
+   "semanal": {
+    "2026-06-07": 907.0,
+    "2026-06-14": 2836.73,
+    "2026-06-21": 7797.0,
+    "2026-06-28": 7952.0,
+    "2026-07-05": 2199.0,
+    "2026-07-12": 1185.0,
+    "2026-07-19": 6986.98,
+    "2026-07-26": 1841.99,
+    "2026-08-02": 647.0,
+    "2026-08-09": 6920.0,
+    "2026-08-16": 300.0,
+    "2026-08-23": 5157.0,
+    "2026-08-30": 0.0,
+    "2026-09-06": 0.0
+   }
+  },
+  {
+   "cat": "Cerveza",
+   "grupo": "Insumos",
+   "total": 39087.21,
+   "n": 37,
+   "semanal": {
+    "2026-06-07": 1922.0,
+    "2026-06-14": 4160.0,
+    "2026-06-21": 5468.51,
+    "2026-06-28": 7975.89,
+    "2026-07-05": 1654.0,
+    "2026-07-12": 4745.46,
+    "2026-07-19": 3792.16,
+    "2026-07-26": 640.76,
+    "2026-08-02": 811.76,
+    "2026-08-09": 2777.37,
+    "2026-08-16": 0.0,
+    "2026-08-23": 4860.5,
+    "2026-08-30": 278.8,
+    "2026-09-06": 0.0
+   }
+  },
+  {
+   "cat": "Préstamo",
+   "grupo": "Fijos",
+   "total": 31000.0,
+   "n": 2,
+   "semanal": {
+    "2026-06-07": 0.0,
+    "2026-06-14": 0.0,
+    "2026-06-21": 0.0,
+    "2026-06-28": 0.0,
+    "2026-07-05": 15500.0,
+    "2026-07-12": 0.0,
+    "2026-07-19": 0.0,
+    "2026-07-26": 0.0,
+    "2026-08-02": 0.0,
+    "2026-08-09": 15500.0,
+    "2026-08-16": 0.0,
+    "2026-08-23": 0.0,
+    "2026-08-30": 0.0,
+    "2026-09-06": 0.0
+   }
+  },
+  {
+   "cat": "Refrescos y mixers",
+   "grupo": "Insumos",
+   "total": 27812.0,
+   "n": 36,
+   "semanal": {
+    "2026-06-07": 691.0,
+    "2026-06-14": 1370.0,
+    "2026-06-21": 5735.0,
+    "2026-06-28": 2657.0,
+    "2026-07-05": 2548.0,
+    "2026-07-12": 1092.0,
+    "2026-07-19": 2613.0,
+    "2026-07-26": 1896.0,
+    "2026-08-02": 1630.0,
+    "2026-08-09": 3678.0,
+    "2026-08-16": 1748.0,
+    "2026-08-23": 2154.0,
+    "2026-08-30": 0.0,
+    "2026-09-06": 0.0
+   }
+  },
+  {
+   "cat": "Cocina y botanas",
+   "grupo": "Insumos",
+   "total": 27177.98,
+   "n": 54,
+   "semanal": {
+    "2026-06-07": 2138.0,
+    "2026-06-14": 3353.39,
+    "2026-06-21": 2746.0,
+    "2026-06-28": 4206.4,
+    "2026-07-05": 2300.0,
+    "2026-07-12": 1745.0,
+    "2026-07-19": 1172.62,
+    "2026-07-26": 1071.3,
+    "2026-08-02": 2684.0,
+    "2026-08-09": 1325.6,
+    "2026-08-16": 701.78,
+    "2026-08-23": 3723.89,
+    "2026-08-30": 10.0,
+    "2026-09-06": 0.0
+   }
+  },
+  {
+   "cat": "Permiso",
+   "grupo": "Fijos",
+   "total": 20600.0,
+   "n": 2,
+   "semanal": {
+    "2026-06-07": 0.0,
+    "2026-06-14": 0.0,
+    "2026-06-21": 0.0,
+    "2026-06-28": 0.0,
+    "2026-07-05": 10300.0,
+    "2026-07-12": 0.0,
+    "2026-07-19": 0.0,
+    "2026-07-26": 0.0,
+    "2026-08-02": 0.0,
+    "2026-08-09": 10300.0,
+    "2026-08-16": 0.0,
+    "2026-08-23": 0.0,
+    "2026-08-30": 0.0,
+    "2026-09-06": 0.0
+   }
+  },
+  {
+   "cat": "Limpieza y desechables",
+   "grupo": "Operación",
+   "total": 6566.17,
+   "n": 30,
+   "semanal": {
+    "2026-06-07": 264.0,
+    "2026-06-14": 0.0,
+    "2026-06-21": 346.59,
+    "2026-06-28": 720.9,
+    "2026-07-05": 456.95,
+    "2026-07-12": 539.16,
+    "2026-07-19": 559.59,
+    "2026-07-26": 0.0,
+    "2026-08-02": 185.0,
+    "2026-08-09": 1337.98,
+    "2026-08-16": 228.0,
+    "2026-08-23": 1734.0,
+    "2026-08-30": 194.0,
+    "2026-09-06": 0.0
+   }
+  },
+  {
+   "cat": "Basura",
+   "grupo": "Fijos",
+   "total": 6100.0,
+   "n": 2,
+   "semanal": {
+    "2026-06-07": 0.0,
+    "2026-06-14": 0.0,
+    "2026-06-21": 0.0,
+    "2026-06-28": 0.0,
+    "2026-07-05": 0.0,
+    "2026-07-12": 3200.0,
+    "2026-07-19": 0.0,
+    "2026-07-26": 0.0,
+    "2026-08-02": 0.0,
+    "2026-08-09": 0.0,
+    "2026-08-16": 0.0,
+    "2026-08-23": 2900.0,
+    "2026-08-30": 0.0,
+    "2026-09-06": 0.0
+   }
+  },
+  {
+   "cat": "Retiros y ajustes",
+   "grupo": "Operación",
+   "total": 5990.0,
+   "n": 5,
+   "semanal": {
+    "2026-06-07": 0.0,
+    "2026-06-14": 4490.0,
+    "2026-06-21": 0.0,
+    "2026-06-28": 1500.0,
+    "2026-07-05": 0.0,
+    "2026-07-12": 0.0,
+    "2026-07-19": 0.0,
+    "2026-07-26": 0.0,
+    "2026-08-02": 0.0,
+    "2026-08-09": 0.0,
+    "2026-08-16": 0.0,
+    "2026-08-23": 0.0,
+    "2026-08-30": 0.0,
+    "2026-09-06": 0.0
+   }
+  },
+  {
+   "cat": "Sin clasificar",
+   "grupo": "Operación",
+   "total": 5041.02,
+   "n": 17,
+   "semanal": {
+    "2026-06-07": 1567.0,
+    "2026-06-14": 0.0,
+    "2026-06-21": 979.0,
+    "2026-06-28": 107.0,
+    "2026-07-05": 66.0,
+    "2026-07-12": 0.0,
+    "2026-07-19": 0.0,
+    "2026-07-26": 0.0,
+    "2026-08-02": 0.0,
+    "2026-08-09": 820.0,
+    "2026-08-16": 300.82,
+    "2026-08-23": 859.2,
+    "2026-08-30": 342.0,
+    "2026-09-06": 0.0
+   }
+  },
+  {
+   "cat": "Hielo",
+   "grupo": "Insumos",
+   "total": 3975.0,
+   "n": 16,
+   "semanal": {
+    "2026-06-07": 0.0,
+    "2026-06-14": 371.0,
+    "2026-06-21": 477.0,
+    "2026-06-28": 665.0,
+    "2026-07-05": 554.0,
+    "2026-07-12": 212.0,
+    "2026-07-19": 212.0,
+    "2026-07-26": 371.0,
+    "2026-08-02": 212.0,
+    "2026-08-09": 265.0,
+    "2026-08-16": 424.0,
+    "2026-08-23": 106.0,
+    "2026-08-30": 106.0,
+    "2026-09-06": 0.0
+   }
+  },
+  {
+   "cat": "Contador",
+   "grupo": "Fijos",
+   "total": 3000.0,
+   "n": 2,
+   "semanal": {
+    "2026-06-07": 0.0,
+    "2026-06-14": 0.0,
+    "2026-06-21": 1500.0,
+    "2026-06-28": 0.0,
+    "2026-07-05": 0.0,
+    "2026-07-12": 0.0,
+    "2026-07-19": 1500.0,
+    "2026-07-26": 0.0,
+    "2026-08-02": 0.0,
+    "2026-08-09": 0.0,
+    "2026-08-16": 0.0,
+    "2026-08-23": 0.0,
+    "2026-08-30": 0.0,
+    "2026-09-06": 0.0
+   }
+  },
+  {
+   "cat": "Mantenimiento",
+   "grupo": "Operación",
+   "total": 2800.0,
+   "n": 1,
+   "semanal": {
+    "2026-06-07": 0.0,
+    "2026-06-14": 0.0,
+    "2026-06-21": 0.0,
+    "2026-06-28": 0.0,
+    "2026-07-05": 0.0,
+    "2026-07-12": 0.0,
+    "2026-07-19": 0.0,
+    "2026-07-26": 0.0,
+    "2026-08-02": 0.0,
+    "2026-08-09": 0.0,
+    "2026-08-16": 0.0,
+    "2026-08-23": 2800.0,
+    "2026-08-30": 0.0,
+    "2026-09-06": 0.0
+   }
+  },
+  {
+   "cat": "Servicios",
+   "grupo": "Fijos",
+   "total": 2423.32,
+   "n": 7,
+   "semanal": {
+    "2026-06-07": 159.0,
+    "2026-06-14": 0.0,
+    "2026-06-21": 0.0,
+    "2026-06-28": 839.37,
+    "2026-07-05": 0.0,
+    "2026-07-12": 0.0,
+    "2026-07-19": 159.0,
+    "2026-07-26": 0.0,
+    "2026-08-02": 1106.95,
+    "2026-08-09": 159.0,
+    "2026-08-16": 0.0,
+    "2026-08-23": 0.0,
+    "2026-08-30": 0.0,
+    "2026-09-06": 0.0
+   }
+  },
+  {
+   "cat": "Publicidad",
+   "grupo": "Operación",
+   "total": 1400.0,
+   "n": 1,
+   "semanal": {
+    "2026-06-07": 0.0,
+    "2026-06-14": 0.0,
+    "2026-06-21": 1400.0,
+    "2026-06-28": 0.0,
+    "2026-07-05": 0.0,
+    "2026-07-12": 0.0,
+    "2026-07-19": 0.0,
+    "2026-07-26": 0.0,
+    "2026-08-02": 0.0,
+    "2026-08-09": 0.0,
+    "2026-08-16": 0.0,
+    "2026-08-23": 0.0,
+    "2026-08-30": 0.0,
+    "2026-09-06": 0.0
+   }
+  },
+  {
+   "cat": "Agua",
+   "grupo": "Operación",
+   "total": 982.0,
+   "n": 8,
+   "semanal": {
+    "2026-06-07": 0.0,
+    "2026-06-14": 0.0,
+    "2026-06-21": 250.0,
+    "2026-06-28": 58.0,
+    "2026-07-05": 0.0,
+    "2026-07-12": 0.0,
+    "2026-07-19": 408.0,
+    "2026-07-26": 0.0,
+    "2026-08-02": 150.0,
+    "2026-08-09": 0.0,
+    "2026-08-16": 58.0,
+    "2026-08-23": 0.0,
+    "2026-08-30": 58.0,
+    "2026-09-06": 0.0
+   }
+  }
+ ],
+ "grupos": {
+  "Fijos": {
+   "2026-06-07": 159.0,
+   "2026-06-14": 8680.0,
+   "2026-06-21": 23525.0,
+   "2026-06-28": 7274.37,
+   "2026-07-05": 38485.0,
+   "2026-07-12": 8255.0,
+   "2026-07-19": 26230.0,
+   "2026-07-26": 4600.0,
+   "2026-08-02": 7641.95,
+   "2026-08-09": 32334.0,
+   "2026-08-16": 2675.0,
+   "2026-08-23": 16975.0,
+   "2026-08-30": 16100.0,
+   "2026-09-06": 2475.0
+  },
+  "Insumos": {
+   "2026-06-07": 5658.0,
+   "2026-06-14": 12091.12,
+   "2026-06-21": 22223.51,
+   "2026-06-28": 23456.29,
+   "2026-07-05": 9255.0,
+   "2026-07-12": 8979.46,
+   "2026-07-19": 14776.76,
+   "2026-07-26": 5821.05,
+   "2026-08-02": 5984.76,
+   "2026-08-09": 14965.97,
+   "2026-08-16": 3173.78,
+   "2026-08-23": 16001.39,
+   "2026-08-30": 394.8,
+   "2026-09-06": 0.0
+  },
+  "Operación": {
+   "2026-06-07": 1831.0,
+   "2026-06-14": 4490.0,
+   "2026-06-21": 2975.59,
+   "2026-06-28": 2385.9,
+   "2026-07-05": 522.95,
+   "2026-07-12": 539.16,
+   "2026-07-19": 967.59,
+   "2026-07-26": 0.0,
+   "2026-08-02": 335.0,
+   "2026-08-09": 2157.98,
+   "2026-08-16": 586.82,
+   "2026-08-23": 5393.2,
+   "2026-08-30": 594.0,
+   "2026-09-06": 0.0
+  }
+ },
+ "nomina_por_persona": {
+  "memo": 41500.0,
+  "gus": 27600.0,
+  "javier": 14026.0,
+  "alexis": 2760.0,
+  "negro": 400.0
+ },
+ "top_gastos": [
+  {
+   "fecha": "2026-07-25",
+   "monto": 18000.0,
+   "cat": "Renta",
+   "nota": "Renta Julio"
+  },
+  {
+   "fecha": "2026-07-05",
+   "monto": 15500.0,
+   "cat": "Préstamo",
+   "nota": "Pago préstamo Juan"
+  },
+  {
+   "fecha": "2026-08-15",
+   "monto": 15500.0,
+   "cat": "Préstamo",
+   "nota": "Pago prestamo Juan"
+  },
+  {
+   "fecha": "2026-08-31",
+   "monto": 13000.0,
+   "cat": "Renta",
+   "nota": "Completar Renta 31 de agosto"
+  },
+  {
+   "fecha": "2026-07-11",
+   "monto": 10300.0,
+   "cat": "Permiso",
+   "nota": "Permiso provisional Julio"
+  },
+  {
+   "fecha": "2026-08-15",
+   "monto": 10300.0,
+   "cat": "Permiso",
+   "nota": "permiso provisional de funcionamiento Agosto"
+  },
+  {
+   "fecha": "2026-06-22",
+   "monto": 10000.0,
+   "cat": "Renta",
+   "nota": "Restante Renta Junio"
+  },
+  {
+   "fecha": "2026-08-25",
+   "monto": 5000.0,
+   "cat": "Renta",
+   "nota": "Renta parcial 25 de agosto"
+  },
+  {
+   "fecha": "2026-06-22",
+   "monto": 4408.0,
+   "cat": "Destilados",
+   "nota": "Pago botellas oviedo"
+  },
+  {
+   "fecha": "2026-06-21",
+   "monto": 3850.0,
+   "cat": "Nómina",
+   "nota": "NOMINA MEMO"
+  },
+  {
+   "fecha": "2026-06-27",
+   "monto": 3675.0,
+   "cat": "Nómina",
+   "nota": "NOMINA MEMO 27/6"
+  },
+  {
+   "fecha": "2026-08-23",
+   "monto": 3656.0,
+   "cat": "Destilados",
+   "nota": "Botellas Oviedo"
+  },
+  {
+   "fecha": "2026-06-14",
+   "monto": 3650.0,
+   "cat": "Nómina",
+   "nota": "Nomina Memo"
+  },
+  {
+   "fecha": "2026-07-11",
+   "monto": 3600.0,
+   "cat": "Nómina",
+   "nota": "Nomina memo"
+  },
+  {
+   "fecha": "2026-07-01",
+   "monto": 3571.88,
+   "cat": "Cerveza",
+   "nota": "Pago Heineken cerveza junio 30"
+  },
+  {
+   "fecha": "2026-06-26",
+   "monto": 3570.0,
+   "cat": "Refrescos y mixers",
+   "nota": "Pago botanas  boneless  topo chico  negro"
+  },
+  {
+   "fecha": "2026-06-14",
+   "monto": 3500.0,
+   "cat": "Nómina",
+   "nota": "Nomina Javier"
+  },
+  {
+   "fecha": "2026-06-19",
+   "monto": 3200.0,
+   "cat": "Cerveza",
+   "nota": "Pago Cerveza"
+  },
+  {
+   "fecha": "2026-07-17",
+   "monto": 3200.0,
+   "cat": "Basura",
+   "nota": "Pago recolección de basura"
+  },
+  {
+   "fecha": "2026-07-14",
+   "monto": 3186.12,
+   "cat": "Cerveza",
+   "nota": "Pago Cerveza Heineken"
+  }
+ ],
+ "sin_clasificar": [
+  {
+   "fecha": "2026-06-12",
+   "monto": 1517.0,
+   "nota": "RMar pedido"
+  },
+  {
+   "fecha": "2026-06-23",
+   "monto": 797.0,
+   "nota": "R-MAR 23/06/26"
+  },
+  {
+   "fecha": "2026-08-27",
+   "monto": 664.0,
+   "nota": "pago aldo 27/08/26"
+  },
+  {
+   "fecha": "2026-08-15",
+   "monto": 540.0,
+   "nota": "aldo 15/08/26"
+  },
+  {
+   "fecha": "2026-08-15",
+   "monto": 280.0,
+   "nota": "Controy"
+  },
+  {
+   "fecha": "2026-08-22",
+   "monto": 230.0,
+   "nota": "pago lalo 22/08/26"
+  },
+  {
+   "fecha": "2026-09-01",
+   "monto": 203.0,
+   "nota": "pago ald0 01/09/26"
+  },
+  {
+   "fecha": "2026-09-03",
+   "monto": 139.0,
+   "nota": "jamaica 03/09/26"
+  },
+  {
+   "fecha": "2026-08-23",
+   "monto": 115.2,
+   "nota": "jicama y pepino"
+  },
+  {
+   "fecha": "2026-06-23",
+   "monto": 100.0,
+   "nota": "R-AR 23/06/26"
+  },
+  {
+   "fecha": "2026-07-03",
+   "monto": 87.0,
+   "nota": "tostadas y crema 03/07/2025"
+  },
+  {
+   "fecha": "2026-06-25",
+   "monto": 82.0,
+   "nota": "Vino tinto caja"
+  },
+  {
+   "fecha": "2026-08-24",
+   "monto": 80.0,
+   "nota": "/cardamomo 24/08/26"
+  },
+  {
+   "fecha": "2026-08-22",
+   "monto": 70.82,
+   "nota": "agitadores plastico 22/08/26"
+  },
+  {
+   "fecha": "2026-07-11",
+   "monto": 66.0,
+   "nota": "Tostadas"
+  },
+  {
+   "fecha": "2026-06-12",
+   "monto": 50.0,
+   "nota": "Cigarros Memo"
+  },
+  {
+   "fecha": "2026-06-28",
+   "monto": 20.0,
+   "nota": "rollo papel para aceite"
+  }
+ ]
+};
+
+const mx = n => '$' + Math.round(n).toLocaleString('es-MX');
+const mx1 = n => '$' + n.toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2});
+const pct = n => n.toFixed(1) + '%';
+const GRUPOS = [['Fijos','var(--s1)'],['Insumos','var(--s2)'],['Operación','var(--s3)']];
+const COLOR = {Fijos:'var(--s1)', Insumos:'var(--s2)', 'Operación':'var(--s3)'};
+const VEN = DATA.ventas_sin_propina, TOT = DATA.total_gastos, NS = DATA.periodo.semanas;
+
+/* ── Tiles ─────────────────────────────────────────────── */
+document.getElementById('t-ven').textContent = mx(VEN);
+document.getElementById('t-gas').textContent = mx(TOT);
+document.getElementById('t-gasf').textContent = pct(100*TOT/VEN) + ' de la venta';
+document.getElementById('t-que').textContent = mx(VEN-TOT);
+document.getElementById('t-quef').textContent = pct(100*(VEN-TOT)/VEN) + ' de margen';
+document.getElementById('t-sem').textContent = mx(TOT/NS);
+
+/* ── Tooltip ───────────────────────────────────────────── */
+const tip = document.getElementById('tip');
+function showTip(e, title, rows){
+  tip.innerHTML = '<div class="t">'+title+'</div>' +
+    rows.map(r=>'<div class="r"><span>'+r[0]+'</span><span>'+r[1]+'</span></div>').join('');
+  tip.style.opacity = 1;
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  let x = e.clientX + 14, y = e.clientY - h - 10;
+  if (x + w > innerWidth - 8) x = e.clientX - w - 14;
+  if (y < 8) y = e.clientY + 16;
+  tip.style.left = x+'px'; tip.style.top = y+'px';
+}
+const hideTip = () => tip.style.opacity = 0;
+function wire(el, title, rows){
+  el.addEventListener('mousemove', e => showTip(e, title, rows));
+  el.addEventListener('mouseleave', hideTip);
+}
+
+/* ── Leyendas ──────────────────────────────────────────── */
+function legend(id, items){
+  document.getElementById(id).innerHTML = items.map(([n,c]) =>
+    '<span><span class="dot" style="background:'+c+'"></span>'+n+'</span>').join('');
+}
+legend('leg1', GRUPOS.map(([n,c])=>[n+' — '+pct(100*DATA.categorias.filter(x=>x.grupo===n).reduce((s,x)=>s+x.total,0)/TOT), c]));
+legend('leg2', GRUPOS);
+
+/* ── Chart 1: barras horizontales por categoría ────────── */
+(function(){
+  const cats = DATA.categorias;
+  const RH = 27, PAD_L = 168, PAD_R = 92, TOP = 6;
+  const H = cats.length*RH + TOP + 4, W = 820;
+  const plot = W - PAD_L - PAD_R;
+  const max = Math.max(...cats.map(c=>c.total));
+  let s = '<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Gasto total por categoría">';
+  cats.forEach((c,i)=>{
+    const y = TOP + i*RH, bw = Math.max(2, plot*c.total/max);
+    s += '<text x="'+(PAD_L-10)+'" y="'+(y+14)+'" text-anchor="end" font-size="12.5" fill="var(--ink)">'+c.cat+'</text>';
+    s += '<rect class="bar" data-i="'+i+'" x="'+PAD_L+'" y="'+(y+4)+'" width="'+bw+'" height="15" rx="4" fill="'+COLOR[c.grupo]+'"/>';
+    // Si la barra es larga, el monto va DENTRO para no chocar con la columna de %.
+    const inside = bw > plot - 78;
+    s += inside
+      ? '<text x="'+(PAD_L+bw-9)+'" y="'+(y+15)+'" text-anchor="end" font-size="12" fill="#fff" font-weight="600">'+mx(c.total)+'</text>'
+      : '<text x="'+(PAD_L+bw+9)+'" y="'+(y+15)+'" font-size="12" fill="var(--ink2)">'+mx(c.total)+'</text>';
+    s += '<text x="'+W+'" y="'+(y+15)+'" text-anchor="end" font-size="11.5" fill="var(--muted)">'+pct(100*c.total/VEN)+' vta</text>';
+  });
+  s += '</svg>';
+  document.getElementById('chart1').innerHTML = s;
+  document.querySelectorAll('#chart1 .bar').forEach(el=>{
+    const c = cats[+el.dataset.i];
+    wire(el, c.cat, [['Grupo', c.grupo], ['Total', mx1(c.total)],
+      ['% del gasto', pct(100*c.total/TOT)], ['% de la venta', pct(100*c.total/VEN)],
+      ['Por semana', mx1(c.total/NS)], ['Movimientos', c.n]]);
+  });
+})();
+
+/* ── Chart 2: columnas apiladas por semana ─────────────── */
+(function(){
+  const sem = DATA.semanas, W = 820, H = 260, PAD_L = 46, PAD_B = 34, PAD_T = 10;
+  const plotH = H - PAD_B - PAD_T, plotW = W - PAD_L - 10;
+  const totals = sem.map(s => GRUPOS.reduce((a,[g]) => a + DATA.grupos[g][s], 0));
+  const max = Math.ceil(Math.max(...totals)/10000)*10000;
+  const bw = Math.min(38, plotW/sem.length - 9);
+  const x = i => PAD_L + (i+0.5)*(plotW/sem.length) - bw/2;
+  const y = v => PAD_T + plotH - plotH*v/max;
+  let s = '<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Gasto semanal por grupo">';
+  for(let g=0; g<=max; g+=10000){
+    s += '<line x1="'+PAD_L+'" x2="'+W+'" y1="'+y(g)+'" y2="'+y(g)+'" stroke="var(--grid)" stroke-width="1"/>';
+    s += '<text x="'+(PAD_L-8)+'" y="'+(y(g)+4)+'" text-anchor="end" font-size="11" fill="var(--muted)">'+(g/1000)+'k</text>';
+  }
+  sem.forEach((sm,i)=>{
+    let acc = 0;
+    GRUPOS.forEach(([g,c])=>{
+      const v = DATA.grupos[g][sm];
+      if (v > 0){
+        const h = Math.max(1.5, plotH*v/max - 2);
+        s += '<rect class="bar" data-i="'+i+'" data-g="'+g+'" x="'+x(i)+'" y="'+(y(acc+v)+2)+'" width="'+bw+'" height="'+h+'" rx="3" fill="'+c+'"/>';
+      }
+      acc += v;
+    });
+    const d = sm.slice(8)+'/'+sm.slice(5,7);
+    s += '<text x="'+(x(i)+bw/2)+'" y="'+(H-13)+'" text-anchor="middle" font-size="10.5" fill="var(--muted)">'+d+'</text>';
+    s += '<text x="'+(x(i)+bw/2)+'" y="'+(y(totals[i])-4)+'" text-anchor="middle" font-size="10.5" fill="var(--ink2)">'+Math.round(totals[i]/1000)+'</text>';
+  });
+  s += '</svg>';
+  document.getElementById('chart2').innerHTML = s;
+  document.querySelectorAll('#chart2 .bar').forEach(el=>{
+    const i = +el.dataset.i, sm = sem[i];
+    wire(el, 'Semana del ' + sm, GRUPOS.map(([g]) => [g, mx1(DATA.grupos[g][sm])])
+      .concat([['— Total —', mx1(totals[i])], ['Cobrado (con propina)', mx1(DATA.cobrado_semana[sm])]]));
+  });
+})();
+
+/* ── Tabla matriz ──────────────────────────────────────── */
+(function(){
+  const sem = DATA.semanas;
+  let h = '<thead><tr><th>Categoría</th><th>Total</th>' +
+    sem.map(s=>'<th>'+s.slice(8)+'/'+s.slice(5,7)+'</th>').join('') + '</tr></thead><tbody>';
+  DATA.categorias.forEach(c=>{
+    h += '<tr><td><span class="dot" style="background:'+COLOR[c.grupo]+'"></span>'+c.cat+'</td>' +
+      '<td><b>'+mx(c.total)+'</b></td>' +
+      sem.map(s=>{const v=c.semanal[s]; return '<td'+(v?'':' class="z"')+'>'+(v?Math.round(v).toLocaleString('es-MX'):'·')+'</td>';}).join('') + '</tr>';
+  });
+  h += '<tr class="tot"><td>Total</td><td>'+mx(DATA.total_gastos)+'</td>' +
+    sem.map(s=>{const v=DATA.categorias.reduce((a,c)=>a+c.semanal[s],0); return '<td>'+Math.round(v).toLocaleString('es-MX')+'</td>';}).join('') + '</tr>';
+  document.getElementById('matriz').innerHTML = h + '</tbody>';
+})();
+
+/* ── Tablas chicas ─────────────────────────────────────── */
+(function(){
+  const n = DATA.nomina_por_persona, tot = Object.values(n).reduce((a,b)=>a+b,0);
+  const cap = s => s.charAt(0).toUpperCase()+s.slice(1);
+  document.getElementById('nomina').innerHTML =
+    '<thead><tr><th>Persona</th><th>Total</th><th>% de la nómina</th><th>Por semana</th></tr></thead><tbody>' +
+    Object.entries(n).map(([k,v])=>'<tr><td>'+cap(k)+'</td><td>'+mx1(v)+'</td><td>'+pct(100*v/tot)+'</td><td>'+mx(v/NS)+'</td></tr>').join('') +
+    '<tr class="tot"><td>Total</td><td>'+mx1(tot)+'</td><td>100.0%</td><td>'+mx(tot/NS)+'</td></tr></tbody>';
+
+  document.getElementById('top').innerHTML =
+    '<thead><tr><th>Fecha</th><th style="text-align:left">Categoría</th><th style="text-align:left">Nota</th><th>Monto</th></tr></thead><tbody>' +
+    DATA.top_gastos.map(g=>'<tr><td>'+g.fecha+'</td><td style="text-align:left"><span class="dot" style="background:'+
+      (COLOR[DATA.categorias.find(c=>c.cat===g.cat).grupo])+'"></span>'+g.cat+'</td>' +
+      '<td style="text-align:left;white-space:normal">'+g.nota+'</td><td>'+mx1(g.monto)+'</td></tr>').join('') + '</tbody>';
+
+  const sc = DATA.sin_clasificar;
+  document.getElementById('sc').innerHTML =
+    '<thead><tr><th>Fecha</th><th style="text-align:left">Nota</th><th>Monto</th></tr></thead><tbody>' +
+    sc.map(g=>'<tr><td>'+g.fecha+'</td><td style="text-align:left;white-space:normal">'+g.nota+'</td><td>'+mx1(g.monto)+'</td></tr>').join('') +
+    '<tr class="tot"><td>'+sc.length+' movimientos</td><td></td><td>'+mx1(sc.reduce((a,g)=>a+g.monto,0))+'</td></tr></tbody>';
+})();
+</script>
+</body>
+</html>

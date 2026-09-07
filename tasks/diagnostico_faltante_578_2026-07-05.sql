@@ -132,10 +132,10 @@ WHERE cm.category = 'propinas_entregadas'
 SELECT
     c.folio,
     c.status,
-    c.created_at AT TIME ZONE 'America/Mexico_City' AS abierta,
-    c.closed_at  AT TIME ZONE 'America/Mexico_City' AS cerrada,
-    c.total,
+    c.opened_at AT TIME ZONE 'America/Mexico_City' AS abierta,
+    c.closed_at AT TIME ZONE 'America/Mexico_City' AS cerrada,
     c.final_total,
+    c.tip_total,
     (SELECT COUNT(*) FROM comanda_items ci
       WHERE ci.comanda_id = c.id AND ci.status = 'active') AS items_activos,
     (p.id IS NOT NULL) AS tiene_pago
