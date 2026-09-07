@@ -1,3 +1,122 @@
+## Plan — Sesión 2026-09-07 v3: terminal por venta y comisión exacta — ✅ CODEADO, PENDIENTE QUE JAVI CORRA MIGRACIÓN Y BACKFILL
+
+> **v3 (2026-09-07):** Javi cuestionó el tamaño del plan v2 y tenía razón. Esta versión lo reduce a lo que de verdad paga. Reemplaza a la v2 completa.
+>
+> **Lo que se cayó de la v2:** la pantalla de conciliación `/admin/conciliacion`, la tabla `reconciliations`, el formulario de captura de saldos, y la revisión folio por folio de las 460 ventas.
+> **Lo que ya se había caído en la v2** (por el cambio de proceso de Javi): partir `bank` en dos cuentas, la categoría de reenvío Getnet→MP, el selector de cuenta en los gastos y el backfill de ~25 gastos.
+> **Lo que queda:** capturar la terminal, arreglar la leyenda del Ledger, y dos renglones informativos.
+
+### Por qué se hace esto (y por qué es chico)
+
+No es para buscar dinero: la auditoría cerró con residuo de $324.76 (0.11%) y **no falta nada**. Son dos razones concretas:
+
+**1. La leyenda del Ledger miente hoy, y el error crece.**
+
+| | |
+|---|---|
+| BANCO que muestra el Ledger | $23,089.61 |
+| Leyenda "Real estimado (− comisión MP)" | $11,445.55 |
+| → comisión que asume la leyenda | $11,644.06 |
+| Comisión real (MP $7,926.89 + Getnet $1,986.76) | **$9,913.65** |
+| **Error de la leyenda** | **$1,730.41** |
+
+`estimateBankNet()` aplica 4.06% a *toda* la tarjeta, incluyendo lo cobrado con Getnet al 2.17%. El saldo real del banco es **$13,175.96**, no $11,445.55. **El error crece $18.90 por cada $1,000 vendidos con Getnet.** Esto no es una función nueva: es un número que ya está en pantalla y está mal.
+
+**2. La terminal por venta es el único dato que se pierde para siempre si no se captura.** Todo lo demás se puede hacer en diciembre igual de bien. Hoy se pudo inferir porque Mercado Pago publica línea por línea y las dos terminales tienen tasas distintas — el día que Getnet cambie su tarifa a 4%, esa inferencia deja de funcionar y el histórico nuevo queda ciego.
+
+### Diseño
+
+**El modelo de saldos NO se toca.** BANCO sigue siendo bruto, como hoy — Javi quiere seguir viendo el total cobrado con tarjeta. Lo único que cambia es que la leyenda de abajo pasa de estimada a exacta.
+
+```
+FACTOR_NETO = { mp: 0.9594,      // 3.5% + IVA = 4.06% — verificado en 341 de 353 liberaciones
+                getnet: 0.9783 } // 2.17% — verificado exacto al centavo en 7 barridos
+```
+
+Sin filas nuevas, sin tocar el RPC de cobro, reversible cambiando una constante.
+
+### ✅ Decisión de Javi (2026-09-07): opción (b) — guardado aparte, con aviso si falla
+
+**El RPC `finalize_comanda_payment` NO se toca en ningún punto de este plan.** La venta se guarda como hoy; inmediatamente después el frontend manda un `UPDATE` con la terminal.
+
+Mitigación obligatoria del riesgo de esa segunda operación: **si el update falla, el POS lo avisa en pantalla en ese momento**, con el folio, para que se corrija ahí mismo. Nunca silencioso. Además el Ledger marca visualmente las ventas con `card_terminal` en NULL.
+
+(Se descartó la opción (a) —parámetro nuevo en el RPC— por decisión de Javi de no tocar código de cobro en producción.)
+
+---
+
+### Fase 0 — Clasificación del histórico — ✅ HECHA 2026-09-07 (solo lectura)
+
+- [x] Cada venta con tarjeta del ledger comparada contra las 353 "Liberación de dinero" del estado de cuenta de Mercado Pago (una por venta, mismo día, netas de 4.06%).
+- [x] **Regla base:** `folio <= 572` → `mp` (285 folios, $180,440.50) · `folio >= 573` → `getnet` (175 folios, $110,308.91). El corte es limpio: última venta con tarjeta antes del 25-jul es el folio 572, primera después es el 574.
+- [x] **24 excepciones** en 9 días de la era Getnet que también cobraron por Mercado Pago, identificadas folio por folio. Los 9 días cierran al centavo.
+- [x] **Resultado:** `mp` 309 folios $196,144.27 · `getnet` 151 folios $94,605.14 · suma 460 folios $290,749.41 ✓ (cuadra con Cierre Mensual).
+- [x] **Control:** (mp bruto − $1,030 de SPEI de junio) × 0.9594 = $187,192.63 vs $187,316.75 de liberaciones reales = **−$124.12 (0.07%)**, el mismo residuo ya medido en la auditoría.
+- [x] Entregable: `tasks/backfill_card_terminal_2026-09-07.sql` — clasificación documentada en comentarios + SQL por bloques + 3 bloques de verificación + rollback.
+
+### Fase 1 — Migración + backfill (solo datos, sin UI)
+- [x] `supabase/migrations/20260907000001_add_payments_card_terminal.sql`: columna + CHECK + **RPC `set_payment_card_terminal`** (ver hallazgo abajo).
+- [ ] **PENDIENTE DE JAVI:** correr la migración (`npx supabase db push`) y luego `tasks/backfill_card_terminal_2026-09-07.sql` bloque por bloque.
+- [ ] **Verificación (en el propio SQL, bloques 6-8):** reparto final exacto (309/151), cero ventas sin terminal, y día por día `mp_bruto × 0.9594` = liberaciones de ese día en el estado de cuenta.
+
+### Fase 2 — Capturar la terminal en el cobro
+- [x] Selector de 2 botones en `PaymentPanel.jsx`, visible solo cuando `tarjeta > 0`. Default: última terminal usada (`config/cardTerminals.js` + `localStorage`). Cableado por `ComandaPanel` → `PosPage` → `usePayment`.
+- [x] Guardado por la vía (b): `confirmPayment` llama al RPC nuevo DESPUÉS del cobro y devuelve `terminalWarning`; el POS lo concatena al mensaje de éxito. Nunca silencioso.
+- [ ] **PENDIENTE DE JAVI:** cobrar con cada terminal en producción y confirmar el valor en la fila de `payments`.
+
+### Fase 3 — Leyenda exacta + dos renglones informativos
+- [x] `src/utils/ledger.js`: `CARD_TERMINAL_NET_FACTOR` + `netFactorForTerminal()` + `cardCommission()`. `estimateBankNet()` conservada y ahora acepta el desglose (o un número, por compatibilidad). **`bankDelta` NO cambió** — el saldo sigue siendo bruto.
+- [x] Fallback a `mp` cuando `card_terminal` es NULL, y `cardSalesUnknownTerminal` acumulado para marcarlo en la UI.
+- [x] `src/pages/LedgerPage.jsx`: leyenda **"Real (− comisión): $X"** + desglose MP/Getnet visible + **"Getnet en tránsito (últimos 2 días)"** y **"Esperado en Mercado Pago"** (solo si el rango llega hasta hoy — en un rango histórico ese dinero ya se liquidó y mostrarlo sería mentir) + aviso amarillo si hay tarjeta sin terminal registrada.
+- [x] `src/pages/MonthlyReportPage.jsx`: leyenda corregida ("Neto (−comisión de tarjeta)").
+- [x] Radio de impacto real: 9 archivos modificados + 2 nuevos. **No se tocó** `config/cashMovements.js` ni `WeeklyReportPage.jsx` ni `finalize_comanda_payment`.
+- [ ] **PENDIENTE DE JAVI (test de aceptación):** con los datos al 6-sep, tras el backfill, la leyenda debe dar **≈ $13,176** (hoy dice $11,445.55). El valor exacto depende de cómo caiga el SPEI del cliente por folio; si sale entre $13,170 y $13,182, quedó bien.
+
+### Review — 2026-09-07
+
+**Hallazgo que cambió la implementación (no la decisión):** `authenticated` solo tiene **SELECT** sobre `payments` — no hay política de UPDATE, y fue a propósito (ver el comentario de `20260516000002_fix_payments_select_rls.sql`: dar UPDATE dejaría esquivar los guards del RPC de cobro). Un `.update()` directo desde el frontend habría afectado **0 filas en silencio** — justo el hueco que este trabajo busca cerrar.
+
+Se resolvió con el patrón que el repo ya usa para `adjust_payment_tip`: un RPC chico, `set_payment_card_terminal(p_comanda_id, p_terminal)`, SECURITY DEFINER, que solo puede escribir `card_terminal` y valida que el pago exista y tenga tarjeta > 0. **`finalize_comanda_payment` sigue byte por byte igual** — la decisión de Javi se respeta completa.
+
+**Archivos nuevos (2)**
+- `supabase/migrations/20260907000001_add_payments_card_terminal.sql` — columna + CHECK + RPC + GRANT a `authenticated`.
+- `src/config/cardTerminals.js` — etiquetas, orden y persistencia de la última terminal usada.
+
+**Archivos modificados (9)**
+`utils/ledger.js` · `services/ledger.js` (trae `card_terminal`) · `services/comandaCheckout.js` · `hooks/usePayment.js` · `components/PaymentPanel.jsx` · `components/ComandaPanel.jsx` · `pages/PosPage.jsx` · `pages/LedgerPage.jsx` · `pages/MonthlyReportPage.jsx`. Total: +338 / −20.
+
+**Pruebas** — `/tmp/t_ledger.mjs`, 16 aserciones sobre el código real, todas pasan:
+factores exactos (mp 0.9594, getnet 0.9783) · fallback a `mp` con terminal nula o desconocida · comisión por terminal y mezclada · compatibilidad con la firma vieja (número suelto = todo mp) · **el saldo de banco sigue siendo BRUTO** tras el pipeline completo · acumulado correcto por terminal · `cardSalesUnknownTerminal` marca la tarjeta sin clasificar · **el SPEI del cliente entra íntegro y no paga comisión**.
+
+**Lint** — cero errores nuevos. Quedan 3 preexistentes en `MonthlyReportPage.jsx` (líneas 167-169), del patrón `set-state-in-effect` repo-wide ya documentado; ninguno en las líneas tocadas. De paso se quitó un `data` sin usar en `usePayment.js` (preexistente, pero la línea se estaba tocando de todos modos).
+
+**Pendiente de Javi**
+1. `npx supabase db push` para aplicar la migración.
+2. Correr `tasks/backfill_card_terminal_2026-09-07.sql` bloque por bloque (bloques 1-2 son SELECT).
+3. `npm run build`.
+4. Cobrar una venta con cada terminal y confirmar el dato.
+5. Abrir el Ledger con rango hasta hoy y ver que la leyenda dé ≈ $13,176.
+6. **Borrar `.git/index.lock`** — lo volvió a dejar un `git status` mío; el sandbox no puede borrarlo y bloquea el próximo commit.
+7. Borrar `_to_delete/` cuando quiera (tiene 3 planes temporales y `productCosting.js`).
+
+---
+
+### Riesgos y cómo se acotan
+- **Riesgo bajo por diseño:** no se toca el modelo de saldos ni las categorías de movimientos. El cambio más profundo es una fórmula de display.
+- **Ventas con `card_terminal` en NULL** (si Javi elige la vía (b) y falla un update) calcularían comisión de Mercado Pago cuando quizá fueron Getnet. Se mitiga con el fallback marcado visualmente.
+- **La regla de operación de Javi** (transferir siempre el monto completo de Getnet; los retiros salen siempre de Mercado Pago) no la fuerza el código. Los dos renglones informativos del Ledger son el detector, no el candado — decisión consciente para no sobre-ingenierizar.
+
+### Aplazado a propósito (no es que falte, es que no paga hoy)
+- **Pantalla de conciliación `/admin/conciliacion` + tabla `reconciliations`.** Se reevalúa si los dos renglones del Ledger no alcanzan.
+- **Reclasificar los $10,052.77 de gastos históricos** pagados desde la cuenta personal. Con la regla de operación nueva no vuelve a pasar; el registro del periodo es `tasks/conciliacion_bancaria_2026-09-06.md`.
+- **Los $910 de depósitos de efectivo** que nunca llegaron a Mercado Pago. Hilo suelto del histórico.
+- **Bug latente de paginación de `getLedgerData`** (ordena por `created_at`, que no es único; cruza las 1,000 filas ~nov-2026). Independiente de este plan, pero conviene antes de esa fecha.
+
+### Ya cerrado, sin trabajo pendiente
+- **Faltante de $578 del 5→6 julio** — ✅ resuelto 2026-09-06. Propinas cobradas $1,116.75 vs entregadas $1,116.00 ($486 esa noche + $630 de ajuste a la mañana siguiente). Eran propinas que salieron del cajón antes del conteo; quedan $52 registrados de más. Nada que corregir.
+
+---
+
 ## Plan — Sesion 2026-09-06: Costeo manual por producto, cross menu, auditoria banco (3 iniciativas) — PENDIENTE DE APROBACION, NO CODEADO
 
 ### Contexto

@@ -111,6 +111,7 @@ export async function confirmPayment({
     transferencia,
     propina,
     cambio,
+    cardTerminal,
 }) {
     const safePropina       = Number(propina       || 0);
     const safeCambio        = Number(cambio        || 0);
@@ -164,5 +165,34 @@ export async function confirmPayment({
         return { error: new Error(friendlyRpcError(rpcResult.error, 'Error al finalizar cobro.')) };
     }
 
-    return { error: null };
+    // ── Terminal de tarjeta ───────────────────────────────────────────────
+    // Se guarda APARTE, después del cobro. Decisión de Javi (2026-09-07):
+    // `finalize_comanda_payment` no se toca. Ver plan v3 en tasks/todo.md.
+    //
+    // Va por RPC y no por `.update()` directo porque los usuarios
+    // `authenticated` solo tienen SELECT sobre `payments` — un update directo
+    // afectaría 0 filas EN SILENCIO (ver 20260516000002_fix_payments_select_rls.sql).
+    //
+    // Si esto falla, el COBRO YA QUEDÓ BIEN: solo falta un dato informativo.
+    // Por eso no se devuelve como `error` (eso haría creer que no se cobró),
+    // sino como `terminalWarning` para que el POS lo muestre y se corrija.
+    let terminalWarning = null;
+
+    if (safeTarjeta > 0) {
+        if (!cardTerminal) {
+            terminalWarning = 'El cobro se registró, pero no se guardó con qué terminal. Avísale a Javi.';
+        } else {
+            const { data: termResult, error: termError } = await supabase.rpc(
+                'set_payment_card_terminal',
+                { p_comanda_id: comandaId, p_terminal: cardTerminal }
+            );
+
+            if (termError || (termResult && !termResult.ok)) {
+                terminalWarning =
+                    `El cobro se registró bien, pero NO se guardó la terminal (${cardTerminal}). Avísale a Javi.`;
+            }
+        }
+    }
+
+    return { error: null, terminalWarning };
 }

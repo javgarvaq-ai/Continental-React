@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom'
 import AdminNav from '../components/AdminNav'
 import { getYearlyMonthSummaries, getMonthlyReportData, getProductSalesForPeriod } from '../services/reports'
 import { getLedgerData } from '../services/ledger'
-import { buildLedger, estimateBankNet } from '../utils/ledger'
+import { buildLedger, cardCommission } from '../utils/ledger'
 import { money } from '../utils/money'
 
 // ── Constants ─────────────────────────────────────────────────
@@ -299,7 +299,7 @@ function MonthlyReportPage() {
                                     <MetricCard label="Caja fuerte" value={money(ledger.closing.houseBalance)}  color="white" accent={YELLOW} />
                                     <MetricCard label="Banco"       value={money(ledger.closing.bankBalance)}   color="white" accent={BLUE}
                                         sub={ledger.closing.cardSalesCumulative > 0
-                                            ? `Estimado neto (−comisión MP): ${money(estimateBankNet(ledger.closing.bankBalance, ledger.closing.cardSalesCumulative))}`
+                                            ? `Neto (−comisión de tarjeta): ${money(ledger.closing.bankBalance - cardCommission(ledger.closing.cardSalesByTerminal))}`
                                             : null}
                                     />
                                     <MetricCard label="Total en cuentas"

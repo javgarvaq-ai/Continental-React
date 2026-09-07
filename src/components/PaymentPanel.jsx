@@ -1,4 +1,5 @@
 import { money } from '../utils/money';
+import { CARD_TERMINAL_OPTIONS } from '../config/cardTerminals';
 
 const labelStyle = {
     display: 'block',
@@ -41,6 +42,8 @@ function SummaryRow({ label, value, highlight }) {
 function PaymentPanel({
     currentComanda,
     paymentData,
+    cardTerminal,
+    onCardTerminalChange,
     propinaFieldValue,
     paymentSummary,
     isConfirmingPayment,
@@ -88,6 +91,37 @@ function PaymentPanel({
                         onWheel={(e) => e.target.blur()}
                         style={inputStyle}
                     />
+
+                    {/* Solo aparece si de verdad se está cobrando con tarjeta.
+                        Viene preseleccionada la última terminal usada, así que
+                        en la mayoría de los cobros no es un clic extra. */}
+                    {Number(paymentData.tarjeta || 0) > 0 && (
+                        <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                            {CARD_TERMINAL_OPTIONS.map((t) => {
+                                const active = cardTerminal === t.value;
+                                return (
+                                    <button
+                                        key={t.value}
+                                        type="button"
+                                        onClick={() => onCardTerminalChange && onCardTerminalChange(t.value)}
+                                        style={{
+                                            flex: 1,
+                                            padding: '7px 6px',
+                                            borderRadius: '6px',
+                                            border: `1px solid ${active ? '#60a5fa' : '#2a2a2a'}`,
+                                            background: active ? '#0f2036' : '#0e0e0e',
+                                            color: active ? '#93c5fd' : '#8a8a8a',
+                                            fontSize: '11px',
+                                            fontWeight: active ? 700 : 500,
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        {t.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
 
                 <div>

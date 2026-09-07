@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom'
 import AdminNav from '../components/AdminNav'
 import { getLedgerData } from '../services/ledger'
 import { getCurrentShift } from '../services/dashboard'
-import { buildLedger, estimateBankNet } from '../utils/ledger'
+import { buildLedger, cardCommission, netFactorForTerminal } from '../utils/ledger'
 import { money } from '../utils/money'
 
 // ── Colors ─────────────────────────────────────────────────────
@@ -144,6 +144,43 @@ function LedgerPage() {
         [raw],
     )
 
+    /**
+     * Desglose real del banco.
+     *
+     * Antes se estimaba con una sola tasa (4.06%) sobre TODA la tarjeta, lo que
+     * sobreestimaba la comisión en $1,730.41 al 2026-09-06 porque Getnet cobra
+     * 2.17%. Ahora se calcula con la tasa de cada terminal.
+     *
+     * "En tránsito" solo se muestra si el rango llega hasta hoy: Getnet liquida
+     * a 1-2 días, así que en un rango histórico ese dinero ya llegó y mostrarlo
+     * sería mentir. Se calcula sobre `raw.payments` (todo el histórico) y no
+     * sobre las filas del rango, porque un rango corto no las contendría.
+     */
+    const bankBreakdown = useMemo(() => {
+        if (!ledger) return null
+        const byTerminal = ledger.closing.cardSalesByTerminal || { mp: 0, getnet: 0 }
+        const commission = cardCommission(byTerminal)
+        const net        = ledger.closing.bankBalance - commission
+
+        let inTransit = null
+        if (endDate === today() && raw?.payments) {
+            const cutoff = Date.now() - 2 * 24 * 60 * 60 * 1000
+            inTransit = raw.payments.reduce((sum, p) => (
+                p.card_terminal === 'getnet' && new Date(p.created_at).getTime() >= cutoff
+                    ? sum + Number(p.tarjeta || 0) * netFactorForTerminal('getnet')
+                    : sum
+            ), 0)
+        }
+
+        return {
+            commission,
+            net,
+            inTransit,
+            byTerminal,
+            unknown: ledger.closing.cardSalesUnknownTerminal || 0,
+        }
+    }, [ledger, raw, endDate])
+
     const rows = useMemo(() => {
         if (!ledger) return []
         if (locFilter === 'all') return ledger.rows
@@ -229,9 +266,29 @@ function LedgerPage() {
                         <BalanceCard label="Cajón"       closing={ledger.closing.drawerBalance} accent={GREEN} />
                         <BalanceCard label="Caja fuerte" closing={ledger.closing.houseBalance}  accent="#facc15" />
                         <BalanceCard label="Banco"       closing={ledger.closing.bankBalance}   accent="#60a5fa"
-                            sub={ledger.closing.cardSalesCumulative > 0
-                                ? `Real estimado (− comisión MP): ${money(estimateBankNet(ledger.closing.bankBalance, ledger.closing.cardSalesCumulative))}`
-                                : null} />
+                            sub={bankBreakdown && ledger.closing.cardSalesCumulative > 0 ? (
+                                <>
+                                    <div>Real (− comisión): <strong>{money(bankBreakdown.net)}</strong></div>
+                                    <div style={{ color: MUTED, marginTop: '3px' }}>
+                                        Comisión {money(bankBreakdown.commission)} — MP {money(bankBreakdown.byTerminal.mp || 0)} al 4.06% · Getnet {money(bankBreakdown.byTerminal.getnet || 0)} al 2.17%
+                                    </div>
+                                    {bankBreakdown.inTransit != null && bankBreakdown.inTransit > 0 && (
+                                        <>
+                                            <div style={{ color: MUTED, marginTop: '3px' }}>
+                                                Getnet en tránsito (últimos 2 días): {money(bankBreakdown.inTransit)}
+                                            </div>
+                                            <div style={{ marginTop: '3px' }}>
+                                                Esperado en Mercado Pago: <strong>{money(bankBreakdown.net - bankBreakdown.inTransit)}</strong>
+                                            </div>
+                                        </>
+                                    )}
+                                    {bankBreakdown.unknown > 0 && (
+                                        <div style={{ color: '#facc15', marginTop: '3px' }}>
+                                            ⚠️ {money(bankBreakdown.unknown)} de tarjeta sin terminal registrada — se calculó como Mercado Pago
+                                        </div>
+                                    )}
+                                </>
+                            ) : null} />
                     </div>
                 )}
 

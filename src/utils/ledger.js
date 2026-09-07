@@ -36,18 +36,60 @@ export const LEDGER_LOCATIONS = ['drawer', 'house_safe', 'bank']
 
 // Card-terminal commission — Mercado Pago Point / Tap (cobro presencial directo):
 // 3.5% + 16% IVA, sin cargo fijo por transacción. Effective ≈ 4.06%.
-// Editable here; the rate depends on the MP disposition term (al instante vs 14 días).
 export const CARD_COMMISSION_RATE = 0.035
 export const CARD_COMMISSION_IVA  = 0.16
 
 /**
- * Estimated real bank cash after the card-terminal commission.
- * Commission applies ONLY to card sales (transfers/cash deposits arrive whole).
- * It's an estimate — the exact fee is set by the MP statement.
+ * Factor neto por terminal — cuánto del bruto llega realmente al banco.
+ *
+ * MEDIDOS contra los estados de cuenta reales durante la conciliación del
+ * 2026-09-06 (ver tasks/conciliacion_bancaria_2026-09-06.md), no supuestos:
+ *
+ *   mp     0.9594 — 3.5% + IVA = 4.06%. Verificado: 341 de 353 "Liberación de
+ *                   dinero" ÷ 0.9594 dan un bruto múltiplo exacto de $0.05.
+ *   getnet 0.9783 — 1.87% + IVA = 2.17%. Verificado al centavo en 7 barridos
+ *                   que son exactamente 0.9783 × las ventas del periodo.
+ *
+ * ⚠️ Antes de este cambio se aplicaba 4.06% a TODA la tarjeta, incluyendo la de
+ * Getnet: al 2026-09-06 eso sobreestimaba la comisión en $1,730.41 y el error
+ * crecía $18.90 por cada $1,000 vendidos con Getnet.
  */
-export function estimateBankNet(bankBalance, cardSalesCumulative) {
-    const commission = Number(cardSalesCumulative || 0) * CARD_COMMISSION_RATE * (1 + CARD_COMMISSION_IVA)
-    return Number(bankBalance || 0) - commission
+export const CARD_TERMINAL_NET_FACTOR = {
+    mp:     1 - CARD_COMMISSION_RATE * (1 + CARD_COMMISSION_IVA), // 0.9594
+    getnet: 0.9783,
+}
+
+/** Terminal que se asume cuando la venta no la tiene registrada (histórico sin backfill). */
+export const FALLBACK_CARD_TERMINAL = 'mp'
+
+export function netFactorForTerminal(terminal) {
+    const f = CARD_TERMINAL_NET_FACTOR[terminal]
+    return f == null ? CARD_TERMINAL_NET_FACTOR[FALLBACK_CARD_TERMINAL] : f
+}
+
+/**
+ * Comisión de tarjeta a partir del bruto vendido POR TERMINAL.
+ * Acepta también un número (bruto total) por compatibilidad: en ese caso lo
+ * trata todo como la terminal de fallback.
+ */
+export function cardCommission(cardSalesByTerminal) {
+    if (typeof cardSalesByTerminal === 'number') {
+        return Number(cardSalesByTerminal || 0) * (1 - netFactorForTerminal(FALLBACK_CARD_TERMINAL))
+    }
+    const by = cardSalesByTerminal || {}
+    return Object.keys(by).reduce(
+        (sum, t) => sum + Number(by[t] || 0) * (1 - netFactorForTerminal(t)),
+        0,
+    )
+}
+
+/**
+ * Dinero real en el banco después de la comisión de tarjeta.
+ * La comisión aplica SOLO a la tarjeta — transferencias y depósitos de efectivo
+ * llegan íntegros.
+ */
+export function estimateBankNet(bankBalance, cardSalesByTerminal) {
+    return Number(bankBalance || 0) - cardCommission(cardSalesByTerminal)
 }
 
 // Tie-break ordering for events sharing the exact same timestamp:
@@ -106,8 +148,12 @@ export function buildLedgerEvents({ payments = [], cashMovements = [], shifts = 
             // card + transfer land in the bank bucket.
             drawerDelta: efectivo,
             houseDelta: 0,
+            // El saldo de banco se sigue acumulando en BRUTO, igual que antes.
+            // La comisión se resta aparte al mostrar el neto (estimateBankNet),
+            // para no perder de vista el total cobrado con tarjeta.
             bankDelta: tarjeta + transferencia,
             efectivo, tarjeta, transferencia,
+            cardTerminal: p.card_terminal || null,
             tip: Number(p.tip_amount || 0),
             user: null, // payments.paid_by_user has no FK to users — not joinable
         })
@@ -165,13 +211,35 @@ export function computeRunningBalances(sortedEvents) {
     let house = 0
     let bank = 0
     let cardSales = 0 // cumulative card sales — base for the bank commission estimate
+    // Mismo acumulado pero separado por terminal, porque cada una cobra una
+    // comisión distinta. Las ventas sin terminal registrada caen en el fallback
+    // y además se cuentan aparte para poder marcarlas en la UI.
+    const cardSalesByTerminal = { mp: 0, getnet: 0 }
+    let cardSalesUnknownTerminal = 0
     return sortedEvents.map((e) => {
         drawer += e.drawerDelta
         house  += e.houseDelta
         bank   += e.bankDelta
-        if (e.kind === 'payment') cardSales += Number(e.tarjeta || 0)
+        if (e.kind === 'payment') {
+            const tarjeta = Number(e.tarjeta || 0)
+            if (tarjeta) {
+                cardSales += tarjeta
+                const known = CARD_TERMINAL_NET_FACTOR[e.cardTerminal] != null
+                if (!known) cardSalesUnknownTerminal += tarjeta
+                const key = known ? e.cardTerminal : FALLBACK_CARD_TERMINAL
+                cardSalesByTerminal[key] += tarjeta
+            }
+        }
 
-        const annotated = { ...e, drawerBalance: drawer, houseBalance: house, bankBalance: bank, cardSalesCumulative: cardSales }
+        const annotated = {
+            ...e,
+            drawerBalance: drawer,
+            houseBalance: house,
+            bankBalance: bank,
+            cardSalesCumulative: cardSales,
+            cardSalesByTerminal: { ...cardSalesByTerminal },
+            cardSalesUnknownTerminal,
+        }
 
         // Comparación contra el conteo físico — no altera drawer/drawerBalance.
         if (e.kind === 'shift_open') {
@@ -199,7 +267,12 @@ export function sliceWithOpening(computedEvents, startIso, endIso) {
     const startMs = new Date(startIso).getTime()
     const endMs   = new Date(endIso).getTime()
 
-    let opening = { drawerBalance: 0, houseBalance: 0, bankBalance: 0, cardSalesCumulative: 0 }
+    let opening = {
+        drawerBalance: 0, houseBalance: 0, bankBalance: 0,
+        cardSalesCumulative: 0,
+        cardSalesByTerminal: { mp: 0, getnet: 0 },
+        cardSalesUnknownTerminal: 0,
+    }
     const rows = []
 
     for (const e of computedEvents) {
@@ -210,6 +283,8 @@ export function sliceWithOpening(computedEvents, startIso, endIso) {
                 houseBalance: e.houseBalance,
                 bankBalance: e.bankBalance,
                 cardSalesCumulative: e.cardSalesCumulative,
+                cardSalesByTerminal: e.cardSalesByTerminal,
+                cardSalesUnknownTerminal: e.cardSalesUnknownTerminal,
             }
         } else if (t < endMs) {
             rows.push(e)
@@ -218,7 +293,14 @@ export function sliceWithOpening(computedEvents, startIso, endIso) {
 
     const last = rows.length ? rows[rows.length - 1] : null
     const closing = last
-        ? { drawerBalance: last.drawerBalance, houseBalance: last.houseBalance, bankBalance: last.bankBalance, cardSalesCumulative: last.cardSalesCumulative }
+        ? {
+            drawerBalance: last.drawerBalance,
+            houseBalance: last.houseBalance,
+            bankBalance: last.bankBalance,
+            cardSalesCumulative: last.cardSalesCumulative,
+            cardSalesByTerminal: last.cardSalesByTerminal,
+            cardSalesUnknownTerminal: last.cardSalesUnknownTerminal,
+        }
         : opening
 
     return { opening, rows, closing }

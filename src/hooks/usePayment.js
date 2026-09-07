@@ -10,6 +10,7 @@ import { printTicket } from '../components/Ticket'
 import { money } from '../utils/money'
 import { requireOnline } from '../utils/requireOnline'
 import { computePaymentBreakdown } from '../utils/payments'
+import { readLastCardTerminal, rememberCardTerminal } from '../config/cardTerminals'
 
 function getPaymentSummary(totalCuenta, paymentData) {
     const efectivo = Number(paymentData.efectivo || 0)
@@ -57,6 +58,10 @@ export function usePayment({
         propina: '',
         propinaManual: false,
     })
+    // Terminal de tarjeta. Arranca con la última usada (localStorage) para que
+    // no sea un clic extra en cada venta; es sticky a propósito y NO se limpia
+    // en resetPaymentState.
+    const [cardTerminal, setCardTerminal] = useState(readLastCardTerminal)
     const [isUpdatingComandaStatus, setIsUpdatingComandaStatus] = useState(false)
     const [isConfirmingPayment, setIsConfirmingPayment] = useState(false)
 
@@ -282,7 +287,7 @@ export function usePayment({
         try {
             const cobradoAt = new Date().toISOString()
 
-            const { error, data } = await confirmPayment({
+            const { error, terminalWarning } = await confirmPayment({
                 comandaId: currentComanda.id,
                 total: displayedTotal,
                 userId: currentUser.id,
@@ -292,11 +297,16 @@ export function usePayment({
                 transferencia: paymentSummary.transferencia,
                 propina: paymentSummary.propina,
                 cambio: Math.round(paymentSummary.cambio * 100) / 100,
+                cardTerminal: paymentSummary.tarjeta > 0 ? cardTerminal : null,
             })
 
             if (error) {
                 setStatus(`Error confirmando cobro: ${error.message}`)
                 return
+            }
+
+            if (paymentSummary.tarjeta > 0 && !terminalWarning) {
+                rememberCardTerminal(cardTerminal)
             }
 
             // Process membership if customer is assigned
@@ -378,6 +388,11 @@ export function usePayment({
             if (printBlocked) {
                 successMsg += ' ⚠️ Impresión bloqueada — permite pop-ups y usa "Reimprimir folio".'
             }
+            // El cobro sí quedó; lo que falló fue el dato de terminal. Se avisa
+            // en el momento para que no quede un hueco silencioso.
+            if (terminalWarning) {
+                successMsg += ` ⚠️ ${terminalWarning}`
+            }
 
             await onBackToUnits(successMsg)
         } finally {
@@ -388,6 +403,8 @@ export function usePayment({
     return {
         // State
         paymentData,
+        cardTerminal,
+        setCardTerminal,
         isUpdatingComandaStatus,
         isConfirmingPayment,
         // Derived

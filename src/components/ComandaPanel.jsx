@@ -18,6 +18,8 @@ function ComandaPanel({
     currentUser,
     isConfirmingPayment,
     paymentData,
+    cardTerminal,
+    onCardTerminalChange,
     propinaFieldValue,
     paymentSummary,
     onDecreaseCartItem,
@@ -270,6 +272,8 @@ function ComandaPanel({
             <PaymentPanel
                 currentComanda={currentComanda}
                 paymentData={paymentData}
+                cardTerminal={cardTerminal}
+                onCardTerminalChange={onCardTerminalChange}
                 propinaFieldValue={propinaFieldValue}
                 paymentSummary={paymentSummary}
                 isConfirmingPayment={isConfirmingPayment}

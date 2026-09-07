@@ -154,6 +154,8 @@ function PosPage() {
     // usePayment — needs membershipDiscountPct/discountAmount (from useCustomer) and loadUnits (from useComanda)
     const {
         paymentData,
+        cardTerminal,
+        setCardTerminal,
         isUpdatingComandaStatus,
         isConfirmingPayment,
         displayedTotal,
@@ -1015,6 +1017,8 @@ function PosPage() {
                             currentUser={currentUser}
                             isConfirmingPayment={isConfirmingPayment}
                             paymentData={paymentData}
+                            cardTerminal={cardTerminal}
+                            onCardTerminalChange={setCardTerminal}
                             propinaFieldValue={propinaFieldValue}
                             paymentSummary={paymentSummary}
                             onDecreaseCartItem={handleDecreaseCartItem}

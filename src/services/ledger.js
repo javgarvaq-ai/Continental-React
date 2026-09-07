@@ -51,7 +51,7 @@ export async function getLedgerData({ startDate, endDate }) {
     const [paymentsRes, movementsRes, shiftsRes] = await Promise.all([
         fetchAllPages((from, to) => supabase
             .from('payments')
-            .select('id, created_at, efectivo, tarjeta, transferencia, tip_amount, shift_id, comanda_id, comandas ( folio )')
+            .select('id, created_at, efectivo, tarjeta, transferencia, tip_amount, card_terminal, shift_id, comanda_id, comandas ( folio )')
             .lt('created_at', endIso)
             .order('created_at', { ascending: true })
             .range(from, to)),
