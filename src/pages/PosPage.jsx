@@ -19,6 +19,7 @@ import ScheduleViewPanel from '../components/ScheduleViewPanel';
 import ChecadorPanel from '../components/ChecadorPanel';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { requireOnline } from '../utils/requireOnline';
+import { RP_OPTIONS } from '../config/rps';
 import {
     getProductsCatalog,
     getActiveCartItems,
@@ -48,7 +49,7 @@ function PosPage() {
     const [isCancellingMesa, setIsCancellingMesa] = useState(false);
     const [cancelConfirming, setCancelConfirming] = useState(false)
     const [changeUserDialog, setChangeUserDialog] = useState(false)
-    const [openTableDialog, setOpenTableDialog] = useState({ open: false, unit: null, existing: null, input: '', searching: false, notFound: false })
+    const [openTableDialog, setOpenTableDialog] = useState({ open: false, unit: null, existing: null, input: '', searching: false, notFound: false, rp: '', cortesia: false })
     const [reprintDialog, setReprintDialog] = useState({ open: false, folioInput: '', phase: 'folio', comanda: null, loading: false, error: '' })
     // B2 fix: counter incremented by any mutation — loadComandaView depends on it
     // so the cart re-fetches after every operation without needing a direct reloadCart call
@@ -357,42 +358,46 @@ function PosPage() {
 
         if (isNew) {
             // Open the dialog — user picks customer name/number before creating the comanda
-            setOpenTableDialog({ open: true, unit, existing, input: '', searching: false, notFound: false })
+            setOpenTableDialog({ open: true, unit, existing, input: '', searching: false, notFound: false, rp: '', cortesia: false })
             setStatus('')
             return
         }
 
         // Existing comanda — load it directly
-        await doOpenTable({ unit, existing, customerName: '', pendingCustomerData: null, isNew: false })
+        await doOpenTable({ unit, existing, customerName: '', pendingCustomerData: null, isNew: false, rpName: null, rpCortesia: false })
     }
 
     async function handleOpenTableSubmit() {
-        const { unit, existing, input } = openTableDialog
+        const { unit, existing, input, rp, cortesia } = openTableDialog
         const trimmed = (input || '').trim()
+        const rpName = (rp || '').trim() || null
+        const rpCortesia = rpName ? Boolean(cortesia) : false
 
         if (trimmed && /^\d+$/.test(trimmed)) {
             setOpenTableDialog(d => ({ ...d, searching: true, notFound: false }))
             const { data: customerData } = await getCustomerWithMembership(trimmed)
             if (customerData) {
                 setOpenTableDialog(d => ({ ...d, searching: false }))
-                await doOpenTable({ unit, existing, customerName: customerData.customer.name, pendingCustomerData: customerData, isNew: true })
+                await doOpenTable({ unit, existing, customerName: customerData.customer.name, pendingCustomerData: customerData, isNew: true, rpName, rpCortesia })
             } else {
                 setOpenTableDialog(d => ({ ...d, searching: false, notFound: true }))
             }
             return
         }
 
-        await doOpenTable({ unit, existing, customerName: trimmed, pendingCustomerData: null, isNew: true })
+        await doOpenTable({ unit, existing, customerName: trimmed, pendingCustomerData: null, isNew: true, rpName, rpCortesia })
     }
 
-    async function doOpenTable({ unit, existing, customerName, pendingCustomerData, isNew }) {
-        setOpenTableDialog({ open: false, unit: null, existing: null, input: '', searching: false, notFound: false })
+    async function doOpenTable({ unit, existing, customerName, pendingCustomerData, isNew, rpName = null, rpCortesia = false }) {
+        setOpenTableDialog({ open: false, unit: null, existing: null, input: '', searching: false, notFound: false, rp: '', cortesia: false })
 
         const { data, error } = await getOrCreateActiveComanda({
             unitId: unit.id,
             userId: currentUser.id,
             customerName,
             customerId: pendingCustomerData?.customer?.id ?? null,
+            rpName,
+            rpCortesia,
             prefetchedExisting: existing,
         })
 
@@ -1058,6 +1063,59 @@ function PosPage() {
                             style={{ width: '100%', padding: '10px 12px', borderRadius: '7px', border: '1px solid #2a2a2a', background: '#0e0e0e', color: '#e2e2e2', fontSize: '14px', boxSizing: 'border-box', outline: 'none' }}
                         />
 
+                        {RP_OPTIONS.length > 0 && (
+                            <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #222' }}>
+                                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>
+                                    RP (opcional)
+                                </label>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                    {RP_OPTIONS.map((name) => {
+                                        const active = openTableDialog.rp === name
+                                        return (
+                                            <button
+                                                key={name}
+                                                type="button"
+                                                onClick={() => setOpenTableDialog(d => (
+                                                    d.rp === name
+                                                        ? { ...d, rp: '', cortesia: false }
+                                                        : { ...d, rp: name }
+                                                ))}
+                                                style={{
+                                                    padding: '7px 12px',
+                                                    borderRadius: '6px',
+                                                    border: `1px solid ${active ? '#8a6d2f' : '#2a2a2a'}`,
+                                                    background: active ? '#2a2113' : '#0e0e0e',
+                                                    color: active ? '#d8ab52' : '#94a3b8',
+                                                    fontSize: '13px',
+                                                    fontWeight: active ? 600 : 400,
+                                                    cursor: 'pointer',
+                                                }}
+                                            >
+                                                {name}
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+
+                                {openTableDialog.rp && (
+                                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: '9px', marginTop: '12px', cursor: 'pointer' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={Boolean(openTableDialog.cortesia)}
+                                            onChange={e => setOpenTableDialog(d => ({ ...d, cortesia: e.target.checked }))}
+                                            style={{ width: '16px', height: '16px', marginTop: '1px', accentColor: '#d8ab52', cursor: 'pointer', flex: 'none' }}
+                                        />
+                                        <span style={{ fontSize: '13px', color: '#e2e2e2', lineHeight: 1.4 }}>
+                                            Lleva cortesía
+                                            <span style={{ display: 'block', fontSize: '11.5px', color: '#94a3b8', marginTop: '2px' }}>
+                                                Si no llega a $1,000, esta cuenta no comisiona.
+                                            </span>
+                                        </span>
+                                    </label>
+                                )}
+                            </div>
+                        )}
+
                         {openTableDialog.notFound && (
                             <div style={{ marginTop: '10px' }}>
                                 <p style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#fb923c' }}>
@@ -1065,7 +1123,7 @@ function PosPage() {
                                 </p>
                                 <button
                                     type="button"
-                                    onClick={() => doOpenTable({ unit: openTableDialog.unit, existing: openTableDialog.existing, customerName: openTableDialog.input.trim(), pendingCustomerData: null, isNew: true })}
+                                    onClick={() => doOpenTable({ unit: openTableDialog.unit, existing: openTableDialog.existing, customerName: openTableDialog.input.trim(), pendingCustomerData: null, isNew: true, rpName: (openTableDialog.rp || '').trim() || null, rpCortesia: (openTableDialog.rp || '').trim() ? Boolean(openTableDialog.cortesia) : false })}
                                     style={{ padding: '7px 14px', borderRadius: '6px', border: '1px solid #3d2a1a', background: '#2a1a0e', color: '#fb923c', fontSize: '13px', cursor: 'pointer', fontWeight: '600' }}
                                 >
                                     Continuar sin cliente
@@ -1076,7 +1134,7 @@ function PosPage() {
                         <div style={{ display: 'flex', gap: '8px', marginTop: '20px' }}>
                             <button
                                 type="button"
-                                onClick={() => setOpenTableDialog({ open: false, unit: null, existing: null, input: '', searching: false, notFound: false })}
+                                onClick={() => setOpenTableDialog({ open: false, unit: null, existing: null, input: '', searching: false, notFound: false, rp: '', cortesia: false })}
                                 style={{ flex: 1, padding: '10px', borderRadius: '7px', border: '1px solid #222', background: 'transparent', color: '#94a3b8', fontSize: '13px', cursor: 'pointer' }}
                             >
                                 Cancelar

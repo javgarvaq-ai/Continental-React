@@ -12,7 +12,7 @@ export async function getUnitsWithStatus() {
 
     const { data: activeComandas, error: comandasError } = await supabase
         .from('comandas')
-        .select('id, unit_id, status, customer_name')
+        .select('id, unit_id, status, customer_name, rp_name, rp_cortesia')
         .in('status', ['open', 'pending_payment', 'processing_payment'])
 
     if (comandasError) {
@@ -26,10 +26,14 @@ export async function getUnitsWithStatus() {
         let statusLabel = 'Libre'
         let statusColor = '#4ade80'
         let customerName = ''
+        let rpName = ''
+        let rpCortesia = false
 
         if (activeComanda) {
             visualStatus = activeComanda.status
             customerName = activeComanda.customer_name || ''
+            rpName = activeComanda.rp_name || ''
+            rpCortesia = Boolean(activeComanda.rp_cortesia)
         }
 
         if (visualStatus === 'open') {
@@ -53,6 +57,8 @@ export async function getUnitsWithStatus() {
             statusLabel,
             statusColor,
             customerName,
+            rpName,
+            rpCortesia,
         }
     })
 

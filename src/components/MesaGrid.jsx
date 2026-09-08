@@ -59,6 +59,19 @@ function MesaGrid({ units, onUnitClick }) {
                                     {unit.customerName}
                                 </div>
                             ) : null}
+                            {unit.rpName ? (
+                                <div style={{ fontSize: '11.5px', color: '#d8ab52', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                    <span>RP · {unit.rpName}</span>
+                                    {unit.rpCortesia ? (
+                                        <span
+                                            title="Lleva cortesia"
+                                            style={{ fontSize: '9.5px', fontWeight: 700, letterSpacing: '0.06em', padding: '1px 5px', borderRadius: '3px', border: '1px solid #8a6d2f', color: '#d8ab52' }}
+                                        >
+                                            CORT
+                                        </span>
+                                    ) : null}
+                                </div>
+                            ) : null}
                         </div>
                     </button>
                 ))}

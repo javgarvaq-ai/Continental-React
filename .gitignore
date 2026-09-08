@@ -23,3 +23,9 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# Entregables generados desde el chat (PDFs, PNGs, reportes)
+Claude outputs/
+
+# Cola de borrado manual: device_bash no puede borrar archivos, los mueve aqui
+_to_delete/

@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 
-export async function getOrCreateActiveComanda({ unitId, userId, customerName, customerId = null, prefetchedExisting = undefined }) {
+export async function getOrCreateActiveComanda({ unitId, userId, customerName, customerId = null, rpName = null, rpCortesia = false, prefetchedExisting = undefined }) {
     let existing = prefetchedExisting
 
     if (existing === undefined) {
@@ -24,6 +24,12 @@ export async function getOrCreateActiveComanda({ unitId, userId, customerName, c
 
     const cleanName = (customerName || '').trim()
 
+    // Sin RP no puede haber cortesía — es la misma regla que el CHECK de la
+    // base (comandas_rp_cortesia_requires_rp). Se normaliza aquí para no
+    // depender de que la UI la respete.
+    const cleanRp = (rpName || '').trim() || null
+    const cleanCortesia = cleanRp ? Boolean(rpCortesia) : false
+
     const { data: newComanda, error: newComandaError } = await supabase
         .from('comandas')
         .insert([
@@ -34,6 +40,8 @@ export async function getOrCreateActiveComanda({ unitId, userId, customerName, c
                 personas: 0,
                 customer_name: cleanName || null,
                 customer_id: customerId || null,
+                rp_name: cleanRp,
+                rp_cortesia: cleanCortesia,
             },
         ])
         .select()
@@ -68,6 +76,8 @@ export async function getOrCreateActiveComanda({ unitId, userId, customerName, c
             event_data: {
                 customer_name: cleanName || null,
                 customer_id: customerId || null,
+                rp_name: cleanRp,
+                rp_cortesia: cleanCortesia,
             },
         },
     ])
