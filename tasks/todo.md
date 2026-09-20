@@ -47,6 +47,49 @@ Orden por severidad/urgencia; cada punto es su propio commit chico, no un solo c
   - `eslint` sin errores nuevos en los 4 archivos tocados (los warnings/errores que salen son de código preexistente, no de este cambio).
   - Pendiente: comparar visualmente en pantalla que la utilidad de agosto en `MonthlyReportPage` ahora sea ~$10,961 más alta que antes — queda para el bloque de pruebas al final junto con lo demás de Fase 0.
 
+### Fase 0.5 — Seguridad adicional del audit (2.15, 2.16), antes de Mercado Pago
+
+Javi decidió cerrar estos dos antes de seguir con MP. Prioridad de audit: ambos 🟠.
+
+- [ ] **2.15 RPCs usaban `p_user_id` del cliente en vez de `auth.uid()`** — ✅ Migración creada 2026-09-20: `supabase/migrations/20260920000002_use_auth_uid_not_client_param.sql`. Verificado antes de tocar nada: en `services/auth.js`, cada usuario entra con su PROPIA cuenta de Supabase Auth (PIN = password vía `signInWithPassword`) — no es sesión de dispositivo compartida — así que `auth.uid()` sí identifica bien a quien actúa. Cambiado en `present_bill_atomic`, `adjust_inventory_stock` y `finalize_comanda_payment`: todo uso interno de `p_user_id` (falsificable por el cliente) reemplazado por `auth.uid()` (viene del JWT, no falsificable). El parámetro `p_user_id` se dejó en la firma (mismo nombre/posición) sin usarse — no hace falta tocar el frontend, Supabase matchea RPCs por nombre de parámetro. Pendiente: Javi revisa y corre `npx supabase db push`, luego probar: presentar cuenta, cobrar una comanda, ajustar stock — y verificar en `comanda_events`/`payments`/`inventory_movements` que el `user_id`/`paid_by_user` grabado es el usuario que realmente hizo la acción.
+- [ ] **2.16 `comandas`/`comanda_items` editables por cualquier `authenticated` vía RLS `USING (true)`** — ✅ Migración creada 2026-09-20: `supabase/migrations/20260920000003_restrict_comanda_writes_by_status.sql`. Pendiente: Javi corre `npx supabase db push` y prueba: agregar producto a comanda abierta, cancelar producto, cobrar comanda completa, reabrir una comanda desde "cuenta presentada", cancelar una membresía sobre una comanda abierta.
+
+  **Mapeo completo de todos los escritores directos de cliente (no-RPC) sobre `comanda_items`/`comandas`:**
+
+  `comanda_items` — INSERT/UPDATE directos desde el cliente:
+  - `services/products.js` — 5 `.update()` + 2 `.insert()` (agregar producto, incrementar cantidad, decrementar, cancelar item, cancelar mixers ligados) — TODOS gateados por `assertComandaOpen()` antes de escribir (chequea `comandas.status === 'open'` desde el cliente).
+  - `services/membership.js` → `addFreeBenefitItemToComanda` — 1 `.insert()` — gateado inline (chequea `comandaRow.status !== 'open'` antes del insert).
+  - `services/membership.js` → `cancelMembershipOnComanda` — 2 `.update()` (cancelar línea de membresía y sus free benefits) — **NO tiene guard explícito de `status === 'open'`**, pero su único caller (`useCustomer.js: handleCancelMembership`) opera siempre sobre `currentComanda` (la comanda abierta en pantalla). No es un problema para la policy nueva: si algún día se llamara sobre una comanda no abierta, la policy simplemente no dejaría pasar la actualización (0 filas afectadas, no error) — de hecho la policy nueva CIERRA este gap que hoy no tiene ninguna protección.
+  - `services/membership.js` → `activateMembership` — usa el RPC `activate_membership` (`SECURITY DEFINER`, confirmado que ya tiene su propio guard de `status = 'open'` agregado en la migración `20260512000003_security_fixes.sql`) — no pasa por RLS, no afectado por la policy nueva.
+
+  `comandas` — UPDATE directo desde el cliente (no RPC):
+  - `services/comandaCheckout.js` → `startPayment` — `pending_payment → processing_payment`.
+  - `services/comandaCheckout.js` → `reopenComanda` — `pending_payment`/`processing_payment → open`. **Confirmado en `hooks/usePayment.js: handleReopenComanda`** (línea ~189) que la UI bloquea explícitamente reabrir si `currentComanda.status` no es `pending_payment` ni `processing_payment` ("Esta comanda no está en estado reabrible.") — **nunca se llama con status `paid`**. No existe flujo de "deshacer pago" que reabra una comanda ya pagada.
+  - Los únicos caminos que sí llevan una comanda a `paid` son el RPC `finalize_comanda_payment` (`SECURITY DEFINER`, no pasa por RLS) y a `pending_payment` el RPC `present_bill_atomic` (también `SECURITY DEFINER`).
+
+  **Conclusión: la policy mínima que propone el audit es segura y no rompe ningún flujo real.** Migración propuesta (pendiente de aprobación antes de crearla):
+  ```sql
+  -- comanda_items: solo se puede insertar/actualizar si la comanda sigue abierta
+  DROP POLICY IF EXISTS "comanda_items_insert" ON public.comanda_items;
+  CREATE POLICY "comanda_items_insert" ON public.comanda_items
+      FOR INSERT TO authenticated WITH CHECK (
+          EXISTS (SELECT 1 FROM comandas c WHERE c.id = comanda_id AND c.status = 'open')
+      );
+
+  DROP POLICY IF EXISTS "comanda_items_update" ON public.comanda_items;
+  CREATE POLICY "comanda_items_update" ON public.comanda_items
+      FOR UPDATE TO authenticated
+      USING (EXISTS (SELECT 1 FROM comandas c WHERE c.id = comanda_id AND c.status = 'open'))
+      WITH CHECK (EXISTS (SELECT 1 FROM comandas c WHERE c.id = comanda_id AND c.status = 'open'));
+
+  -- comandas: ningún UPDATE directo de cliente puede dejar el status en 'paid'
+  -- (el RPC finalize_comanda_payment es SECURITY DEFINER y no pasa por esta policy)
+  DROP POLICY IF EXISTS "comandas_update" ON public.comandas;
+  CREATE POLICY "comandas_update" ON public.comandas
+      FOR UPDATE TO authenticated USING (true) WITH CHECK (status <> 'paid');
+  ```
+  Pruebas a correr en producción después de aplicar (antes de dar por cerrado): agregar producto a comanda abierta, cancelar producto, cobrar comanda completa, reabrir una comanda desde "cuenta presentada", cancelar una membresía sobre una comanda abierta — confirmar que todo sigue funcionando igual que hoy.
+
 ### Pruebas en producción (post-push, commit `64c8ace`/`41be98a`)
 
 - [x] **Cobro con descuento de inventario** — ✅ 2026-09-20. Comanda de prueba folio 962, 3 productos con receta se descontaron correctamente de inventario. Confirma que `finalize_comanda_payment` → `deduct_inventory_item` sigue funcionando después del `REVOKE` de 0.2.
