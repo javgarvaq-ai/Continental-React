@@ -16,11 +16,14 @@ const MUTED  = '#64748b'
 const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 const MONTHS_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
 
+// 'propinas_entregadas' NO va aquí a propósito: no es un gasto operativo del
+// negocio (es plata de terceros que pasa por caja) — se muestra informativa
+// como "Propinas" en Ingresos del mes, pero no suma ni aparece en este
+// desglose ni en "Total gastos" (tasks/todo.md 0.6, confirmado con Javi).
 const EXPENSE_GROUPS = [
     { label: 'Nómina',      cats: ['nomina_caja','nomina_banco','nomina_resguardo'] },
     { label: 'Renta',       cats: ['renta_caja','renta_banco'] },
     { label: 'Proveedores', cats: ['pago_proveedor_caja','pago_proveedor_banco','pago_proveedor_resguardo'] },
-    { label: 'Propinas entregadas', cats: ['propinas_entregadas'] },
     { label: 'Otros gastos', cats: ['gasto_operativo_caja','gasto_operativo_banco','ajuste_ingreso'] },
 ]
 
@@ -289,13 +292,13 @@ function MonthlyReportPage() {
                                     </div>
                                 )
                             })}
-                            {period.totalExpenses === 0 && (
+                            {period.totalOperatingExpenses === 0 && (
                                 <div style={{ color: MUTED, fontSize: '13px', textAlign: 'center', padding: '20px' }}>Sin gastos registrados este mes</div>
                             )}
-                            {period.totalExpenses > 0 && (
+                            {period.totalOperatingExpenses > 0 && (
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', borderTop: '1px solid #2a2a2a', marginTop: '6px' }}>
                                     <span style={{ fontSize: '13px', fontWeight: 700, color: '#e2e8f0' }}>Total gastos</span>
-                                    <span style={{ fontSize: '15px', fontWeight: 700, color: RED }}>{money(period.totalExpenses)}</span>
+                                    <span style={{ fontSize: '15px', fontWeight: 700, color: RED }}>{money(period.totalOperatingExpenses)}</span>
                                 </div>
                             )}
                         </div>
