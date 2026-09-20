@@ -102,14 +102,24 @@ function calcMonth(payments, cashMovements) {
 
     const expensesByCat = {}
     let totalExpenses = 0
+    // Gastos operativos reales para utilidad neta: excluye 'propinas_entregadas'.
+    // `revenue` de arriba ya excluye la propina cobrada (no es venta del bar) —
+    // si también se resta aquí como gasto, se cuenta dos veces contra la
+    // utilidad (audit 1.1/1.2, tasks/todo.md 0.6). `totalExpenses` NO se toca:
+    // sigue incluyendo la propina pagada porque sirve para cuadrar caja
+    // (se usa tal cual en el desglose de gastos y en "Total gastos").
+    let totalOperatingExpenses = 0
     for (const m of cashMovements) {
         if (m.movement_nature !== 'expense') continue
         const cat = m.category || 'otros'
         expensesByCat[cat] = (expensesByCat[cat] || 0) + Number(m.amount || 0)
         totalExpenses += Number(m.amount || 0)
+        if (m.category !== 'propinas_entregadas') {
+            totalOperatingExpenses += Number(m.amount || 0)
+        }
     }
 
-    return { revenue, tips, efectivo, tarjeta, transferencia, expensesByCat, totalExpenses }
+    return { revenue, tips, efectivo, tarjeta, transferencia, expensesByCat, totalExpenses, totalOperatingExpenses }
 }
 
 // ── Page ──────────────────────────────────────────────────────
@@ -173,7 +183,7 @@ function MonthlyReportPage() {
     const cogsMissing = cogsData.some(p => p.costMissing)
     const grossMargin = period.revenue - totalCOGS
     const grossPct    = period.revenue > 0 ? (grossMargin / period.revenue) * 100 : 0
-    const netUtility  = period.revenue - totalCOGS - period.totalExpenses
+    const netUtility  = period.revenue - totalCOGS - period.totalOperatingExpenses
 
     const monthLabel = `${MONTHS_ES[selectedMonth - 1]} ${year}`
 
@@ -325,7 +335,7 @@ function MonthlyReportPage() {
                                 <span style={{ color: '#475569' }}>−</span>
                                 <span style={{ color: RED }}>{money(totalCOGS)}</span><span>COGS</span>
                                 <span style={{ color: '#475569' }}>−</span>
-                                <span style={{ color: RED }}>{money(period.totalExpenses)}</span><span>gastos operativos</span>
+                                <span style={{ color: RED }}>{money(period.totalOperatingExpenses)}</span><span>gastos operativos</span>
                                 <span style={{ color: '#475569' }}>=</span>
                                 <span style={{ color: netUtility >= 0 ? GREEN : RED, fontWeight: 700 }}>{money(netUtility)}</span>
                                 {cogsMissing && <span style={{ color: '#854d0e', marginLeft: '6px' }}>(COGS parcial)</span>}

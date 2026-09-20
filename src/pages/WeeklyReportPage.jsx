@@ -198,6 +198,12 @@ function calcPeriod(payments, cashMovements) {
     const totalTips            = payments.reduce((s, p) => s + Number(p.tip_amount        || 0), 0)
 
     const totalExpenses        = cashMovements.reduce((s, m) => m.movement_nature === 'expense'                                         ? s + Number(m.amount || 0) : s, 0)
+    // Gastos operativos reales para utilidad neta: excluye 'propinas_entregadas'.
+    // Esa plata ya se excluyó de totalSales al calcular la utilidad (no es venta
+    // del bar) — si también se resta aquí como gasto, se cuenta dos veces contra
+    // la utilidad (audit 1.1/1.2, tasks/todo.md 0.6). totalExpenses de arriba NO
+    // se toca: sigue incluyendo la propina pagada porque sirve para cuadrar caja.
+    const totalOperatingExpenses = cashMovements.reduce((s, m) => m.movement_nature === 'expense' && m.category !== 'propinas_entregadas' ? s + Number(m.amount || 0) : s, 0)
     const totalBankExpenses    = cashMovements.reduce((s, m) => m.source_location === 'bank'       && m.movement_nature === 'expense'   ? s + Number(m.amount || 0) : s, 0)
     const totalCashExpenses    = cashMovements.reduce((s, m) => m.source_location === 'drawer'     && m.movement_nature === 'expense'   ? s + Number(m.amount || 0) : s, 0)
     const totalResguardoExp    = cashMovements.reduce((s, m) => m.source_location === 'house_safe' && m.movement_nature === 'expense'   ? s + Number(m.amount || 0) : s, 0)
@@ -214,7 +220,7 @@ function calcPeriod(payments, cashMovements) {
 
     return {
         totalSales, totalCashSales, totalCardSales, totalTransferSales, totalTips,
-        totalExpenses, totalBankExpenses, totalCashExpenses, totalResguardoExp,
+        totalExpenses, totalOperatingExpenses, totalBankExpenses, totalCashExpenses, totalResguardoExp,
         totalTransfersToHouse, totalTransfersToBank,
         expensesByCategory,
     }
@@ -294,7 +300,9 @@ function WeeklyReportPage() {
     const cogsMissing  = cogsData.some(p => p.costMissing)
     const grossMargin  = period.totalSales - totalCOGS
     const grossPct     = period.totalSales > 0 ? (grossMargin / period.totalSales) * 100 : 0
-    const netUtility   = period.totalSales - totalCOGS - period.totalExpenses
+    // Utilidad neta: ventas SIN propina (la propina nunca fue ingreso del bar)
+    // menos COGS menos gastos operativos SIN la propina pagada (ver calcPeriod).
+    const netUtility   = (period.totalSales - period.totalTips) - totalCOGS - period.totalOperatingExpenses
 
     return (
         <div style={{ minHeight: '100vh', background: '#111', color: 'white', padding: '24px', paddingLeft: '216px', boxSizing: 'border-box', fontFamily: 'system-ui, sans-serif' }}>
@@ -349,7 +357,7 @@ function WeeklyReportPage() {
                 <span style={{ color: '#444' }}>—</span>
                 <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
                     style={{ background: '#111', border: '1px solid #333', borderRadius: '6px', color: 'white', padding: '6px 10px', fontSize: '13px' }} />
-                <button type="button" onClick={loadPeriod} disabled={loading}
+                <button type="button" onClick={() => loadPeriod()} disabled={loading}
                     style={{ padding: '7px 18px', borderRadius: '8px', border: 'none', background: loading ? '#333' : '#1565c0', color: loading ? MUTED : 'white', fontWeight: '700', fontSize: '13px', cursor: loading ? 'default' : 'pointer', marginLeft: 'auto' }}>
                     {loading ? 'Cargando...' : 'Cargar'}
                 </button>
@@ -465,11 +473,11 @@ function WeeklyReportPage() {
                     </div>
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', fontSize: '12px', color: MUTED, alignItems: 'center' }}>
-                    <span style={{ color: GREEN }}>{money(period.totalSales)}</span><span>ventas</span>
+                    <span style={{ color: GREEN }}>{money(period.totalSales - period.totalTips)}</span><span>ventas sin propina</span>
                     <span style={{ color: '#475569' }}>−</span>
                     <span style={{ color: RED }}>{money(totalCOGS)}</span><span>COGS</span>
                     <span style={{ color: '#475569' }}>−</span>
-                    <span style={{ color: RED }}>{money(period.totalExpenses)}</span><span>gastos operativos</span>
+                    <span style={{ color: RED }}>{money(period.totalOperatingExpenses)}</span><span>gastos operativos</span>
                     <span style={{ color: '#475569' }}>=</span>
                     <span style={{ color: netUtility >= 0 ? GREEN : RED, fontWeight: '700' }}>{money(netUtility)}</span>
                     {cogsMissing && <span style={{ color: '#854d0e', marginLeft: '6px' }}>(COGS parcial)</span>}

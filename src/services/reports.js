@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { fetchAllPages } from './pagination'
 
 // ── Date helpers ──────────────────────────────────────────────
 export function daysAgo(n) {
@@ -44,7 +45,7 @@ export async function getWeeklyReportData({ startDate, endDate }) {
     const endIso   = `${addDaysToDateString(endDate, 1)}T06:00:00-06:00`
 
     const [paymentsResult, cashMovementsResult, comandasResult] = await Promise.all([
-        supabase
+        fetchAllPages((from, to) => supabase
             .from('payments')
             .select(`
                 *,
@@ -58,20 +59,26 @@ export async function getWeeklyReportData({ startDate, endDate }) {
                 )
             `)
             .gte('created_at', startIso)
-            .lt('created_at', endIso),
+            .lt('created_at', endIso)
+            .order('id')
+            .range(from, to)),
 
-        supabase
+        fetchAllPages((from, to) => supabase
             .from('cash_movements')
             .select('*')
             .gte('created_at', startIso)
-            .lt('created_at', endIso),
+            .lt('created_at', endIso)
+            .order('id')
+            .range(from, to)),
 
-        supabase
+        fetchAllPages((from, to) => supabase
             .from('comandas')
             .select('*')
             .eq('status', 'paid')
             .gte('cobrado_at', startIso)
-            .lt('cobrado_at', endIso),
+            .lt('cobrado_at', endIso)
+            .order('id')
+            .range(from, to)),
     ])
 
     return {
@@ -183,21 +190,25 @@ export async function getProductSalesForPeriod({ startDate, endDate }) {
     const startIso = `${startDate}T06:00:00-06:00`
     const endIso   = `${addDaysToDateString(endDate, 1)}T06:00:00-06:00`
 
-    const { data: comandas, error: comandasError } = await supabase
+    const { data: comandas, error: comandasError } = await fetchAllPages((from, to) => supabase
         .from('comandas')
         .select('id')
         .eq('status', 'paid')
         .gte('cobrado_at', startIso)
         .lt('cobrado_at', endIso)
+        .order('id')
+        .range(from, to))
 
     if (comandasError) return { data: [], error: comandasError }
     if (!comandas || comandas.length === 0) return { data: [], error: null }
 
-    const { data: items, error } = await supabase
+    const { data: items, error } = await fetchAllPages((from, to) => supabase
         .from('comanda_items')
-        .select('quantity, unit_price, is_free_benefit, is_free_mixer, product_id, source_shot_product_id, products:products!comanda_items_product_id_fkey(name, categories(name))')
+        .select('id, quantity, unit_price, is_free_benefit, is_free_mixer, product_id, source_shot_product_id, products:products!comanda_items_product_id_fkey(name, categories(name))')
         .in('comanda_id', comandas.map(c => c.id))
         .eq('status', 'active')
+        .order('id')
+        .range(from, to))
 
     if (error || !items) return { data: [], error }
 
@@ -644,14 +655,18 @@ export async function getYearlyMonthSummaries({ year }) {
     const endIso   = `${year + 1}-01-01T06:00:00-06:00`
 
     const [paymentsRes, movementsRes] = await Promise.all([
-        supabase.from('payments')
-            .select('created_at, total_paid, tip_amount')
+        fetchAllPages((from, to) => supabase.from('payments')
+            .select('id, created_at, total_paid, tip_amount')
             .gte('created_at', startIso)
-            .lt('created_at',  endIso),
-        supabase.from('cash_movements')
-            .select('created_at, amount, movement_nature')
+            .lt('created_at',  endIso)
+            .order('id')
+            .range(from, to)),
+        fetchAllPages((from, to) => supabase.from('cash_movements')
+            .select('id, created_at, amount, movement_nature')
             .gte('created_at', startIso)
-            .lt('created_at',  endIso),
+            .lt('created_at',  endIso)
+            .order('id')
+            .range(from, to)),
     ])
 
     const months = Array.from({ length: 12 }, (_, i) => ({
@@ -687,14 +702,18 @@ export async function getMonthlyReportData({ year, month }) {
     const lastDayStr = `${year}-${mm}-${String(lastDay).padStart(2, '0')}`
 
     const [paymentsRes, movementsRes] = await Promise.all([
-        supabase.from('payments')
-            .select('created_at, total_paid, tip_amount, efectivo, tarjeta, transferencia')
+        fetchAllPages((from, to) => supabase.from('payments')
+            .select('id, created_at, total_paid, tip_amount, efectivo, tarjeta, transferencia')
             .gte('created_at', startIso)
-            .lt('created_at',  endIso),
-        supabase.from('cash_movements')
-            .select('created_at, amount, movement_nature, category, source_location, destination_location')
+            .lt('created_at',  endIso)
+            .order('id')
+            .range(from, to)),
+        fetchAllPages((from, to) => supabase.from('cash_movements')
+            .select('id, created_at, amount, movement_nature, category, source_location, destination_location')
             .gte('created_at', startIso)
-            .lt('created_at',  endIso),
+            .lt('created_at',  endIso)
+            .order('id')
+            .range(from, to)),
     ])
 
     return {

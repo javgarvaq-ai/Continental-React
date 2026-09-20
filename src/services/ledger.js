@@ -1,32 +1,6 @@
 import { supabase } from './supabase'
 import { addDaysToDateString } from './reports'
-
-const PAGE_SIZE = 1000
-
-/**
- * Fetches every row matching `builder` (a function that takes a fresh query
- * and returns it with filters/order applied), paginating with .range() until
- * a page comes back shorter than PAGE_SIZE. This guarantees completeness
- * regardless of how large the table grows — needed now that the Ledger's
- * drawer balance is persistent/cumulative (see utils/ledger.computeRunningBalances):
- * a single silently-dropped historical row would permanently skew the running
- * total, with no way to detect it from the UI.
- */
-async function fetchAllPages(builder) {
-    let all = []
-    let from = 0
-
-    while (true) {
-        const { data, error } = await builder(from, from + PAGE_SIZE - 1)
-        if (error) return { data: null, error }
-
-        all = all.concat(data || [])
-        if (!data || data.length < PAGE_SIZE) break
-        from += PAGE_SIZE
-    }
-
-    return { data: all, error: null }
-}
+import { fetchAllPages } from './pagination'
 
 /**
  * Fetches everything the Ledger view needs to compute running balances.

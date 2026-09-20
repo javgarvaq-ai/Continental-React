@@ -47,7 +47,10 @@ export function useShift({ currentUser, currentShiftId, isOnline, setStatus, onS
         // finally paid — see tasks/todo.md 2026-08-06). 'pending_payment'/
         // 'processing_payment' are mid-checkout and hard-block close —
         // never overridable, even with forceCloseWithOpenTables.
-        const { data: openComandas } = await getOpenComandas()
+        const { data: openComandas, error: openComandasError } = await getOpenComandas()
+        if (openComandasError) {
+            return { data: null, error: openComandasError }
+        }
         const openTableNames = (openComandas || [])
             .filter(c => c.status === 'open')
             .map(c => c.units?.name)

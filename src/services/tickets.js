@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { addDaysToDateString } from './reports'
+import { fetchAllPages } from './pagination'
 
 export async function getComandaByFolio(folioNumero) {
     const { data: comanda, error } = await supabase
@@ -79,33 +80,47 @@ export async function adjustPaymentTip({ paymentId, tipAmount }) {
 // Searches comandas by date range, optional folio number, customer name,
 // or status. Returns up to `limit` results newest-first (default 2000 — enough for any realistic date range).
 export async function searchComandas({ startDate, endDate, search = '', status = 'all', limit = 2000 }) {
-    let query = supabase
-        .from('comandas')
-        .select(`
-            id, folio, status, opened_at, cobrado_at, final_total, personas, customer_name,
-            units ( name ),
-            customers ( name, customer_number ),
-            payments ( total_paid, efectivo, tarjeta, transferencia, tip_amount )
-        `)
-        // Operational-day cutoff (06:00 local, -06:00) so a shift crossing
-        // midnight isn't split across two calendar days — same convention as
-        // buildDailyRevenue. Previously missing the -06:00 offset entirely.
-        .gte('opened_at', `${startDate}T06:00:00-06:00`)
-        .lt('opened_at', `${addDaysToDateString(endDate, 1)}T06:00:00-06:00`)
-        .order('opened_at', { ascending: false })
-        .limit(limit)
+    // Supabase/PostgREST caps a single response at 1000 rows regardless of
+    // .limit() — a wide date range used to be silently truncated with no
+    // error (audit 1.3). fetchAllPages paginates past that; `.order('id')`
+    // is a tie-breaker after `opened_at` so pagination is lossless even when
+    // two comandas open in the same instant (opened_at alone isn't unique).
+    const buildQuery = (from, to) => {
+        let query = supabase
+            .from('comandas')
+            .select(`
+                id, folio, status, opened_at, cobrado_at, final_total, personas, customer_name,
+                units ( name ),
+                customers ( name, customer_number ),
+                payments ( total_paid, efectivo, tarjeta, transferencia, tip_amount )
+            `)
+            // Operational-day cutoff (06:00 local, -06:00) so a shift crossing
+            // midnight isn't split across two calendar days — same convention as
+            // buildDailyRevenue. Previously missing the -06:00 offset entirely.
+            .gte('opened_at', `${startDate}T06:00:00-06:00`)
+            .lt('opened_at', `${addDaysToDateString(endDate, 1)}T06:00:00-06:00`)
+            .order('opened_at', { ascending: false })
+            .order('id')
+            .range(from, to)
 
-    if (status !== 'all') {
-        if (status === 'open') {
-            query = query.in('status', ['open', 'pending_payment', 'processing_payment'])
-        } else {
-            query = query.eq('status', status)
+        if (status !== 'all') {
+            if (status === 'open') {
+                query = query.in('status', ['open', 'pending_payment', 'processing_payment'])
+            } else {
+                query = query.eq('status', status)
+            }
         }
+
+        return query
     }
 
-    const { data, error } = await query
+    const { data: allData, error } = await fetchAllPages(buildQuery)
 
-    if (error || !data) return { data: [], error }
+    if (error || !allData) return { data: [], error }
+
+    // `limit` stays as a safety cap on how much the caller gets back, applied
+    // after fetching everything so the newest-first order is preserved.
+    const data = allData.slice(0, limit)
 
     // Client-side filter for folio number or customer name search
     const trimmed = search.trim()

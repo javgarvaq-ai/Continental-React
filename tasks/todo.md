@@ -1,3 +1,77 @@
+## Plan — Sesión 2026-09-20: Prioridades del audit + Integración Mercado Pago — 🅿️ PENDIENTE DE APROBACIÓN DE JAVI, NO CODEADO
+
+> Deriva de `tasks/auditoria_admin_2026-09-18.md`. Javi decidió: (1) primero los fixes del audit, después Mercado Pago; (2) los movimientos de MP se guardan en tabla propia (no solo consulta en vivo), para poder cruzarlos con el Ledger y automatizar conciliación a futuro.
+
+### Investigación hecha hoy: ¿se puede traer los movimientos de MP por API?
+
+**Sí.** Mercado Pago tiene el *Account Money Report* ("Todas las transacciones"), disponible para cuentas MX:
+
+- `POST https://api.mercadopago.com/v1/account/settlement_report` — genera el reporte (async, body `{begin_date, end_date}`) → `202 Accepted`
+- `GET .../settlement_report/list` — lista reportes generados (`id`, `file_name`, `begin_date`, `end_date`, `date_created`)
+- `GET .../settlement_report/:file_name` — descarga el CSV
+- `POST` / `DELETE .../settlement_report/schedule` — programa generación automática recurrente en el lado de MP
+
+Auth: `Authorization: Bearer <access_token>` — access token de **producción de la cuenta de Javi**, generado por él mismo en el panel de desarrolladores de MP (no requiere flujo OAuth con terceros, es su propia cuenta).
+
+Contenido del CSV: liquidaciones, reembolsos, contracargos, disputas, retiros, cashback — con monto bruto y `SETTLEMENT_NET_AMOUNT` (impacto real en el saldo).
+
+**Límite de alcance — importante:** esto solo cubre el lado de **Mercado Pago** (Terminal 1). Getnet (Terminal 2) deposita a la cuenta personal BBVA de Javi, no a MP — esta API no toca esa parte. Sigue haciendo falta el PDF de BBVA para Getnet. Esta integración resuelve la mitad del trabajo manual de conciliación (la parte MP), no la conciliación completa.
+
+Fuentes: [Crear reporte a través de la API](https://www.mercadopago.com.mx/developers/es/docs/checkout-pro/additional-content/reports/account-money/api) · [Report use - Account balance](https://www.mercadopago.com.mx/developers/en/docs/checkout-api-payments/additional-content/reports/account-money/how-to-use)
+
+---
+
+### Fase 0 — Seguridad y estabilidad (del audit, antes que nada)
+
+Orden por severidad/urgencia; cada punto es su propio commit chico, no un solo cambión.
+
+- [x] **0.1 Verificar exposición real de RPCs a `anon`** (audit 2.14) — ✅ HECHO 2026-09-20, confirmado: 6 de 8 RPCs expuestas a `anon` (`adjust_payment_tip`, `adjust_inventory_stock`, `deduct_inventory_item`, `finalize_comanda_payment`, `present_bill_atomic`, `set_payment_card_terminal`). Solo `activate_membership` y `process_membership_on_payment` estaban correctamente cerradas. Javi corrió en el SQL Editor de Supabase:
+  ```sql
+  SELECT proname, proacl FROM pg_proc
+  WHERE pronamespace = 'public'::regnamespace AND prosecdef;
+  ```
+  y pega el resultado aquí antes de que se toque nada — si `proacl` es NULL o trae `anon=X` en `adjust_payment_tip`, `adjust_inventory_stock`, `deduct_inventory_item`, `finalize_comanda_payment` o `present_bill_atomic`, están expuestos a cualquiera con la anon key (pública en el bundle).
+- [ ] **0.2 Migración creada, pendiente de revisión y push** — `supabase/migrations/20260920000001_revoke_anon_from_sensitive_rpcs.sql`:
+  - `REVOKE ... FROM anon` en `finalize_comanda_payment`, `present_bill_atomic`, `set_payment_card_terminal` (se quedan abiertas a `authenticated`, cualquier mesero cobra).
+  - `REVOKE ... FROM anon, authenticated` en `deduct_inventory_item` (sin caller directo en frontend, verificado por grep — solo la usa internamente `finalize_comanda_payment`).
+  - `adjust_payment_tip` y `adjust_inventory_stock`: `REVOKE FROM anon` + `CREATE OR REPLACE` agregando el guard `(SELECT role FROM public.users WHERE id = auth.uid()) NOT IN ('admin','manager')` (mismo patrón que `20260512000001_admin_role_rls.sql`), preservando el resto de la lógica sin cambios (verificado línea por línea contra los archivos originales).
+  - Pendiente: Javi revisa el archivo y corre `npx supabase db push` en su terminal.
+- [x] **0.3 Paginación de reportes** (audit 1.3) — ✅ HECHO 2026-09-20. `src/services/pagination.js` nuevo con `fetchAllPages` (movido de `ledger.js`, que ahora lo importa). Aplicado con `.order('id').range()` en `getWeeklyReportData`, `getProductSalesForPeriod`, `getYearlyMonthSummaries`, `getMonthlyReportData` (todos en `reports.js`). En `searchComandas` (`tickets.js`) se usó `.order('opened_at', {ascending:false}).order('id')` — compuesto, porque esa sí necesita mantener el orden más-reciente-primero en pantalla; `id` es el desempate para que la paginación no salte/duplique filas. `limit` se sigue respetando, aplicado después de traer todo. `eslint` sin errores en los 4 archivos. Pendiente probar en pantalla (Reporte Semanal/Mensual/Financiero/buscador de folios) — queda para el bloque de pruebas al final.
+- [x] **0.4 Botón "Cargar" del Reporte financiero** (audit 2.1) — ✅ HECHO 2026-09-20. `WeeklyReportPage.jsx:352`, `onClick={loadPeriod}` → `onClick={() => loadPeriod()}`. El bug real: React pasaba el SyntheticEvent del click como `overrideStart`, así que al cambiar las fechas y darle "Cargar" el período que se cargaba no era el que se veía en los inputs. Nota aparte (no incluida en este fix, revisar si vale la pena después): mismo patrón `onClick={load}` sin wrapper en `ProductCostingPage.jsx:245` y `ProductSalesReportPage.jsx:456` — no se tocó porque no estaba en el alcance de 0.4 y no confirmé si esas `load` toman argumentos que el evento rompería.
+- [x] **0.5 `getOpenComandas` con error ignorado en cierre de turno** (audit 2.3) — ✅ HECHO 2026-09-20. `src/hooks/useShift.js:50`, dentro de `fetchShiftPanelData()`: se destructuraba solo `data` de `getOpenComandas()`, descartando `error` — si la query fallaba, `openComandas` quedaba `undefined` y `(openComandas || [])` lo volvía `[]` en silencio, así que `hasOpenTables`/`hasBlockingTables` daban `false` como si no hubiera ninguna mesa abierta. Fix: ahora se captura `error` y si existe se retorna `{ data: null, error }` de inmediato, igual que ya se hacía con `getShiftSummary` unas líneas arriba. Verificado que `ShiftPanel.jsx` ya maneja bien ese error (no pinta el resumen, no deja avanzar a cerrar turno) — no hizo falta tocar el componente.
+- [x] **0.6 Una sola fórmula de utilidad, sin doble conteo de propinas** (audit 1.1 + 1.2) — ✅ HECHO 2026-09-20, confirmado con agosto real antes de tocar código.
+  - Verificado con SQL contra agosto: `MonthlyReportPage` restaba la propina dos veces (excluida de `revenue`, pero seguía sumada en `totalExpenses`) — subestimaba la utilidad neta de agosto en **$10,961.00 MXN**, exactamente el monto de `propinas_entregadas` pagado ese mes. `WeeklyReportPage` no tenía el mismo bug (metía la propina en ventas Y en gastos, se cancelaba sola) pero quedaba a merced de que cobro y pago de propina cayeran en el mismo período — con agosto, la diferencia entre ambos enfoques fue de solo $6.63 (el desfase real de cobro vs pago).
+  - Fix aplicado en ambas pantallas: se agregó `totalOperatingExpenses` (gastos con `movement_nature = 'expense'` pero excluyendo `category = 'propinas_entregadas'`), usado SOLO en el cálculo de `netUtility` y en el desglose de la caja de "Utilidad neta". `totalExpenses` (todos los gastos, incluida la propina pagada) se dejó intacto — sigue usándose en "Total gastos" y en el desglose por categoría, porque para cuadrar caja sí es plata real que salió.
+  - `WeeklyReportPage.jsx`: `netUtility = (totalSales - totalTips) - totalCOGS - totalOperatingExpenses`.
+  - `MonthlyReportPage.jsx`: `netUtility = revenue - totalCOGS - totalOperatingExpenses` (revenue ya excluía propina, solo hacía falta corregir el lado de gastos).
+  - `eslint` sin errores nuevos en los 4 archivos tocados (los warnings/errores que salen son de código preexistente, no de este cambio).
+  - Pendiente: comparar visualmente en pantalla que la utilidad de agosto en `MonthlyReportPage` ahora sea ~$10,961 más alta que antes — queda para el bloque de pruebas al final junto con lo demás de Fase 0.
+
+Fixes 🟡/⚪ del audit (2.5–2.13, 1.4–1.8) quedan en el backlog de esta fase, se atacan después de 0.1–0.6 si hay tiempo, no bloquean Fase 1.
+
+---
+
+### Fase 1 — Pantalla de Mercado Pago (`/admin/mercado-pago`)
+
+- [ ] **1.1 Javi genera el access token de producción** en su cuenta de MP (panel de desarrolladores → Tus integraciones → Credenciales de producción). Dato sensible — nunca va al frontend.
+- [ ] **1.2 Guardarlo como secret de Edge Function** (`MP_ACCESS_TOKEN`), mismo patrón que `SB_SERVICE_ROLE_KEY` en las Edge Functions existentes.
+- [ ] **1.3 Migración: tabla `mp_movements`** — columnas propuestas: `id uuid`, `mp_report_line_id text unique` (o hash de la fila si el CSV no trae id único — a definir al ver un CSV real), `movement_date timestamptz`, `movement_type text` (settlement/refund/chargeback/dispute/withdrawal/cashback), `gross_amount numeric(12,2)`, `net_amount numeric(12,2)`, `description text`, `raw jsonb` (fila cruda del CSV, para no perder nada que no se mapeó), `created_at`. RLS: SELECT solo `admin`; sin policy de INSERT/UPDATE para `authenticated` — todo escribe por Edge Function con `service_role` (igual que `create-user`/`reset-pin`).
+- [ ] **1.4 Edge Function `mp-sync-movements`**: pide el reporte del rango de fechas que falte, hace poll a `/list` hasta que esté listo, descarga el CSV, lo parsea y hace upsert en `mp_movements` (idempotente — no duplica si se corre dos veces el mismo rango).
+- [ ] **1.5 Scheduled task diario** que invoca la Edge Function (con `create_trigger`, **no** con cron de Supabase — así se mantiene rastro de cada corrida y se puede reintentar manual desde acá si falla un día).
+- [ ] **1.6 Pantalla admin nueva** `/admin/mercado-pago`: tabla de movimientos con filtro de fecha (mismo patrón que Ledger/Folios), totales por tipo, y un renglón comparando el bruto acumulado contra lo que ya calcula `cardCommission()`/`estimateBankNet()` del Ledger para la terminal `mp` — primera señal visual de si algo no cuadra, sin construir todavía conciliación automática.
+
+Fuera de esta fase (se evalúa después, ver feature #6 del audit): cruzar `mp_movements` contra `payments` folio por folio para conciliación automática, y traer el lado Getnet/BBVA (eso no tiene API — sigue siendo PDF).
+
+---
+
+### Antes de codear, confirmar con Javi
+
+1. El resultado del `SELECT proacl FROM pg_proc …` de 0.1 — define si 0.2 es "arreglar un hueco real" o "blindar por si acaso".
+2. Nombre/forma final de la tabla `mp_movements` una vez que se vea un CSV real de ejemplo (Javi puede descargar uno manual desde el panel de MP hoy mismo para no adivinar columnas).
+3. Si 0.6 (fórmula de utilidad) cambia el número que Javi ya usa para decisiones — mostrar el antes/después de un mes cerrado antes de dar el cambio por bueno.
+
+---
+
 ## Plan — Sesión 2026-09-07 v3: terminal por venta y comisión exacta — ✅ CODEADO, PENDIENTE QUE JAVI CORRA MIGRACIÓN Y BACKFILL
 
 > **v3 (2026-09-07):** Javi cuestionó el tamaño del plan v2 y tenía razón. Esta versión lo reduce a lo que de verdad paga. Reemplaza a la v2 completa.
