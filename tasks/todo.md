@@ -173,16 +173,22 @@ Plan (aprobado, implementando):
 
 Pendiente: Javi prueba en `/analytics` — los 3 presets siguen igual, y "Personalizado" con un rango real (ej. una semana pasada) trae los números correctos.
 
-### Fase 1 — Pantalla de Mercado Pago (`/admin/mercado-pago`)
+### Fase 1 — Pantalla de Mercado Pago (`/admin/mercado-pago`) — ✅ Decisión de Javi 2026-09-20: Opción A (simple, sin tabla propia)
 
-- [ ] **1.1 Javi genera el access token de producción** en su cuenta de MP (panel de desarrolladores → Tus integraciones → Credenciales de producción). Dato sensible — nunca va al frontend.
-- [ ] **1.2 Guardarlo como secret de Edge Function** (`MP_ACCESS_TOKEN`), mismo patrón que `SB_SERVICE_ROLE_KEY` en las Edge Functions existentes.
-- [ ] **1.3 Migración: tabla `mp_movements`** — columnas propuestas: `id uuid`, `mp_report_line_id text unique` (o hash de la fila si el CSV no trae id único — a definir al ver un CSV real), `movement_date timestamptz`, `movement_type text` (settlement/refund/chargeback/dispute/withdrawal/cashback), `gross_amount numeric(12,2)`, `net_amount numeric(12,2)`, `description text`, `raw jsonb` (fila cruda del CSV, para no perder nada que no se mapeó), `created_at`. RLS: SELECT solo `admin`; sin policy de INSERT/UPDATE para `authenticated` — todo escribe por Edge Function con `service_role` (igual que `create-user`/`reset-pin`).
-- [ ] **1.4 Edge Function `mp-sync-movements`**: pide el reporte del rango de fechas que falte, hace poll a `/list` hasta que esté listo, descarga el CSV, lo parsea y hace upsert en `mp_movements` (idempotente — no duplica si se corre dos veces el mismo rango).
-- [ ] **1.5 Scheduled task diario** que invoca la Edge Function (con `create_trigger`, **no** con cron de Supabase — así se mantiene rastro de cada corrida y se puede reintentar manual desde acá si falla un día).
-- [ ] **1.6 Pantalla admin nueva** `/admin/mercado-pago`: tabla de movimientos con filtro de fecha (mismo patrón que Ledger/Folios), totales por tipo, y un renglón comparando el bruto acumulado contra lo que ya calcula `cardCommission()`/`estimateBankNet()` del Ledger para la terminal `mp` — primera señal visual de si algo no cuadra, sin construir todavía conciliación automática.
+Javi confirmó: por ahora solo quiere **ver** los movimientos de MP, igual que ya los ve en la app — sin guardar histórico propio ni conciliación automática todavía. Eso se puede agregar después (Opción B, más abajo, queda en el backlog) sin tirar nada de esto.
 
-Fuera de esta fase (se evalúa después, ver feature #6 del audit): cruzar `mp_movements` contra `payments` folio por folio para conciliación automática, y traer el lado Getnet/BBVA (eso no tiene API — sigue siendo PDF).
+**Detalle importante del diseño:** el *Account Money Report* de MP es asíncrono — se pide (`POST settlement_report`), MP lo genera (tiempo desconocido hasta que se pruebe), y hasta entonces se puede descargar (`GET .../list` para ver status, luego `GET .../:file_name` para el CSV). No es un `GET` instantáneo — la pantalla necesita un estado de "generando reporte…" mientras espera, no un spinner normal de medio segundo.
+
+Plan (pendiente de aprobación para empezar a codear):
+
+- [ ] **1.1 Javi genera el access token de producción** en su cuenta de MP (panel de desarrolladores → Tus integraciones → Credenciales de producción). Dato sensible — nunca va al frontend, se guarda como secret de la Edge Function (`MP_ACCESS_TOKEN`, mismo patrón que `SB_SERVICE_ROLE_KEY` en las Edge Functions existentes).
+- [ ] **1.2 Prueba manual antes de codear el parser:** Javi (o yo con el token) genera un reporte de un rango chico ya vivido (ej. la semana pasada) directo contra la API, para (a) medir cuánto tarda en estar listo de verdad, y (b) ver las columnas reales del CSV — así el parser se escribe contra datos reales, no contra la documentación de MP (mismo principio que ya usamos con las columnas de Supabase: nunca asumir).
+- [ ] **1.3 Edge Function `mp-get-movements`**: recibe `{ startDate, endDate }` del frontend, hace `POST settlement_report`, hace poll a `/list` hasta que el reporte esté listo (con un tope de tiempo razonable — si se pasa, regresa "sigue generándose, reintenta" en vez de colgarse), descarga el CSV, lo parsea a JSON (columnas confirmadas en 1.2) y lo regresa. Sin tocar la base de datos — nada se guarda.
+- [ ] **1.4 Pantalla admin nueva** `/admin/mercado-pago`: filtro de fechas (mismo patrón que Ledger/Folios), estado "Generando reporte…" mientras se espera a MP, tabla de movimientos con totales por tipo (liquidaciones/reembolsos/contracargos/retiros/etc.) una vez que llega.
+
+**Backlog, no ahora — Opción B (tabla propia + sync automático):** si más adelante Javi quiere cruzar esto contra el Ledger folio por folio o automatizar la conciliación, se agrega: tabla `mp_movements`, Edge Function con upsert idempotente, y una tarea programada diaria que la alimente — sin rehacer nada de la Opción A, la pantalla simplemente pasaría a leer de la tabla en vez de pedirle a MP cada vez que se abre.
+
+Fuera de alcance siempre (no tiene API): el lado Getnet/BBVA sigue siendo PDF manual — esto solo resuelve la mitad del trabajo de conciliación (la parte de Mercado Pago).
 
 ---
 
