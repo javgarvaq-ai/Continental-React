@@ -2,11 +2,16 @@ import { supabase } from './supabase'
 import { fetchAllPages } from './pagination'
 
 // ── Date helpers ──────────────────────────────────────────────
+// Corte operativo de las 06:00 (no medianoche): un desvelado a la 1am sigue
+// perteneciendo al día operativo anterior — mismo corte de 06:00 que usa el
+// resto del archivo (operationalDateKey, rangos explícitos T06:00:00-06:00).
+// Antes cortaba a medianoche local del navegador (audit 1.8), lo que hacía
+// que Analytics/Top categorías/Top insumos incluyeran la madrugada del día
+// anterior como si fuera del día siguiente.
 export function daysAgo(n) {
-    const d = new Date()
-    d.setDate(d.getDate() - n)
-    d.setHours(0, 0, 0, 0)
-    return d
+    const todayKey = operationalDateKey(Date.now())
+    const cutoffDateStr = addDaysToDateString(todayKey, -n)
+    return new Date(`${cutoffDateStr}T06:00:00-06:00`)
 }
 
 export function startOfMonth() {
@@ -148,7 +153,10 @@ export function buildDailyRevenue(payments, days = 14) {
 export function buildHourlyDistribution(payments) {
     const hours = Array.from({ length: 24 }, (_, h) => ({ hour: h, revenue: 0, count: 0 }))
     payments.forEach(p => {
-        const h = new Date(p.created_at).getHours()
+        // Hora fija de México (UTC-6, sin horario de verano desde 2022) en vez de
+        // .getHours() del navegador (audit 1.8), para que la distribución por
+        // hora del día no cambie si el admin se abre desde otro huso horario.
+        const h = new Date(new Date(p.created_at).getTime() - 6 * 60 * 60 * 1000).getUTCHours()
         hours[h].revenue += Number(p.total_paid || 0)
         hours[h].count   += 1
     })

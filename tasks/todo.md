@@ -102,7 +102,59 @@ Javi decidió cerrar estos dos antes de seguir con MP. Prioridad de audit: ambos
   - **Hallazgo aparte para backlog**: el costeo de productos está incompleto (51 productos sin `reference_cost` solo en agosto, incluyendo 807 unidades de Refresco) — la utilidad de un mes "cerrado" sigue moviéndose mientras se sigue costeando. No es un bug, es la consecuencia de que el costo se calcula en vivo y no se congela al momento de la venta.
   - **Ajuste adicional pedido por Javi, ya aplicado**: en `MonthlyReportPage`, "Propinas entregadas" salía en el desglose "Gastos operativos del mes" y sumaba a "Total gastos" de esa sección — a pesar de ya estar excluida de la utilidad neta (0.6), seguía viéndose ahí como si fuera un gasto operativo más, lo cual confunde bajo ese encabezado. Fix: se quitó del array `EXPENSE_GROUPS` (ya no aparece como línea) y "Total gastos" de esa sección ahora usa `totalOperatingExpenses` en vez de `totalExpenses`. La propina se sigue viendo informativa arriba, en "Propinas" dentro de "Ingresos del mes" (sin cambios) — es donde Javi confirmó que quiere verla. `WeeklyReportPage` NO se tocó: su sección de gastos tiene una nota explícita ("Dinero que salió permanentemente del negocio... propinas") con un propósito distinto (flujo de caja por banco/caja/resguardo) — pendiente de que Javi confirme si también quiere excluirla ahí o si el enfoque actual es intencional.
 
-Fixes 🟡/⚪ del audit (2.5–2.13, 1.4–1.8) quedan en el backlog de esta fase, se atacan después de 0.1–0.6 si hay tiempo, no bloquean Fase 1.
+Fixes 🟡/⚪ del audit (2.5–2.13, 1.4–1.8) quedan en el backlog de esta fase — **actualización 2026-09-20: Javi decidió sacar 1.5, 1.6 y 1.8 del backlog y hacerlos antes de Mercado Pago**, en ese orden.
+
+---
+
+### Fase 0.6 — Audit 1.5, 1.6, 1.8 (antes de Mercado Pago)
+
+#### 1.5 🟠 Ruido de coma flotante persistido en la base — PLAN LISTO, pendiente de aprobación
+
+Verificado contra el schema real (`20260508191907_remote_schema.sql`): todas estas columnas son `numeric` **sin escala** hoy:
+- `cash_movements.amount`
+- `comandas.final_total`, `comandas.tip_total`
+- `payments.efectivo`, `payments.tarjeta`, `payments.transferencia`, `payments.total_paid`, `payments.tip_amount`, `payments.change_given`
+- `shifts.starting_cash`, `shifts.cash_counted`, `shifts.difference`, `shifts.total_efectivo`, `shifts.total_tarjeta`, `shifts.total_transferencia`, `shifts.total_propinas`, `shifts.total_retiros`, `shifts.expected_cash`
+- (bonus, no estaba en el audit pero es la misma familia) `comanda_items.unit_price` — ¿la incluimos también? Confirmar.
+
+Plan (dos partes, ninguna requiere tocar el frontend en su forma):
+
+1. **Migración** `ALTER COLUMN ... TYPE numeric(12,2)` en las columnas de arriba. Postgres redondea al convertir, así que de una vez limpia cualquier arrastre de coma flotante que ya esté guardado.
+2. **Código** — agregar `round2()` a `src/utils/money.js` (ya existe un `round2` casi idéntico en `src/utils/inventoryUnits.js`, pero es para unidades de inventario, no dinero — mejor uno propio en `money.js` para no mezclar dominios) y aplicarlo en las 3 fuentes que el audit señala:
+   - `hooks/usePayment.js` → `getPaymentSummary()`: redondear `propina`, `totalRecibido`, `cambio` y `pendiente` ahí mismo (hoy solo `cambio` se redondea, y hasta abajo en `handleConfirmPayment`, no en el origen).
+   - `services/shifts.js` → `closeShift()`: redondear `difference = cashCounted - expectedCash` (hoy sin redondear — es la causa exacta del "dif. turno −$0.00" que reportó el audit).
+   - `services/comandaCheckout.js` → `confirmPayment()` / `utils/payments.js` → `computePaymentBreakdown()`: una vez que `getPaymentSummary` entregue todo ya redondeado, esto se limpia solo (el `Math.round(...)` manual en `usePayment.js:299` se puede quitar, ya no hace falta).
+
+Pendiente de Javi: (a) confirmar si se incluye `comanda_items.unit_price` en la migración, (b) aprobar para escribir migración + código.
+
+#### 1.6 🟡 Descuentos de membresía no reconcilian con "Ventas por producto" — ⏭️ APLAZADO (decisión de Javi 2026-09-20: `ProductSalesReportPage` no está bien terminada y casi no la usa; se retoma más adelante ampliando el alcance para ver los descuentos reflejados en un lugar más útil, no solo esa pantalla).
+
+<details><summary>Investigación ya hecha (para cuando se retome)</summary>
+
+Confirmado en código: `membership_benefit_usage` guarda `discount_amount_saved` **por comanda** (una fila, `benefit_type='discount'`), nunca prorrateado por línea de producto — el descuento nunca toca `comanda_items.unit_price`, que se queda a precio de lista. El monto real cobrado (ya con descuento) solo vive en `payments.total_paid`.
+
+**Alcance real, ya acotado — es más chico de lo que parecía:**
+- `MonthlyReportPage` y `WeeklyReportPage` SÍ usan `getProductSalesForPeriod` pero **solo para el `cost` (COGS)** — el `revenue`/utilidad que muestran viene de `payments.total_paid`, que ya es el monto real cobrado. Ahí NO hay descuadre, esas pantallas ya están bien.
+- El único lugar donde de verdad se ve el número inflado es `ProductSalesReportPage.jsx` ("Ventas por producto"): su fila "Total" (`totals.revenue`, línea ~180) suma `unit_price × qty` a precio de lista, así que en cualquier periodo con descuentos de membresía activos, ese Total va a salir MÁS ALTO que el "Ventas sin propina" del Cierre Mensual del mismo periodo — y nada en pantalla lo explica.
+
+**Fix mínimo propuesto:** en `ProductSalesReportPage.jsx`, agregar una query de `membership_benefit_usage` (sum de `discount_amount_saved` donde `benefit_type='discount'`, filtrado por fecha vía join a `comandas`/`comanda_items` o por `created_at` del periodo) y mostrar una línea informativa debajo del Total: "Descuentos de membresía aplicados: −$X (el Total de arriba es a precio de lista)". Solo lectura, no toca ningún cálculo existente — riesgo bajo.
+
+</details>
+
+#### 1.8 🟡 Rangos de fecha inconsistentes (corte 6am vs medianoche) — ✅ HECHO 2026-09-20 (Javi: "ese sí es importante, analytics la uso mucho")
+
+La mayoría de `reports.js` ya usa el corte operativo de 06:00 correctamente (`operationalDateKey`, `operationalWeekSunday`, y los rangos explícitos `T06:00:00-06:00` en Monthly/Weekly/Ledger/ProductSales). Quedan exactamente **2 puntos sin corregir**, ambos ya identificados con línea exacta:
+
+1. **`daysAgo(n)`** (`reports.js:5`) corta a medianoche local del navegador, no a las 06:00 operativas. La usan 3 funciones: `getPaymentsForPeriod` (Analytics "7/14/30 días"), `getTopCategoriesRevenue`, `getTopConsumedItems`. Fix: reescribir `daysAgo()` para que calcule el corte igual que el resto del archivo — reusando `operationalDateKey()` + `addDaysToDateString()` que ya existen ahí — en vez de `setHours(0,0,0,0)`. Un solo cambio arregla las 3 funciones a la vez porque todas llaman a este mismo helper.
+2. **`buildHourlyDistribution`** (`reports.js:151`) usa `new Date(p.created_at).getHours()` — hora local del navegador que abre la pantalla, no la hora de México fija. Hoy no falla porque el bar siempre abre el admin desde una PC en horario de México, pero si algún día se abre desde otro huso (ej. Javi revisando desde el teléfono en otro país) la distribución por hora del día sale corrida. Fix: calcular la hora restando el offset fijo de México (UTC-6) en vez de usar `.getHours()` — mismo patrón que ya usa `OPERATIONAL_DAY_SHIFT_MS` en el resto del archivo.
+
+Ambos fixes son acotados, de una función cada uno, sin tocar el frontend visualmente (mismo resultado hoy en la práctica, correcto en los bordes donde antes fallaba).
+
+**Implementado en `src/services/reports.js`:**
+- `daysAgo(n)` reescrito para usar el corte operativo de 06:00 (reusa `operationalDateKey()` + `addDaysToDateString()` que ya existían en el archivo) en vez de medianoche local del navegador. Arregla de un jalón `getPaymentsForPeriod` (Analytics 7/14/30 días), `getTopCategoriesRevenue` y `getTopConsumedItems`, que son las 3 funciones que lo usan.
+- `buildHourlyDistribution` reescrito para calcular la hora restando el offset fijo de México (UTC-6) en vez de `.getHours()` del navegador — la distribución por hora del día ya no depende de dónde se abra el admin.
+- Verificado con `eslint` (sin errores) y con un test aislado de la lógica de fechas (simulando "ahorita" a las 3am, antes del corte, confirmando que `daysAgo(7)` cae exactamente 7 días operativos atrás a las 06:00, y que la hora calculada de un timestamp UTC da la hora correcta de México).
+- **Pendiente: Javi prueba en Analytics** (los filtros de 7/14/30 días y la gráfica de "ventas por hora del día") que los números no cambiaron de forma rara — el efecto esperado es que la madrugada (antes de las 6am) ahora se cuenta en el día anterior, así que si hay ventas típicamente entre medianoche y 6am, los totales de "hoy"/"ayer" pueden moverse un poco (es el fix, no una regresión).
 
 ---
 
