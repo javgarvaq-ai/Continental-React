@@ -121,30 +121,35 @@ export async function getGlobalBalances() {
 // Analytics & Trends
 // ─────────────────────────────────────────────────────────────
 
-export async function getPaymentsForPeriod(days = 14) {
+// startDate/endDate: strings 'YYYY-MM-DD' del rango operativo (corte 06:00,
+// mismo patrón que Monthly/Weekly/ProductSales). endDate es inclusivo.
+export async function getPaymentsForPeriod({ startDate, endDate }) {
+    const startIso = `${startDate}T06:00:00-06:00`
+    const endIso   = `${addDaysToDateString(endDate, 1)}T06:00:00-06:00`
     const { data, error } = await supabase
         .from('payments')
         .select('created_at, total_paid, efectivo, tarjeta, transferencia, tip_amount')
-        .gte('created_at', daysAgo(days).toISOString())
+        .gte('created_at', startIso)
+        .lt('created_at', endIso)
         .order('created_at', { ascending: true })
     return { data: data || [], error }
 }
 
-export function buildDailyRevenue(payments, days = 14) {
+export function buildDailyRevenue(payments, { startDate, endDate }) {
     const buckets = {}
-    const now = Date.now()
-    for (let i = days - 1; i >= 0; i--) {
-        const ts = now - i * 24 * 60 * 60 * 1000
-        const key = operationalDateKey(ts)
-        const label = new Date(ts).toLocaleDateString('es-MX', { month: 'short', day: 'numeric', timeZone: 'America/Mexico_City' })
+    let key = startDate
+    while (key <= endDate) {
+        const [y, m, d] = key.split('-').map(Number)
+        const label = new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('es-MX', { month: 'short', day: 'numeric', timeZone: 'UTC' })
         buckets[key] = { date: key, label, revenue: 0, comandas: 0, tips: 0 }
+        key = addDaysToDateString(key, 1)
     }
     payments.forEach(p => {
-        const key = operationalDateKey(p.created_at)
-        if (buckets[key]) {
-            buckets[key].revenue  += Number(p.total_paid  || 0)
-            buckets[key].tips     += Number(p.tip_amount  || 0)
-            buckets[key].comandas += 1
+        const k = operationalDateKey(p.created_at)
+        if (buckets[k]) {
+            buckets[k].revenue  += Number(p.total_paid  || 0)
+            buckets[k].tips     += Number(p.tip_amount  || 0)
+            buckets[k].comandas += 1
         }
     })
     return Object.values(buckets)
@@ -435,12 +440,15 @@ export async function getProductUnitsForPeriod({ startDate, endDate }) {
     return { data: rows, error: null }
 }
 
-export async function getTopCategoriesRevenue(days = 14) {
+export async function getTopCategoriesRevenue({ startDate, endDate }) {
+    const startIso = `${startDate}T06:00:00-06:00`
+    const endIso   = `${addDaysToDateString(endDate, 1)}T06:00:00-06:00`
     const { data: comandas } = await supabase
         .from('comandas')
         .select('id')
         .eq('status', 'paid')
-        .gte('cobrado_at', daysAgo(days).toISOString())
+        .gte('cobrado_at', startIso)
+        .lt('cobrado_at', endIso)
 
     if (!comandas || comandas.length === 0) return { data: [], error: null }
 

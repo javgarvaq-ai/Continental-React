@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import AdminNav from '../components/AdminNav'
 import { money } from '../utils/money'
 import {
@@ -7,6 +7,8 @@ import {
     buildHourlyDistribution,
     buildDayOfWeekStats,
     getTopCategoriesRevenue,
+    operationalDateKey,
+    addDaysToDateString,
 } from '../services/reports'
 
 const PERIODS = [
@@ -14,6 +16,28 @@ const PERIODS = [
     { label: '14 días', days: 14 },
     { label: '30 días', days: 30 },
 ]
+
+// Convierte un preset de "N días" en un rango { startDate, endDate } explícito
+// (fechas operativas, corte 06:00), terminando en el día operativo de hoy.
+function todayOperationalKey() {
+    return operationalDateKey(Date.now())
+}
+
+function presetRange(days) {
+    const endDate = todayOperationalKey()
+    const startDate = addDaysToDateString(endDate, -(days - 1))
+    return { startDate, endDate }
+}
+
+const dateInputStyle = {
+    background: '#0f0f0f',
+    border: '1px solid #334155',
+    borderRadius: '6px',
+    color: '#e2e8f0',
+    fontSize: '13px',
+    padding: '5px 8px',
+    colorScheme: 'dark',
+}
 
 // ── Shared primitives ─────────────────────────────────────────
 function SectionTitle({ children }) {
@@ -113,7 +137,10 @@ function StatRow({ label, value, accent = '#94a3b8' }) {
 
 // ── Page ──────────────────────────────────────────────────────
 function AnalyticsPage() {
-    const [period, setPeriod] = useState(PERIODS[1])
+    // selectedDays: 7 | 14 | 30 | 'custom'
+    const [selectedDays, setSelectedDays] = useState(14)
+    const [customStart, setCustomStart]   = useState('')
+    const [customEnd, setCustomEnd]       = useState('')
     const [loading, setLoading] = useState(true)
 
     const [daily, setDaily]           = useState([])
@@ -121,21 +148,54 @@ function AnalyticsPage() {
     const [dowStats, setDowStats]     = useState([])
     const [categories, setCategories] = useState([])
 
+    const todayKey = useMemo(() => todayOperationalKey(), [])
+
+    // Rango efectivo: preset (7/14/30) calculado desde hoy, o el custom si
+    // ambas fechas están capturadas y en orden. null → todavía no hay nada
+    // que pedir (ej. recién se abrió "Personalizado" sin llenar fechas).
+    const range = useMemo(() => {
+        if (selectedDays === 'custom') {
+            if (!customStart || !customEnd || customStart > customEnd) return null
+            return { startDate: customStart, endDate: customEnd }
+        }
+        return presetRange(selectedDays)
+    }, [selectedDays, customStart, customEnd])
+
+    const rangeLabel = selectedDays === 'custom'
+        ? (range ? `del ${range.startDate} al ${range.endDate}` : 'rango inválido')
+        : `últimos ${selectedDays} días`
+
     const fetchAll = useCallback(async () => {
+        if (!range) return
         setLoading(true)
         const [paymentsRes, catsRes] = await Promise.all([
-            getPaymentsForPeriod(period.days),
-            getTopCategoriesRevenue(period.days),
+            getPaymentsForPeriod(range),
+            getTopCategoriesRevenue(range),
         ])
 
-        setDaily(buildDailyRevenue(paymentsRes.data, period.days))
+        setDaily(buildDailyRevenue(paymentsRes.data, range))
         setHourly(buildHourlyDistribution(paymentsRes.data))
         setDowStats(buildDayOfWeekStats(paymentsRes.data))
         setCategories(catsRes.data)
         setLoading(false)
-    }, [period])
+    }, [range])
 
     useEffect(() => { fetchAll() }, [fetchAll])
+
+    function selectPreset(days) {
+        setSelectedDays(days)
+    }
+
+    function selectCustom() {
+        // Al entrar a "Personalizado" por primera vez, arranca con el rango
+        // del preset actual como punto de partida en vez de fechas vacías.
+        if (selectedDays !== 'custom') {
+            const r = presetRange(typeof selectedDays === 'number' ? selectedDays : 14)
+            setCustomStart(r.startDate)
+            setCustomEnd(r.endDate)
+        }
+        setSelectedDays('custom')
+    }
 
     // Derived summary stats
     const totalRevenue = daily.reduce((s, d) => s + d.revenue, 0)
@@ -157,26 +217,63 @@ function AnalyticsPage() {
                 <AdminNav currentPath="/analytics" />
 
                 {/* Header */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
                     <h1 style={{ margin: 0, fontSize: '22px', fontWeight: 700, color: '#f1f5f9' }}>Analytics & Tendencias</h1>
-                    <div style={{ display: 'flex', gap: '6px' }}>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                         {PERIODS.map(p => (
                             <button
                                 key={p.days}
-                                onClick={() => setPeriod(p)}
+                                onClick={() => selectPreset(p.days)}
                                 style={{
                                     padding: '6px 14px', borderRadius: '6px', border: '1px solid',
-                                    borderColor: period.days === p.days ? '#4a90d9' : '#334155',
-                                    background: period.days === p.days ? '#1d3557' : 'transparent',
-                                    color: period.days === p.days ? '#e2e8f0' : '#64748b',
+                                    borderColor: selectedDays === p.days ? '#4a90d9' : '#334155',
+                                    background: selectedDays === p.days ? '#1d3557' : 'transparent',
+                                    color: selectedDays === p.days ? '#e2e8f0' : '#64748b',
                                     cursor: 'pointer', fontSize: '13px', fontWeight: 600,
                                 }}
                             >
                                 {p.label}
                             </button>
                         ))}
+                        <button
+                            onClick={selectCustom}
+                            style={{
+                                padding: '6px 14px', borderRadius: '6px', border: '1px solid',
+                                borderColor: selectedDays === 'custom' ? '#4a90d9' : '#334155',
+                                background: selectedDays === 'custom' ? '#1d3557' : 'transparent',
+                                color: selectedDays === 'custom' ? '#e2e8f0' : '#64748b',
+                                cursor: 'pointer', fontSize: '13px', fontWeight: 600,
+                            }}
+                        >
+                            Personalizado
+                        </button>
+                        {selectedDays === 'custom' && (
+                            <>
+                                <input
+                                    type="date"
+                                    value={customStart}
+                                    max={customEnd || todayKey}
+                                    onChange={e => setCustomStart(e.target.value)}
+                                    style={dateInputStyle}
+                                />
+                                <span style={{ color: '#64748b', fontSize: '13px' }}>a</span>
+                                <input
+                                    type="date"
+                                    value={customEnd}
+                                    min={customStart || undefined}
+                                    max={todayKey}
+                                    onChange={e => setCustomEnd(e.target.value)}
+                                    style={dateInputStyle}
+                                />
+                            </>
+                        )}
                     </div>
                 </div>
+                {selectedDays === 'custom' && customStart && customEnd && customStart > customEnd && (
+                    <div style={{ color: '#f87171', fontSize: '13px', marginTop: '-16px', marginBottom: '16px' }}>
+                        La fecha de inicio no puede ser después de la fecha final.
+                    </div>
+                )}
 
                 {loading ? (
                     <div style={{ textAlign: 'center', color: '#475569', padding: '60px', fontSize: '14px' }}>Cargando…</div>
@@ -202,7 +299,7 @@ function AnalyticsPage() {
 
                         {/* Daily revenue chart */}
                         <Card style={{ marginBottom: '16px' }}>
-                            <SectionTitle>Ingresos diarios — últimos {period.days} días</SectionTitle>
+                            <SectionTitle>Ingresos diarios — {rangeLabel}</SectionTitle>
                             <DailyRevenueChart data={daily} />
                         </Card>
 
@@ -245,7 +342,7 @@ function AnalyticsPage() {
 
                         {/* Top categories */}
                         <Card>
-                            <SectionTitle>Categorías — ingresos últimos {period.days} días</SectionTitle>
+                            <SectionTitle>Categorías — ingresos {rangeLabel}</SectionTitle>
                             {categories.length === 0 ? (
                                 <div style={{ color: '#475569', fontSize: '13px', textAlign: 'center', padding: '20px 0' }}>Sin ventas en el período</div>
                             ) : (

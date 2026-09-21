@@ -158,6 +158,21 @@ Ambos fixes son acotados, de una función cada uno, sin tocar el frontend visual
 
 ---
 
+### Fase 0.7 — Filtro de fechas personalizado en Analytics (pedido de Javi 2026-09-20, fuera del audit)
+
+Javi quiere elegir un rango de fechas propio en Analytics (hoy solo hay 7/14/30 días fijos). Decisión ya confirmada: **solo Analytics**, el Dashboard se queda como vista en vivo (mesas abiertas/turno actual/últimos cobros no tienen sentido para un día pasado).
+
+Verificado: `getPaymentsForPeriod`, `getTopCategoriesRevenue` y `buildDailyRevenue` (en `reports.js`) **solo los usa `AnalyticsPage.jsx`** — se puede cambiar su firma de `days` a `{ startDate, endDate }` explícitos sin afectar ninguna otra pantalla.
+
+Plan (aprobado, implementando):
+- `reports.js`: las 3 funciones pasan a recibir `{ startDate, endDate }` (mismo patrón `T06:00:00-06:00` que ya usan Monthly/Weekly/ProductSales) en vez de `days` contados desde ahorita.
+- `AnalyticsPage.jsx`: se agrega un botón "Personalizado" junto a 7/14/30 días que revela dos inputs de fecha; los presets 7/14/30 se siguen viendo igual, solo que ahora calculan su `startDate`/`endDate` antes de llamar al servicio.
+- `buildHourlyDistribution`/`buildDayOfWeekStats` no cambian (ya trabajan sobre la lista de payments que les llegue, sin importar el rango).
+
+**✅ Implementado 2026-09-20.** `reports.js`: `getPaymentsForPeriod`, `getTopCategoriesRevenue` y `buildDailyRevenue` ahora reciben `{ startDate, endDate }` en vez de `days`. `AnalyticsPage.jsx`: botón "Personalizado" junto a 7/14/30 que revela dos `<input type="date">`; valida que inicio no sea después de fin; al entrar a "Personalizado" arranca precargado con el rango del preset activo en vez de vacío. Verificado con `eslint` (limpio salvo un error preexistente ya documentado antes en `MonthlyReportPage` — `useEffect(() => fetchAll())`, mismo patrón en todo el proyecto, no es nuevo de este cambio) y con `npm run build` (compiló y generó el bundle completo; solo falló al final en un paso de limpieza de carpeta por permisos del sandbox, nada relacionado con el código).
+
+Pendiente: Javi prueba en `/analytics` — los 3 presets siguen igual, y "Personalizado" con un rango real (ej. una semana pasada) trae los números correctos.
+
 ### Fase 1 — Pantalla de Mercado Pago (`/admin/mercado-pago`)
 
 - [ ] **1.1 Javi genera el access token de producción** en su cuenta de MP (panel de desarrolladores → Tus integraciones → Credenciales de producción). Dato sensible — nunca va al frontend.
