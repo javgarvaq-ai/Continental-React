@@ -2465,3 +2465,167 @@ Javi capturó el 2026-10-04 (12:29–13:00 MX) gastos de septiembre en `cash_mov
 - Nota de rigor: Javi pegó el 3b, pero NO pegó los resultados literales del paso 2 (filas/total) ni del 3a; los dio por buenos de palabra. No hay comparación numérica antes/después guardada.
 - No se tocó código de la app, solo datos. `shift_id` se dejó intacto a propósito.
 - Siguiente: auditoría mensual recurrente (septiembre completo 7→30 como primera corrida; la conciliación previa cubre hasta el 6-sep).
+
+
+---
+
+## Plan — Sesión 2026-10-04: Auditoría mensual en SQL (Javi corre, Claude audita) — 🅿️ PENDIENTE DE APROBACIÓN, SIN SQL TODAVÍA
+
+### Decisión de Javi
+Solo SQL (sin pantalla en el admin). Javi corre el script en el SQL Editor de Supabase, pega los resultados aquí y Claude hace la auditoría y entrega el veredicto. Primera corrida: **septiembre 2026 completo (1→30)**; la conciliación previa (`conciliacion_bancaria_2026-09-06.md`) llega hasta el 6-sep, pero correr el mes entero es más simple y sirve de referencia.
+
+### Diseño (pensado para que correrlo cada mes sea pegar y cambiar UNA fecha)
+- Archivo: `tasks/auditoria_mensual.sql` (reutilizable; un solo parámetro `mes` al inicio de cada bloque).
+- **Bloque 1 — Scorecard:** UNA sola consulta, una fila por chequeo (`chequeo | resultado | esperado | estado OK/REVISAR`). Es lo único que Javi pega siempre.
+- **Bloques 2..N — Detalle:** solo se corren los que el scorecard marque REVISAR (lista de filas con id, monto, nota). Así no se pega pantalla de datos cuando todo está bien.
+- Zona horaria siempre `America/Mexico_City` (UTC-6). Columnas verificadas contra el esquema ANTES de escribir (regla de `lessons.md`): `payments` (created_at, efectivo, tarjeta, transferencia, total_paid, tip_amount, change_given, shift_id, card_terminal), `cash_movements` (created_at, shift_id, type, amount, note, category, movement_nature, source_location, destination_location), `shifts` (opened_at, closed_at, status, starting_cash, cash_counted, difference, expected_cash).
+
+### Chequeos del scorecard (heredados de la conciliación jun–sep + los que nos fallaron)
+Parte A — consistencia interna (solo base de datos, Claude la resuelve sola):
+1. **Resumen del mes:** folios, efectivo, tarjeta (por terminal `mp`/`getnet`), transferencia, propinas cobradas.
+2. **Gastos por categoría/naturaleza** + gasto operativo (excluye `propinas_entregadas`, igual que el arreglo 0.6).
+3. **Gastos sin nota** (esperado 0).
+4. **Fechas sospechosas** (el problema de hoy): movimientos cuya nota nombra un mes/día distinto al de `created_at`, o cuyo `created_at` cae a >1 día de la apertura de su turno. ⚠️ Los 21 re-fechados hoy SÍ saldrán ahí (turno de octubre, fecha de septiembre) — son excepción conocida y documentada, no hallazgo nuevo.
+5. **Cierre de turno:** turnos cerrados con `difference <> 0` y cuántos cuadran exacto (referencia: 84/100 en jun–sep).
+6. **Apertura vs cierre anterior:** `starting_cash` ≠ `cash_counted` del turno previo (detecta efectivo que entró/salió entre turnos).
+7. **Propinas cobradas vs entregadas** del mes (referencia: diferencia 0.42%).
+8. **Posibles duplicados:** mismo monto + misma nota + mismo turno + mismo día (el patrón del doble cargo de zumos).
+9. **Tarjeta sin terminal** (`card_terminal IS NULL`) desde 2026-09-07, cuando entró el campo (esperado 0).
+10. **Montos raros:** cero, negativos, o > umbral definido por Javi.
+
+Parte B — conciliación bancaria (necesita datos de afuera):
+11. **Comisión esperada por terminal** = tarjeta × (1 − factor): mp 0.9594, getnet 0.9783 (factores medidos el 2026-09-06, ver `src/utils/ledger.js`).
+12. **Saldo "Banco" del sistema al cierre de mes** (modelo del Ledger: tarjeta + transferencia + movs destino banco − movs origen banco, acumulado).
+13. **Identidad de cierre:** saldo sistema − saldo real = suma de partidas nombradas, **residuo $0.00** o falta un hallazgo. Para esto Javi me trae el **saldo real de Mercado Pago al 30-sep** (y el depósito pendiente de Getnet, si lo hay). Parte B se hace DESPUÉS de la A, con esos datos.
+
+### Reglas de oro para la auditoría (de `lessons.md`, no negociables)
+- "Rezago / en tránsito / comisión" son hipótesis: se miden con el dato crudo antes de escribirlas.
+- Bajar a nivel transacción antes de agregar; netear los dos sentidos de cualquier flujo entre cuentas.
+- No se cierra con residuo ≠ $0.00.
+
+### Entregable al terminar
+`tasks/auditoria_2026-09.md` (veredicto + tabla de hallazgos con montos) y esta lista actualizada. Auditorías siguientes: mismo `.sql`, cambia el mes.
+
+### Checklist
+- [x] Javi aprueba el plan; umbral de monto raro = $18,000 (2026-10-04)
+- [x] Escribir `tasks/auditoria_mensual.sql` (scorecard + 8 bloques de detalle). Probado contra Postgres 16 local con tablas del mismo esquema y datos sembrados: corre sin errores, cada chequeo se dispara cuando debe, cuentas del saldo/comisión verificadas a mano, y mes sin datos no truena.
+- [ ] Javi corre el scorecard de septiembre y pega el resultado
+- [ ] Claude audita Parte A, pide detalles de los chequeos que salgan REVISAR
+- [ ] Javi trae saldo real MP al 30-sep → Parte B e identidad de cierre
+- [ ] Escribir `tasks/auditoria_2026-09.md` con veredicto
+
+
+---
+
+## Parte A + inicio de Parte B de la auditoría de septiembre — 2026-10-04 (EN CURSO)
+
+### Scorecard de septiembre (pegado por Javi)
+- Cuadra: gastos $106,734.09 (= 3b), 21 re-fechados explicados, 0 sin nota, 0 duplicados, 0 tarjeta sin terminal, 0 montos raros, propinas cobradas $10,319.37 vs entregadas $10,249.00 (dif. $70.37 = 0.7%).
+- ⏳ Pendientes de detalle (Javi aún no pega los bloques 3, 4, 5 de `auditoria_mensual.sql`): 31 (1 nota con mes distinto), 32 (2 movimientos antes de abrir turno, sin explicar), 41 (7 de 29 turnos con diferencia, suma −$384.70; ref jun-sep 16%), 43 (5 aperturas ≠ cierre anterior).
+
+### Estado de cuenta de Mercado Pago (PDF de 52 págs, 1-jun → 3-oct-2026)
+- Leído por parser: 775 movimientos, **0 saltos de saldo**, entradas $328,992.25 / salidas −$328,516.63 / saldo final $475.62 — los tres coinciden con la carátula del PDF.
+- **Saldo real al 30-sep: $5,461.01.** Los $475.62 son el saldo del 3-oct, DESPUÉS de pagar $4,988.29 de gastos de octubre. Esos pagos coinciden al centavo con los 9 movimientos "octubre 2/3" que Javi capturó hoy (375, 239.61, 156.84, 590, 1,790, 489.01, 94, 564, 689.83) + $2.90 de rendimientos.
+- Sistema al 30-sep: Banco bruto $12,485.44; neto estimado (−comisión) $1,420.45. Real $5,461.01 → el real está $4,040.56 ARRIBA del neto estimado y $7,024.43 DEBAJO del bruto. **Todavía NO hay conclusión de faltante ni de sobrante**: falta nivel transacción.
+- Septiembre en MP: liberaciones $1,229.95 (el sistema espera ~$1,467.69 de las ventas mp: 1,529.80 × 0.9594) → hipótesis a medir, no explicada. Transferencias recibidas $67,108.61, de las cuales $62,858.61 vienen de la cuenta personal de Javi, $1,250 son los 2 SPEI de clientes (= `payments.transferencia` de sept) y **$3,000 de Eduardo Ibarra Martínez el 7-sep sin identificar** (¿lo registró el sistema?). Sin transferencia de Javi en octubre 1-3 → Getnet de los últimos días de sept aún sin pasar a MP.
+
+### Siguiente paso
+Javi corre `tasks/export_banco_ledger.sql` (todo el historial, solo lectura) y sube el CSV; con eso se empareja transacción por transacción (liberaciones ↔ ventas mp; transferencias de Javi ↔ ventas Getnet netas; pagos/transferencias enviadas ↔ gastos de banco) y se cierra la identidad al 30-sep y al 3-oct con residuo $0.00. No se cierra con "rezago/en tránsito" sin medirlo.
+
+
+---
+
+## Conciliación Mercado Pago al 30-sep-2026 — transacción por transacción — 2026-10-04
+
+Fuentes: PDF de estado de cuenta MP (775 movs, saldo 30-sep $5,461.01) + export `export_banco_ledger.sql` (554 cobros, 242 movs de banco). El export reproduce EXACTO el scorecard (Banco bruto $12,485.44; comisión acum. $11,064.99) → los datos son los mismos.
+
+### Identidad de cierre (Banco sistema → saldo real MP), cada línea medida con el dato crudo
+| Concepto | Monto |
+|---|---|
+| Banco del sistema, bruto | 12,485.44 |
+| − Comisión terminal mp (4.06% × $196,396.07) | −7,973.68 |
+| − Comisión Getnet (2.17% × $142,456.46) | −3,091.31 |
+| = Banco neto estimado | 1,420.45 |
+| + Aportación de socio (Eduardo Ibarra, 7-sep) que NO está registrada | +3,000.00 |
+| − Depósitos de efectivo registrados que nunca llegaron (950 − 40) | −910.00 |
+| + SPEI de cliente 21-jun (Lizeth Pérez $100) no registrado | +100.00 |
+| + Rendimientos MP ("Ganancia") y centavos | +232.33 |
+| + Liberaciones MP arriba de lo esperado (189,052.16 − 196,396.07×0.9594) | +629.77 |
+| + Salidas que el sistema cargó al banco y NO salieron de MP (18 movs, jun–ago) | +34,651.97 |
+| − Salidas de MP que el sistema NO tiene (12 movs, jun–ago) | −24,364.20 |
+| − Getnet cobrado en el sistema que no ha llegado a MP (130,065.84 − 142,456.46×0.9783) | −9,299.31 |
+| **= Saldo real MP 30-sep** | **5,461.01** |
+
+Residuo ≈ $0.00 (centavos de redondeo). Todas las salidas de SEPTIEMBRE del estado de cuenta tienen pareja en el sistema (incluye 15,400 préstamo, 10,000 renta, 2,400+3,000 permiso, 3,500 regreso de banco a caja). Las 30 partidas sin pareja son de jun–ago (parte ya conocida de la auditoría anterior).
+
+### Hallazgos
+1. **$475.62 (3-oct) NO es faltante:** son $5,461.01 menos $4,988.29 de gastos de octubre (coinciden con los 9 movs capturados hoy) + $2.90 de rendimientos. Además hay Getnet sin transferir a MP: ventas Getnet 30-sep → 3-oct ≈ $13,551.81 netos (Javi no ha transferido nada desde el 30-sep).
+2. **Aportación de socio de $3,000 (7-sep) sin registrar** en el sistema.
+3. Pagos de Getnet a MP cuadran con ventas Getnet netas con 1–3 días de desfase (medido: 1-sep, 8-sep, 9-sep casi exactos).
+4. El pago de préstamo ($15,400 sept, $15,500 jul) está capturado como gasto (gasto_operativo_banco / renta_banco): infla gastos operativos del reporte de utilidad.
+5. Fechas: préstamo y permiso de funcionamiento tienen fecha del sistema 20-sep, pero salieron del banco 7-sep y 11-sep (mismo mes, no afecta el cierre mensual).
+
+### Pendiente
+- Que Javi pegue BLOQUE 10 (detalle de checks 31/32/41/43 en una consulta) y revisar.
+- Decidir cómo registrar la aportación de $3,000 (Socio → Banco; la categoría `aportacion_socio` actual es Socio → Caja).
+- Estados BBVA/Getnet no recibidos (solo llegó el PDF de MP); necesarios para confirmar el Getnet pendiente real al 3-oct.
+
+
+---
+
+## Revisión de detalle 31/32/41/43 y hueco en la auditoría (resguardo) — 2026-10-04
+
+### Detalle de septiembre (Javi pegó BLOQUE 10)
+- **31 / 32: legítimos.** "Pago agua continental Agosto" ($489, capturado 20-sep, es de agosto pagado en sept) y "Heineken 1-sep" ($231.80 + $47, capturados con fecha 1-sep pero turno abrió 3-sep; coinciden con las transferencias de MP del 1-sep). Agregados a la lista de excepciones del script.
+- **41 / 43 — turnos de caja:** diferencias de turno −$384.70 y saltos de apertura +$94.70 → **neto −$290.00**. Las partidas se anulan salvo dos:
+  - 27-sep: turno abierto con inicial $0 y cerrado 2 min después contando $0 (esperado $170) → diferencia −$170, y el turno siguiente abre con $3,552 (= 3,382 + 170): **se anula, no es faltante**.
+  - 7-sep: apertura $5,367 vs cierre anterior $5,412 (−$45) y ese turno cierra +$45: **se anula**.
+  - 12-sep: ruido de $0.30 y float (0.0000000000009) que contaba como diferencia → corregido con ROUND en el script.
+  - **Faltante real de caja en septiembre: −$260 (turno del 20-sep) y −$30 (entre turnos del 26-sep), −$1/+$1 de ruido = −$290.00.**
+
+### Hueco que Javi detectó (el scorecard NO miraba el resguardo)
+Javi sabe de un retiro de $6k a resguardo del que regresó ~$5,200. El script no tenía ningún chequeo del resguardo (house_safe): solo cajón, banco y propinas. Un faltante en resguardo solo se ve comparando el saldo del sistema contra el efectivo físico. Corrección: checks 80-82 en el scorecard (sacado / regresado / saldo del sistema, estado `CONTAR`), check 44 (diferencia neta de caja) y BLOQUE 11 (movimientos de resguardo con saldo corrido). Probado en Postgres local con 6,000 / 5,200 → saldo 800.
+
+### Decisiones pendientes de Javi
+- Categoría nueva para el pago de préstamo ($15,500 jul, $15,400 sep están como gasto y bajan la utilidad).
+- Cómo registrar la aportación de socio de $3,000 al BANCO (la categoría actual va a Caja).
+- Cuánto efectivo hay FÍSICO en resguardo hoy (para cerrar el check 82).
+
+
+---
+
+## Plan — Categorías `pago_prestamo_banco` y `aportacion_socio_banco` + registrar $3,000 + reclasificar préstamos + limpiar pruebas de caja de sept — 2026-10-04 — 🅿️ PENDIENTE DE APROBACIÓN, SIN CÓDIGO NI SQL DE ESCRITURA TODAVÍA
+
+Decisión de Javi (hoy): sí a la categoría de préstamo y a reclasificar los pagos anteriores; los $3,000 de Eduardo Ibarra (aportación de socio, 7-sep, entraron a Mercado Pago) se registran con una categoría nueva hacia BANCO.
+
+### Verificado en el código (no supuesto)
+- `cash_movements` NO tiene CHECK sobre `category`, `movement_nature` ni ubicaciones (solo pkey y FKs) → no hace falta migración.
+- `MonthlyReportPage`, `WeeklyReportPage` y `reports.js` solo suman gastos con `movement_nature === 'expense'` → un pago con naturaleza `debt_payment` sale solo de gastos y de la utilidad, sin tocar esas pantallas.
+- `utils/ledger.js` calcula saldos por UBICACIÓN (drawer / house_safe / bank): `owner` y `loan` no son ubicaciones del Ledger, así que el banco baja/sube igual que hoy. No requiere cambio.
+- `getShiftSummary` solo cuenta movimientos con origen/destino `drawer` → estos dos son 100% banco, no afectan caja ni cierre de turno.
+
+### Parte 1 — Código (4 archivos, cambios mínimos)
+- [ ] `src/config/cashMovements.js`: 
+  - `pago_prestamo_banco` → type `withdrawal`, nature `debt_payment`, source `bank`, destination `loan`.
+  - `aportacion_socio_banco` → type `deposit`, nature `owner_funding`, source `owner`, destination `bank`.
+- [ ] `src/components/CashMovementPanel.jsx`: agregar `aportacion_socio_banco` ("Aportación socio · Socio → Banco") a DEPOSIT y `pago_prestamo_banco` ("Pago de préstamo · Desde banco") a WITHDRAWAL. Los managers siguen sin verlas (la lista permitida de manager no cambia).
+- [ ] `src/pages/CashMovementsAdminPage.jsx` y `src/pages/LedgerPage.jsx`: las 2 etiquetas en cada mapa de nombres.
+- [ ] Verificación: `eslint` de los 4 archivos y `npm run build` (Javi corre `build`/`git` en su terminal).
+
+### Parte 2 — Datos (SQL, orden: PREVIEW → confirmación → escritura en una sola sentencia con RETURNING → verificación → rollback)
+Archivo: `tasks/prestamo_y_aportacion_2026-10-04.sql`.
+- [ ] **Reclasificar préstamos:** `category='pago_prestamo_banco'`, `movement_nature='debt_payment'`, `destination_location='loan'`, SOLO por `id` confirmado por Javi. Candidatos conocidos: 5-jul $15,500 (`renta_banco`, "Pago préstamo Juan") y 20-sep $15,400 (`gasto_operativo_banco`, "Pago prestamo Juan"). Javi pega primero el SELECT de búsqueda (`note ILIKE '%prest%'`) para ver TODOS los candidatos antes de tocar nada.
+- [ ] **Registrar la aportación:** INSERT de 1 fila: deposit / `aportacion_socio_banco` / owner_funding / owner → bank / $3,000 / `created_at` = 2026-09-07 13:00 MX / `shift_id` = turno del 7-sep (`83dcb48e-cdd1-4818-beeb-5754a67a626f`, abrió 12:48 y cerró 22:16, así no dispara el check 32) / `user_id` = quien abrió ese turno / nota "Aportación socio Eduardo Ibarra 7 sept".
+- Efecto esperado en el scorecard de sept: gastos operativos $96,485.09 → $81,085.09 (−$15,400); Banco neto estimado $1,420.45 → $4,420.45 (+$3,000, que acerca al saldo real $5,461.01); utilidad de julio +$15,500 y de sept +$15,400.
+
+### Parte 3 — Faltantes de caja de septiembre (neto −$290.00)
+- [ ] **20-sep, turno `e506c4ce…` (−$260):** Javi dice que son 2 cuentas de prueba. Identificar los 2 folios con la consulta de abajo; si son de prueba, borrarlos con el patrón de `limpieza_pruebas_terminal_2026-09-07.sql` (comanda_items → comandas). ⚠️ El turno está CERRADO: sus totales están congelados (`total_efectivo`, `expected_cash`, `difference`) y hay que corregirlos aparte en el mismo script; además, esos $260 de efectivo hoy inflan las ventas de sept.
+- [ ] **27-sep, turno `524768b0…` (−$170, abierto con $0 y cerrado 2 min después):** el esperado de $170 sale de un cobro en efectivo ligado a ese turno. Javi no encuentra el folio → se identifica por `shift_id`. OJO: el turno siguiente abrió con $3,552 = $3,382 + $170, o sea que esos $170 SÍ están físicamente en el cajón. Si el cobro es de prueba, el efectivo existe pero no tiene origen en ventas → decidir si se borra la venta y se registra el efectivo como ajuste, o se deja la venta. Se decide viendo los datos.
+- [ ] **26-sep, −$30 entre turnos** (cierre $3,946 → apertura $3,916): Javi dice que se ajusta. Propuesta: 1 movimiento `ajuste_egreso_caja` de $30 fechado justo antes de la apertura del turno `24c7e4ee…`. Falta el `id` del turno anterior (se pide con una consulta).
+- Ruido de $0.30 / $1 (12, 19 y 27-sep): se deja, es redondeo de conteo.
+
+### Consulta de identificación (solo lectura, probada en Postgres local)
+Lista los cobros en efectivo y movimientos de los 2 turnos (20-sep y 27-sep). Javi la corre y pega el resultado ANTES de que se escriba cualquier DELETE.
+
+### Orden propuesto
+1. Javi aprueba este plan. 2. Partes 1 y 2 (no dependen de la 3). 3. Parte 3 cuando Javi pegue la consulta de identificación.
