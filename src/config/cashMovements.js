@@ -89,6 +89,18 @@ const CASH_MOVEMENT_CONFIG = {
         sourceLocation: 'owner',
         destinationLocation: 'drawer',
     },
+    aportacion_socio_banco: {
+        type: 'deposit',
+        movementNature: 'owner_funding',
+        sourceLocation: 'owner',
+        destinationLocation: 'bank',
+    },
+    pago_prestamo_banco: {
+        type: 'withdrawal',
+        movementNature: 'debt_payment',
+        sourceLocation: 'bank',
+        destinationLocation: 'loan',
+    },
     ajuste_ingreso: {
         type: 'deposit',
         movementNature: 'adjustment',

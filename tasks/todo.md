@@ -2629,3 +2629,14 @@ Lista los cobros en efectivo y movimientos de los 2 turnos (20-sep y 27-sep). Ja
 
 ### Orden propuesto
 1. Javi aprueba este plan. 2. Partes 1 y 2 (no dependen de la 3). 3. Parte 3 cuando Javi pegue la consulta de identificación.
+
+### ✅ Plan APROBADO por Javi (2026-10-04) — decisiones y estado
+- [x] Parte 1 (código): `cashMovements.js`, `CashMovementPanel.jsx`, `CashMovementsAdminPage.jsx`, `LedgerPage.jsx` con `pago_prestamo_banco` y `aportacion_socio_banco`. ESLint: sin errores nuevos (los 2 que salen —`CashMovementsAdminPage:128` y `LedgerPage:168`— ya existían). Falta `npm run build` y commit (Javi).
+- [ ] Parte 2: `tasks/prestamo_y_aportacion_2026-10-04.sql` — reclasifica SOLO 3 ids (60111cb3 jul $15,500; 298e825c ago $15,500; d24cf433 sep $15,400). NO entra "PROPINAS PRESTAMO MEMO" ($800, 0bcdbe05). Inserta aportación $3,000 (7-sep, turno 83dcb48e). Probado en Postgres local. Pendiente que Javi lo corra.
+- [ ] Parte 3: `tasks/limpieza_pruebas_caja_sept_2026-10-04.sql`
+  - Folios 963/964 (TestMesa, $130 c/u): se borran SOLO esas 2 comandas; NO el turno e506c4ce (tiene ventas reales 961/965 y ~20 movimientos reales). Totales congelados: total_efectivo −260, expected_cash 6,539→6,279, difference −260→0.
+  - 27-sep turno 524768b0: el cobro 1003 ($170) es real; se corrige el turno a apertura 3,382 / conteo 3,552 / dif 0 (no es faltante).
+  - 26-sep −$30: 1 movimiento `ajuste_egreso_caja` en el turno anterior a 24c7e4ee.
+  - Resguardo: sin pendiente ($750 en sistema son de Javi).
+- [ ] Después: re-correr scorecard de `auditoria_mensual.sql` (esperado: gastos operativos sept 81,085.09; banco neto 4,420.45; checks 41/43/44 mejoran) y verificar depósito Getnet lun/mar (MP ≈ $13,880 si el factor 0.9783 es correcto).
+- Lección: `ILIKE '%prest%'` NO matchea "préstamo" (acento) → usar `'%pr_stamo%'`. El guard del script lo detectó en la prueba local.
