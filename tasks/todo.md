@@ -2453,9 +2453,15 @@ Javi capturó el 2026-10-04 (12:29–13:00 MX) gastos de septiembre en `cash_mov
 5. Rollback documentado: guardar los `created_at` originales en el mismo script.
 
 ### Checklist
-- [ ] Javi aprueba el plan y responde la duda de `372a5997`
-- [ ] Escribir el .sql con PREVIEW / UPDATE / VERIFICACIÓN / ROLLBACK
-- [ ] Javi corre el PREVIEW y confirma
-- [ ] Javi corre el UPDATE
-- [ ] Verificar totales de sept/oct en Cierre Mensual
+- [x] Javi aprueba el plan y confirma `372a5997` = 29-sep, hora 12:00 OK (2026-10-04)
+- [x] Escribir el .sql con PREVIEW / UPDATE / VERIFICACIÓN / ROLLBACK — `tasks/refechar_movimientos_sept_2026-10-04.sql` (21 filas, $28,756.51; total re-sumado en independiente)
+- [x] Javi corre el PREVIEW y confirma
+- [x] Javi corre el UPDATE
+- [x] Verificar totales de sept/oct en Cierre Mensual
 - [ ] Auditoría mensual: diseñar script recurrente (después de este arreglo)
+
+### Review — 2026-10-04 ✅ CERRADO
+- Javi corrió PREVIEW → UPDATE → VERIFICACIÓN y dio el resultado por bueno. El 3b (gastos de sept por categoría) quedó consistente: `renta_banco` = 1 mov / $10,000 (el anticipo del 29-sep); gastos de sept totales $106,734.09 ($96,485.09 operativos + $10,249 propinas entregadas).
+- Nota de rigor: Javi pegó el 3b, pero NO pegó los resultados literales del paso 2 (filas/total) ni del 3a; los dio por buenos de palabra. No hay comparación numérica antes/después guardada.
+- No se tocó código de la app, solo datos. `shift_id` se dejó intacto a propósito.
+- Siguiente: auditoría mensual recurrente (septiembre completo 7→30 como primera corrida; la conciliación previa cubre hasta el 6-sep).
