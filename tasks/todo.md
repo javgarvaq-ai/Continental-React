@@ -2416,3 +2416,46 @@ Solo el `react-hooks/set-state-in-effect` preexistente y repo-wide. Cero errores
 ### Pendiente para Javi
 - **Borrar `.git/index.lock`** — lo dejó un `git status` mío; el sandbox no puede borrarlo y bloquea el próximo commit.
 - `npm run build`
+
+
+---
+
+## Plan — Sesión 2026-10-04: Re-fechar 21 movimientos de septiembre capturados el 4-oct — 🅿️ PENDIENTE DE APROBACIÓN DE JAVI, SIN SQL TODAVÍA
+
+### Qué pasó
+Javi capturó el 2026-10-04 (12:29–13:00 MX) gastos de septiembre en `cash_movements`. Quedaron con `created_at` = 4-oct, así que los reportes mensuales/semanales (`created_at >= start AND < end`) los cuentan en OCTUBRE y el Ledger los ordena en octubre.
+
+### Hallazgos de la revisión (verificados contra el código, no supuestos)
+- Los 21 movimientos son `withdrawal` con `source_location = 'bank'` → **no tocan el cajón**. `getShiftSummary` (`shifts.js:75-81`) solo suma movimientos con origen/destino `drawer`, así que el cierre de turno y `expected_cash` NO cambian. Solo importa `created_at`.
+- `shift_id` es NOT NULL y los 21 comparten el turno `95e9557b…` (el de la captura). **Propuesta: dejarlo así.** Ledger y reportes agrupan por `created_at`, no por `shift_id`; un turno de septiembre nuevo no aporta nada y reasignarlo arriesga el cierre de ese turno.
+- La fila `7f1bcb8f…` (PROPINAS 03/10/26, $1,255, drawer→tips) **ya es de octubre** (nota 03/10, turno nocturno). NO se toca.
+- Las 8 filas con nota "octubre 2 / octubre 3" (7e217ffa, c21f7422, 3ed9f39f, 1e5ba6f5, 29ccd6ce, 13bad217, 2ad56dfa, 6a2b390d, 80c254fb) **ya son de octubre**. NO se tocan.
+
+### Mapeo propuesto (solo `created_at`)
+| Fecha real | Movs | Total |
+|---|---|---|
+| 21-sep | 1 | $2,805.00 |
+| 22-sep | 3 | $3,568.26 |
+| 25-sep | 10 | $7,793.18 |
+| 26-sep | 1 | $58.12 |
+| 28-sep | 1 | $2,155.00 |
+| 29-sep | 4 (+1 por confirmar) | $12,047.95 (+$329.00) |
+| **Total** | **20 (21 con la dudosa)** | **$28,427.51 ($28,756.51)** |
+
+- ⚠️ Duda: `372a5997…` "heineken logistica" ($329) no trae fecha en la nota. Va justo después de "heineken cerveza 29 de sept" ($1,783.20) → probable 29-sep. **Requiere confirmación de Javi.**
+- Hora propuesta: 12:00 MX (UTC-6) de la fecha real, + N segundos por fila para conservar el orden de captura. Evita cruzar la medianoche por zona horaria.
+
+### Método (cuando Javi apruebe)
+1. Archivo `tasks/refechar_movimientos_sept_2026-10-04.sql`, columnas verificadas contra el esquema (`cash_movements`: id, shift_id, user_id, type, amount, note, created_at, category, movement_nature, source_location, destination_location).
+2. PREVIEW (SELECT) con fecha actual vs. nueva por id → Javi confirma.
+3. UPDATE por `id` (nunca por patrón de nota) dentro de `BEGIN … COMMIT`, con `RETURNING`; el editor web no muestra conteo de filas.
+4. SELECT de verificación: total sept debe subir exactamente $28,427.51 ($28,756.51 con la dudosa) y octubre bajar lo mismo.
+5. Rollback documentado: guardar los `created_at` originales en el mismo script.
+
+### Checklist
+- [ ] Javi aprueba el plan y responde la duda de `372a5997`
+- [ ] Escribir el .sql con PREVIEW / UPDATE / VERIFICACIÓN / ROLLBACK
+- [ ] Javi corre el PREVIEW y confirma
+- [ ] Javi corre el UPDATE
+- [ ] Verificar totales de sept/oct en Cierre Mensual
+- [ ] Auditoría mensual: diseñar script recurrente (después de este arreglo)

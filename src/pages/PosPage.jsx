@@ -565,7 +565,25 @@ function PosPage() {
             />
 
             {!selectedUnit ? (
-                <MesaGrid units={units} onUnitClick={handleUnitClick} />
+                <div style={{ position: 'relative', minHeight: 'calc(100vh - 260px)' }}>
+                    {/* Marca de agua: logo grande detrás de las mesas (decorativo, no clickeable) */}
+                    <div
+                        aria-hidden="true"
+                        style={{
+                            position: 'absolute',
+                            inset: 0,
+                            backgroundImage: `url(${logo})`,
+                            backgroundRepeat: 'no-repeat',
+                            backgroundPosition: 'center 65%',
+                            backgroundSize: 'min(70%, 720px)',
+                            opacity: 0.06,
+                            pointerEvents: 'none',
+                        }}
+                    />
+                    <div style={{ position: 'relative' }}>
+                        <MesaGrid units={units} onUnitClick={handleUnitClick} />
+                    </div>
+                </div>
             ) : (
                 <main>
                     <div style={{ marginBottom: '14px' }}>
