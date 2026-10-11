@@ -114,10 +114,29 @@ export async function getShiftSummary(shiftId) {
 export async function getOpenComandas() {
     const { data, error } = await supabase
         .from('comandas')
-        .select('id, status, units(name)')
+        .select('id, status, folio, customer_name, units(name)')
         .in('status', ['open', 'pending_payment', 'processing_payment'])
 
     return { data, error }
+}
+
+/**
+ * Pagos registrados en un turno, con el folio de su comanda — alimenta la lista
+ * "Folios del turno" del modal de corte (qué recibos/vouchers debe haber).
+ * Solo lectura. Ordenado por folio ascendente.
+ */
+export async function getShiftFolios(shiftId) {
+    const { data, error } = await supabase
+        .from('payments')
+        .select('id, efectivo, tarjeta, transferencia, total_paid, card_terminal, comandas(folio, customer_name, units(name))')
+        .eq('shift_id', shiftId)
+
+    if (error) return { data: null, error }
+
+    const sorted = [...(data || [])].sort(
+        (a, b) => Number(a.comandas?.folio || 0) - Number(b.comandas?.folio || 0)
+    )
+    return { data: sorted, error: null }
 }
 
 /**

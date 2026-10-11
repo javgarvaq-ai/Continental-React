@@ -4,6 +4,7 @@ import { requireOnline } from '../utils/requireOnline'
 import {
     getShiftSummary,
     getOpenComandas,
+    getShiftFolios,
     closeShift,
     addCashMovement,
 } from '../services/shifts'
@@ -51,6 +52,20 @@ export function useShift({ currentUser, currentShiftId, isOnline, setStatus, onS
         if (openComandasError) {
             return { data: null, error: openComandasError }
         }
+        // Lista informativa de folios del turno (no afecta el corte ni el cierre).
+        const { data: paidFolios, error: foliosError } = await getShiftFolios(currentShiftId)
+        if (foliosError) {
+            return { data: null, error: foliosError }
+        }
+        const openFolios = (openComandas || [])
+            .map(c => ({
+                folio: c.folio,
+                status: c.status,
+                unitName: c.units?.name || '',
+                customerName: c.customer_name || '',
+            }))
+            .sort((a, b) => Number(a.folio || 0) - Number(b.folio || 0))
+
         const openTableNames = (openComandas || [])
             .filter(c => c.status === 'open')
             .map(c => c.units?.name)
@@ -63,6 +78,8 @@ export function useShift({ currentUser, currentShiftId, isOnline, setStatus, onS
         return {
             data: {
                 summary,
+                paidFolios: paidFolios || [],
+                openFolios,
                 openTableNames,
                 blockingTableNames,
                 hasOpenTables: openTableNames.length > 0,

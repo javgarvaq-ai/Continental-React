@@ -1,3 +1,28 @@
+## Plan — Sesión 2026-10-11 (2): Lista de folios del turno en el modal de corte/cierre — ✅ APROBADO Y CODEADO 2026-10-11 — pendiente pruebas de Javi
+
+> Necesidad (Javi): al abrir el corte/cierre, ver una lista desplegable de los folios que deben tener recibo en el turno y con qué se pagaron, p. ej. `C-001050 efectivo · C-001051 tarjeta (voucher) · C-001052 abierta`. Sirve para cuadrar contra los tickets y vouchers físicos. Solo lectura: no cambia el cálculo del corte ni el cierre. Cero migraciones.
+
+### Qué se muestra
+- **Pagados en el turno** = `payments` con `shift_id` = turno actual (incluye cuentas de días anteriores que se cobran hoy — el recibo físico es de hoy). Por folio: método(s) y monto.
+  - Efectivo → "Efectivo". Tarjeta → "Tarjeta · 🧾 voucher" (+ terminal MP/Getnet si `card_terminal` existe). Transferencia → "Transferencia". Mixto → "Efectivo + Tarjeta", etc.
+- **Sin pagar** = comandas `open` / `pending_payment` / `processing_payment` (las mismas que ya detecta el modal): folio, mesa y estado ("Abierta", "Cuenta", "Cobrando").
+- Encabezado desplegable: "📋 Folios del turno (N pagados · M abiertos)" y, al abrir, conteo por método (ej. 12 efectivo · 9 con voucher · 2 transferencia).
+
+### Cambios
+- [x] `services/shifts.js`: nueva `getShiftFolios(shiftId)` — `payments` del turno con `comandas(folio, customer_name, units(name))`, ordenado por folio. Campos: `efectivo, tarjeta, transferencia, total_paid, card_terminal`.
+- [x] `services/shifts.js`: `getOpenComandas` agrega `folio, customer_name` al select (hoy solo `id, status, units(name)`). Los consumidores actuales siguen funcionando (campos extra).
+- [x] `hooks/useShift.js` → `fetchShiftPanelData`: devuelve además `paidFolios` y `openFolios`. `summary` NO se toca (es lo que consume `closeShift`).
+- [x] `components/ShiftPanel.jsx`: sección desplegable en el paso "review" (cerrada por defecto), folio con el mismo formato del resto del sistema (`C-` + 6 dígitos). Se refresca con "↻ Actualizar".
+- [x] Verificación: comparar conteo/monto por método de la lista contra Efectivo/Tarjeta/Transferencia del resumen del mismo modal (deben coincidir al peso); `eslint` en archivos tocados.
+
+### Decisiones (Javi aprobó las 3 propuestas por defecto)
+1. Voucher = solo tarjeta. 2. Sin canceladas. 3. Sin casillas ✔.
+
+### Review
+`eslint`: único error en `ShiftPanel.jsx` (`fetchData` usado antes de declararse en el `useEffect`) es preexistente, mismo patrón repo-wide. Pendiente: Javi corre `npm run build` y prueba el modal con turno real — comparar las 3 líneas de totales de la lista contra Efectivo/Tarjeta/Transferencia del resumen.
+
+---
+
 ## Plan — Sesión 2026-10-11: Analytics por fecha de creación + renombrar mesa + fecha en card — ✅ APROBADO Y CODEADO 2026-10-11 — pendiente pruebas de Javi
 
 > Contexto: ~6-8 cuentas/semana se cobran días después de abrirse. Los reportes agrupan por fecha de cobro (`payments.created_at` / `comandas.cobrado_at`), así que ese dinero cae en el día del pago. Decisión de Javi: NO tocar turnos, caja, ledger ni reportes financieros. Solo corregir **visualmente** Analytics. Cero migraciones en los 3 puntos.

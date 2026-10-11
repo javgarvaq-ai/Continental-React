@@ -18,11 +18,104 @@ function SummaryRow({ label, value, muted, accent, bold }) {
     )
 }
 
+const formatFolio = (folio) => `C-${String(folio || 0).padStart(6, '0')}`
+
+const OPEN_STATUS_LABELS = {
+    open: { label: 'Abierta', color: '#60a5fa' },
+    pending_payment: { label: 'Cuenta', color: '#fb923c' },
+    processing_payment: { label: 'Cobrando', color: '#a78bfa' },
+}
+
+function methodsOf(p) {
+    const parts = []
+    if (Number(p.efectivo) > 0) parts.push('Efectivo')
+    if (Number(p.tarjeta) > 0) {
+        const term = p.card_terminal === 'mp' ? ' (MP)' : p.card_terminal === 'getnet' ? ' (Getnet)' : ''
+        parts.push(`Tarjeta${term}`)
+    }
+    if (Number(p.transferencia) > 0) parts.push('Transferencia')
+    return parts
+}
+
+// Lista desplegable: qué folios debe haber en el turno y con qué se pagaron.
+function FoliosList({ paidFolios, openFolios }) {
+    const [expanded, setExpanded] = useState(false)
+
+    const count = { efectivo: 0, tarjeta: 0, transferencia: 0 }
+    const sum = { efectivo: 0, tarjeta: 0, transferencia: 0 }
+    paidFolios.forEach(p => {
+        ;['efectivo', 'tarjeta', 'transferencia'].forEach(k => {
+            const v = Number(p[k] || 0)
+            if (v > 0) { count[k] += 1; sum[k] += v }
+        })
+    })
+
+    return (
+        <div style={{ background: '#111', borderRadius: '10px', marginBottom: '16px' }}>
+            <button
+                type="button"
+                onClick={() => setExpanded(e => !e)}
+                style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}
+            >
+                <span>📋 Folios del turno ({paidFolios.length} pagados · {openFolios.length} sin pagar)</span>
+                <span style={{ opacity: 0.6 }}>{expanded ? '▲' : '▼'}</span>
+            </button>
+
+            {expanded && (
+                <div style={{ padding: '0 16px 14px 16px' }}>
+                    <div style={{ fontSize: '12px', opacity: 0.7, marginBottom: '10px', lineHeight: 1.6 }}>
+                        Efectivo: {count.efectivo} · {money(sum.efectivo)}<br />
+                        Tarjeta (con voucher): {count.tarjeta} · {money(sum.tarjeta)}<br />
+                        Transferencia: {count.transferencia} · {money(sum.transferencia)}
+                    </div>
+
+                    {paidFolios.length === 0 && openFolios.length === 0 && (
+                        <div style={{ fontSize: '12px', opacity: 0.5 }}>Sin folios en este turno.</div>
+                    )}
+
+                    {paidFolios.map(p => {
+                        const methods = methodsOf(p)
+                        const hasCard = Number(p.tarjeta) > 0
+                        return (
+                            <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', padding: '5px 0', borderTop: '1px solid #222', fontSize: '12.5px' }}>
+                                <span>
+                                    <strong>{formatFolio(p.comandas?.folio)}</strong>
+                                    <span style={{ opacity: 0.55 }}> {p.comandas?.units?.name || ''}</span>
+                                </span>
+                                <span style={{ textAlign: 'right' }}>
+                                    {methods.length ? methods.join(' + ') : 'Sin cobro'}
+                                    {hasCard ? ' 🧾' : ''}
+                                    <span style={{ opacity: 0.55 }}> · {money(p.total_paid)}</span>
+                                </span>
+                            </div>
+                        )
+                    })}
+
+                    {openFolios.map(c => {
+                        const st = OPEN_STATUS_LABELS[c.status] || { label: c.status, color: '#94a3b8' }
+                        return (
+                            <div key={`open-${c.folio}`} style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', padding: '5px 0', borderTop: '1px solid #222', fontSize: '12.5px' }}>
+                                <span>
+                                    <strong>{formatFolio(c.folio)}</strong>
+                                    <span style={{ opacity: 0.55 }}> {c.unitName}{c.customerName ? ` · ${c.customerName}` : ''}</span>
+                                </span>
+                                <span style={{ color: st.color, fontWeight: 600 }}>{st.label}</span>
+                            </div>
+                        )
+                    })}
+                </div>
+            )}
+        </div>
+    )
+}
+
 function ShiftPanel({ open, onClose, currentUser, onFetchData, onConfirmClose, onOpenCashMovement, shiftId }) {
     const [step, setStep] = useState('review')
     const [summary, setSummary] = useState(null)
     const [openTableNames, setOpenTableNames] = useState([])
     const [blockingTableNames, setBlockingTableNames] = useState([])
+    const [paidFolios, setPaidFolios] = useState([])
+    const [openFolios, setOpenFolios] = useState([])
     const [isLoading, setIsLoading] = useState(false)
     const [cashCounted, setCashCounted] = useState('')
     const [isClosing, setIsClosing] = useState(false)
@@ -41,6 +134,8 @@ function ShiftPanel({ open, onClose, currentUser, onFetchData, onConfirmClose, o
             setSummary(null)
             setOpenTableNames([])
             setBlockingTableNames([])
+            setPaidFolios([])
+            setOpenFolios([])
             setCashCounted('')
             setErrorMsg(null)
             setCloseArmed(false)
@@ -61,6 +156,8 @@ function ShiftPanel({ open, onClose, currentUser, onFetchData, onConfirmClose, o
         setSummary(data.summary)
         setOpenTableNames(data.openTableNames || [])
         setBlockingTableNames(data.blockingTableNames || [])
+        setPaidFolios(data.paidFolios || [])
+        setOpenFolios(data.openFolios || [])
     }
 
     async function handleConfirmClose() {
@@ -198,6 +295,7 @@ function ShiftPanel({ open, onClose, currentUser, onFetchData, onConfirmClose, o
                         {/* Step: Review */}
                         {step === 'review' && (
                             <>
+                            <FoliosList paidFolios={paidFolios} openFolios={openFolios} />
                             <button
                                 type="button"
                                 onClick={() => { setStep('count'); setErrorMsg(null) }}
