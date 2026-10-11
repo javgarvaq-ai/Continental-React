@@ -169,3 +169,35 @@ export async function getActiveComandaByUnit({ unitId }) {
 
     return { data: data || [], error }
 }
+
+// Renombra el texto libre de la mesa (comandas.customer_name). Solo aplica a
+// comandas abiertas SIN cliente asignado: con cliente, el nombre es el del
+// cliente y renombrarlo lo desincroniza (para eso existe "quitar cliente").
+export async function renameComanda({ comandaId, userId, customerName, previousName = null }) {
+    const cleanName = (customerName || '').trim() || null
+
+    const { data: updated, error } = await supabase
+        .from('comandas')
+        .update({ customer_name: cleanName })
+        .eq('id', comandaId)
+        .eq('status', 'open')
+        .is('customer_id', null)
+        .select('id')
+
+    if (error) return { error }
+
+    if (!updated || updated.length === 0) {
+        return { error: new Error('La comanda ya no está abierta o tiene un cliente asignado.') }
+    }
+
+    await supabase.from('comanda_events').insert([
+        {
+            comanda_id: comandaId,
+            user_id: userId,
+            event_type: 'renamed',
+            event_data: { from: previousName || null, to: cleanName },
+        },
+    ])
+
+    return { name: cleanName, error: null }
+}

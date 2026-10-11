@@ -1,3 +1,12 @@
+// 'YYYY-MM-DD' (día operativo) → 'lun, 5 oct'. Se parsea como UTC para que el
+// huso del navegador no mueva el día.
+function formatOpenedDay(key) {
+    const [y, m, d] = key.split('-').map(Number)
+    return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('es-MX', {
+        weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC',
+    })
+}
+
 function MesaGrid({ units, onUnitClick }) {
     return (
         <main>
@@ -54,6 +63,11 @@ function MesaGrid({ units, onUnitClick }) {
                             }}>
                                 {unit.statusLabel}
                             </span>
+                            {unit.openedDay ? (
+                                <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: '6px' }}>
+                                    Creada {formatOpenedDay(unit.openedDay)}
+                                </div>
+                            ) : null}
                             {unit.customerName ? (
                                 <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px' }}>
                                     {unit.customerName}

@@ -7,7 +7,7 @@ import { useCustomer } from '../hooks/useCustomer';
 import { useComanda } from '../hooks/useComanda';
 import { usePayment } from '../hooks/usePayment';
 import { useShift } from '../hooks/useShift';
-import { getOrCreateActiveComanda, cancelComanda, getActiveComandaByUnit } from '../services/comandas';
+import { getOrCreateActiveComanda, cancelComanda, getActiveComandaByUnit, renameComanda } from '../services/comandas';
 import MesaGrid from '../components/MesaGrid';
 import ShotMixerSelector from '../components/ShotMixerSelector';
 import ComandaPanel from '../components/ComandaPanel';
@@ -47,6 +47,7 @@ function PosPage() {
     const [catalogData, setCatalogData] = useState({ products: [], categories: [] });
     const [cartItems, setCartItems] = useState([]);
     const [isCancellingMesa, setIsCancellingMesa] = useState(false);
+    const [renameState, setRenameState] = useState({ open: false, value: '', saving: false });
     const [cancelConfirming, setCancelConfirming] = useState(false)
     const [changeUserDialog, setChangeUserDialog] = useState(false)
     const [openTableDialog, setOpenTableDialog] = useState({ open: false, unit: null, existing: null, input: '', searching: false, notFound: false, rp: '', cortesia: false })
@@ -433,11 +434,37 @@ function PosPage() {
         resetPaymentState();
         resetShotSelector();
         resetCustomerState();
+        setRenameState({ open: false, value: '', saving: false });
         await loadUnits();
 
         if (customStatus) {
             setStatus(customStatus);
         }
+    }
+
+    async function handleRenameMesa() {
+        if (!requireOnline(isOnline, setStatus)) return;
+        if (!currentComanda?.id || !currentUser?.id) return;
+        if (renameState.saving) return;
+
+        setRenameState(p => ({ ...p, saving: true }));
+        const { name, error } = await renameComanda({
+            comandaId: currentComanda.id,
+            userId: currentUser.id,
+            customerName: renameState.value,
+            previousName: currentComanda.customer_name,
+        });
+
+        if (error) {
+            setStatus(`Error renombrando mesa: ${error.message}`);
+            setRenameState({ open: false, value: '', saving: false });
+            return;
+        }
+
+        setCurrentComanda(prev => ({ ...prev, customer_name: name }));
+        setRenameState({ open: false, value: '', saving: false });
+        await loadUnits();
+        setStatus('Nombre de la mesa actualizado.');
     }
 
     async function handleCancelMesa() {
@@ -628,6 +655,49 @@ function PosPage() {
                             {folioDisplay}
                             {customerDisplay}
                         </div>
+
+                        {/* RENOMBRAR — solo comanda abierta y sin cliente asignado */}
+                        {currentComanda?.status === 'open' && !currentComanda?.customer_id && !currentCustomer && (
+                            renameState.open ? (
+                                <div style={{ marginTop: '8px', display: 'flex', gap: '8px' }}>
+                                    <input
+                                        type="text"
+                                        autoFocus
+                                        value={renameState.value}
+                                        onChange={e => setRenameState(p => ({ ...p, value: e.target.value }))}
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter') handleRenameMesa();
+                                            if (e.key === 'Escape') setRenameState({ open: false, value: '', saving: false });
+                                        }}
+                                        placeholder="Nombre de la mesa"
+                                        style={{ flex: 1, padding: '6px 10px', borderRadius: '8px', border: '1px solid #444', background: '#111', color: 'white', fontSize: '13px' }}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={handleRenameMesa}
+                                        disabled={renameState.saving}
+                                        style={{ padding: '6px 12px', borderRadius: '8px', border: 'none', background: '#1565c0', color: 'white', cursor: 'pointer', fontSize: '12px' }}
+                                    >
+                                        {renameState.saving ? '...' : 'Guardar'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setRenameState({ open: false, value: '', saving: false })}
+                                        style={{ padding: '6px 10px', borderRadius: '8px', border: 'none', background: '#333', color: 'white', cursor: 'pointer', fontSize: '12px' }}
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={() => setRenameState({ open: true, value: currentComanda?.customer_name || '', saving: false })}
+                                    style={{ marginTop: '8px', padding: '4px 10px', borderRadius: '8px', border: '1px solid #444', background: '#222', color: '#aaa', cursor: 'pointer', fontSize: '12px' }}
+                                >
+                                    ✏️ Renombrar mesa
+                                </button>
+                            )
+                        )}
 
                         {/* CUSTOMER & MEMBERSHIP INFO */}
                         {/* ASSIGN CUSTOMER BUTTON — shown when no customer assigned */}

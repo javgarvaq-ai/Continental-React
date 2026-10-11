@@ -41,6 +41,7 @@ const EVENT_LABELS = {
     reopened_from_processing:{ label: 'Reabierta (pago)', color: '#f97316' },
     reopened_from_cuenta:    { label: 'Reabierta (cuenta)',color: '#f97316' },
     cancelled:               { label: 'Cancelada',         color: '#f87171' },
+    renamed:                 { label: 'Renombrada',        color: '#94a3b8' },
 }
 
 const EVENT_FILTERS = [

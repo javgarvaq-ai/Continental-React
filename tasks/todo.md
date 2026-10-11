@@ -1,3 +1,46 @@
+## Plan — Sesión 2026-10-11: Analytics por fecha de creación + renombrar mesa + fecha en card — ✅ APROBADO Y CODEADO 2026-10-11 — pendiente pruebas de Javi
+
+> Contexto: ~6-8 cuentas/semana se cobran días después de abrirse. Los reportes agrupan por fecha de cobro (`payments.created_at` / `comandas.cobrado_at`), así que ese dinero cae en el día del pago. Decisión de Javi: NO tocar turnos, caja, ledger ni reportes financieros. Solo corregir **visualmente** Analytics. Cero migraciones en los 3 puntos.
+
+### Punto 1 — Analytics: toggle "Agrupar por: Fecha de cobro | Fecha de creación"
+
+Alcance: solo `AnalyticsPage.jsx` + `services/reports.js` (sección Analytics). Por defecto sigue en **Fecha de cobro** (los números actuales no cambian).
+
+- [x] `reports.js`: nueva `getPaymentsByCreationDate({ startDate, endDate })` — consulta `comandas` (`status='paid'`, `opened_at` dentro del rango operativo 06:00) con `payments(...)` embebido, usando `fetchAllPages` + `.order('id')`. Devuelve filas con la misma forma que `getPaymentsForPeriod` pero con `created_at = comandas.opened_at`, así `buildDailyRevenue` / `buildDayOfWeekStats` / `buildHourlyDistribution` se reutilizan SIN cambios. (El embed puede venir como objeto o arreglo según la FK única — manejar ambos.)
+- [x] `reports.js`: `getTopCategoriesRevenue` recibe un parámetro opcional `dateField` (`'cobrado_at'` por defecto | `'opened_at'`) y filtra por ese campo.
+- [x] `AnalyticsPage.jsx`: estado `groupBy` + control de 2 botones junto a los presets; `fetchAll` elige la función según `groupBy`; nota bajo el título cuando está en modo creación.
+- Efectos conocidos del modo "creación" (se avisan en la nota de la pantalla): (a) una cuenta abierta en el rango que **aún no se paga no aparece** (esta pantalla mide cobrado); (b) las "Horas pico" pasan a ser hora de **apertura**, no de cobro.
+- Verificación: SQL de comparación (misma ventana, ambos modos) — el total del rango completo debe coincidir salvo cuentas que cruzan los bordes; spot-check de 2-3 folios con rezago contra el día en que aparecen.
+- Sin cambios en: `WeeklyReportPage`, `MonthlyReportPage`, `Ledger`, `Dashboard`, turnos, RPCs.
+
+### Punto 2 — Renombrar `comandas.customer_name`
+
+Reglas (confirmadas por Javi): solo si `status='open'` y **sin cliente asignado** (`customer_id IS NULL`). Con cliente o ya pagada → no se puede.
+
+- [x] `services/comandas.js`: `renameComanda({ comandaId, userId, customerName })` — `UPDATE comandas SET customer_name = <trim o null> WHERE id AND status='open' AND customer_id IS NULL`, `.select('id')`; si 0 filas → error "La comanda ya no está abierta o tiene un cliente asignado." Inserta `comanda_events` (`event_type: 'renamed'`, `event_data: {from, to}`).
+- [x] `PosPage.jsx`: en el encabezado de "Mesa activa", botón ✏️ (visible solo si cumple las reglas) → input inline, Enter/Guardar; al guardar actualiza `currentComanda` y llama `loadUnits()` para refrescar la card. Mensajes por `setStatus()` (sin diálogos del navegador).
+- [x] `ComandaEventsPage.jsx`: agregar `renamed` a `EVENT_LABELS` (si no, sale el texto crudo).
+- RLS: `comandas_update` ya permite UPDATE (`USING (true) WITH CHECK (status <> 'paid')`) — no requiere migración. Verificado en `20260920000003`.
+- Pendiente de confirmar al implementar: que no exista CHECK sobre `comanda_events.event_type` en la BD real (no hay en las migraciones del repo).
+
+### Punto 3 — Día de creación en la card del POS (solo informativo)
+
+- [x] `services/units.js` → `getUnitsWithStatus`: agregar `opened_at` al select de comandas activas y exponer `openedAt` en el unit mapeado (vacío si la mesa está libre).
+- [x] `MesaGrid.jsx`: si `unit.openedAt`, línea chica "Creada lun 5 oct". El día se calcula con el **día operativo** (corte 06:00, `operationalDateKey`) para ser consistente con el resto del sistema: una comanda abierta a la 1am del sábado aparece como viernes. Si prefieres el día calendario literal, es cambiar una línea.
+- Sin tocar nada más.
+
+### Orden propuesto y pruebas
+Orden: 3 → 2 → 1 (de menor a mayor riesgo), un commit por punto.
+- [ ] Javi prueba en el POS: abrir mesa → la card muestra el día; renombrar mesa sin cliente (ok), con cliente (no aparece el ✏️), con cuenta presentada (no aparece).
+- [ ] Javi prueba en Analytics: alternar los dos modos en últimos 14 días y comparar con las cuentas diferidas que conoce.
+- [x] `eslint` sin errores nuevos en los archivos tocados (quedan solo `set-state-in-effect` en `AnalyticsPage`/`ComandaEventsPage` y 3 warnings de deps en `PosPage`, todos preexistentes y repo-wide).
+- [ ] `npm run build` — lo corre Javi.
+
+### Review
+Implementado 3 → 2 → 1. Extra no planeado: `PosPage.handleBackToUnits` resetea el editor de renombre para que no quede abierto al cambiar de mesa. Cero migraciones. Archivos: `services/units.js`, `components/MesaGrid.jsx`, `services/comandas.js`, `pages/PosPage.jsx`, `pages/ComandaEventsPage.jsx`, `services/reports.js`, `pages/AnalyticsPage.jsx`.
+
+---
+
 ## Plan — Sesión 2026-09-20: Prioridades del audit + Integración Mercado Pago — 🅿️ PENDIENTE DE APROBACIÓN DE JAVI, NO CODEADO
 
 > Deriva de `tasks/auditoria_admin_2026-09-18.md`. Javi decidió: (1) primero los fixes del audit, después Mercado Pago; (2) los movimientos de MP se guardan en tabla propia (no solo consulta en vivo), para poder cruzarlos con el Ledger y automatizar conciliación a futuro.
@@ -2640,3 +2683,11 @@ Lista los cobros en efectivo y movimientos de los 2 turnos (20-sep y 27-sep). Ja
   - Resguardo: sin pendiente ($750 en sistema son de Javi).
 - [ ] Después: re-correr scorecard de `auditoria_mensual.sql` (esperado: gastos operativos sept 81,085.09; banco neto 4,420.45; checks 41/43/44 mejoran) y verificar depósito Getnet lun/mar (MP ≈ $13,880 si el factor 0.9783 es correcto).
 - Lección: `ILIKE '%prest%'` NO matchea "préstamo" (acento) → usar `'%pr_stamo%'`. El guard del script lo detectó en la prueba local.
+
+### ✅ CIERRE sept 2026 — ejecutado 2026-10-04
+- [x] Parte 1 código desplegado (build OK, push hecho).
+- [x] Parte 2 SQL corrido: 3 préstamos → `pago_prestamo_banco`; aportación Eduardo $3,000 (id a0a0a0a0-3000-…0001). Verificado.
+- [x] Parte 3 SQL corrido: folios 963/964 borrados; turno e506c4ce → expected 6279, diff 0, total_efectivo 885; turno 524768b0 → 3382/3552/3552/0; ajuste $30 (id a0a0a0a0-0030-…0002) en turno 473be885. Verificado, sin huérfanos.
+- [x] Scorecard sept re-corrido: gastos operativos 81,085.09; efectivo 48,018; folios 171; banco neto 4,420.45; check 44 = −30.00 (= el ajuste ya registrado). Checks 41/43 REVISAR = ruido que se compensa (diferencias +45.30 vs saltos −75.30), sin faltante real.
+- Inventario: los 3 `sale_deduction` de los folios de prueba (Bohemia Obscura/Clara/Cristal Media, −1 c/u) se dejaron; `current_stock` es columna, no suma de movimientos → se corrige con el conteo físico de hoy.
+- [ ] Pendiente: tras el depósito Getnet (lun/mar) comparar MP real vs ~$13,880 esperado; si queda por debajo, hay faltante real.

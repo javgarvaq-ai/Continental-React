@@ -3,6 +3,7 @@ import AdminNav from '../components/AdminNav'
 import { money } from '../utils/money'
 import {
     getPaymentsForPeriod,
+    getPaymentsByCreationDate,
     buildDailyRevenue,
     buildHourlyDistribution,
     buildDayOfWeekStats,
@@ -142,6 +143,8 @@ function AnalyticsPage() {
     const [customStart, setCustomStart]   = useState('')
     const [customEnd, setCustomEnd]       = useState('')
     const [loading, setLoading] = useState(true)
+    // 'cobro' = fecha en que se pagó (default) | 'creacion' = fecha en que se abrió la comanda. Solo visual.
+    const [groupBy, setGroupBy] = useState('cobro')
 
     const [daily, setDaily]           = useState([])
     const [hourly, setHourly]         = useState([])
@@ -168,9 +171,10 @@ function AnalyticsPage() {
     const fetchAll = useCallback(async () => {
         if (!range) return
         setLoading(true)
+        const byCreation = groupBy === 'creacion'
         const [paymentsRes, catsRes] = await Promise.all([
-            getPaymentsForPeriod(range),
-            getTopCategoriesRevenue(range),
+            byCreation ? getPaymentsByCreationDate(range) : getPaymentsForPeriod(range),
+            getTopCategoriesRevenue({ ...range, dateField: byCreation ? 'opened_at' : 'cobrado_at' }),
         ])
 
         setDaily(buildDailyRevenue(paymentsRes.data, range))
@@ -178,7 +182,7 @@ function AnalyticsPage() {
         setDowStats(buildDayOfWeekStats(paymentsRes.data))
         setCategories(catsRes.data)
         setLoading(false)
-    }, [range])
+    }, [range, groupBy])
 
     useEffect(() => { fetchAll() }, [fetchAll])
 
@@ -272,6 +276,36 @@ function AnalyticsPage() {
                 {selectedDays === 'custom' && customStart && customEnd && customStart > customEnd && (
                     <div style={{ color: '#f87171', fontSize: '13px', marginTop: '-16px', marginBottom: '16px' }}>
                         La fecha de inicio no puede ser después de la fecha final.
+                    </div>
+                )}
+
+                {/* Agrupar por fecha de cobro o de creación de la comanda */}
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '16px' }}>
+                    <span style={{ color: '#64748b', fontSize: '12px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Agrupar por</span>
+                    {[
+                        { key: 'cobro',    label: 'Fecha de cobro' },
+                        { key: 'creacion', label: 'Fecha de creación' },
+                    ].map(o => (
+                        <button
+                            key={o.key}
+                            onClick={() => setGroupBy(o.key)}
+                            style={{
+                                padding: '5px 12px', borderRadius: '6px', border: '1px solid',
+                                borderColor: groupBy === o.key ? '#4a90d9' : '#334155',
+                                background: groupBy === o.key ? '#1d3557' : 'transparent',
+                                color: groupBy === o.key ? '#e2e8f0' : '#64748b',
+                                cursor: 'pointer', fontSize: '12px', fontWeight: 600,
+                            }}
+                        >
+                            {o.label}
+                        </button>
+                    ))}
+                </div>
+                {groupBy === 'creacion' && (
+                    <div style={{ color: '#94a3b8', fontSize: '12px', marginTop: '-8px', marginBottom: '16px', lineHeight: 1.5 }}>
+                        Cada cuenta se cuenta en el día en que se abrió, aunque se haya pagado después. Las cuentas abiertas
+                        en este rango que aún no se pagan no aparecen. Las horas pico muestran la hora de apertura. Solo es
+                        una vista: no cambia caja, turnos ni reportes financieros.
                     </div>
                 )}
 

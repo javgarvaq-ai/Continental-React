@@ -135,6 +135,33 @@ export async function getPaymentsForPeriod({ startDate, endDate }) {
     return { data: data || [], error }
 }
 
+// Variante de getPaymentsForPeriod que agrupa por la fecha de CREACIÓN de la
+// comanda (comandas.opened_at) en vez de la fecha de cobro. Solo visual para
+// Analytics: cuentas que se pagan días después caen en el día en que se
+// abrieron. Devuelve filas con la misma forma que getPaymentsForPeriod, con
+// `created_at` = opened_at, para reutilizar los build* sin cambios.
+// Una cuenta abierta en el rango que aún no se paga no aparece (no hay pago).
+export async function getPaymentsByCreationDate({ startDate, endDate }) {
+    const startIso = `${startDate}T06:00:00-06:00`
+    const endIso   = `${addDaysToDateString(endDate, 1)}T06:00:00-06:00`
+    const { data, error } = await fetchAllPages((from, to) => supabase
+        .from('comandas')
+        .select('id, opened_at, payments(total_paid, efectivo, tarjeta, transferencia, tip_amount)')
+        .eq('status', 'paid')
+        .gte('opened_at', startIso)
+        .lt('opened_at', endIso)
+        .order('id')
+        .range(from, to))
+
+    const rows = []
+    ;(data || []).forEach(c => {
+        const pays = Array.isArray(c.payments) ? c.payments : (c.payments ? [c.payments] : [])
+        pays.forEach(p => rows.push({ ...p, created_at: c.opened_at }))
+    })
+    rows.sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    return { data: rows, error }
+}
+
 export function buildDailyRevenue(payments, { startDate, endDate }) {
     const buckets = {}
     let key = startDate
@@ -440,15 +467,16 @@ export async function getProductUnitsForPeriod({ startDate, endDate }) {
     return { data: rows, error: null }
 }
 
-export async function getTopCategoriesRevenue({ startDate, endDate }) {
+// dateField: 'cobrado_at' (default) | 'opened_at' — campo de fecha por el que se filtra.
+export async function getTopCategoriesRevenue({ startDate, endDate, dateField = 'cobrado_at' }) {
     const startIso = `${startDate}T06:00:00-06:00`
     const endIso   = `${addDaysToDateString(endDate, 1)}T06:00:00-06:00`
     const { data: comandas } = await supabase
         .from('comandas')
         .select('id')
         .eq('status', 'paid')
-        .gte('cobrado_at', startIso)
-        .lt('cobrado_at', endIso)
+        .gte(dateField, startIso)
+        .lt(dateField, endIso)
 
     if (!comandas || comandas.length === 0) return { data: [], error: null }
 
