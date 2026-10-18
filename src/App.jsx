@@ -31,6 +31,7 @@ import FolioHistoryPage from './pages/FolioHistoryPage'
 import ProductSalesReportPage from './pages/ProductSalesReportPage'
 import LedgerPage from './pages/LedgerPage'
 import ProductCostingPage from './pages/ProductCostingPage'
+import UpdateBanner from './components/UpdateBanner'
 
 function App() {
   const verifySession = useAuthStore(state => state.verifySession)
@@ -178,6 +179,7 @@ function App() {
           }
         />
       </Routes>
+      <UpdateBanner />
     </BrowserRouter>
   )
 }

@@ -1,3 +1,26 @@
+## Plan — Sesión 2026-10-18 (3): Aviso "Hay una versión nueva" + botón Actualizar (copia de El Zaguán POS) — ✅ APROBADO Y CODEADO 2026-10-18 — pendiente deploy y prueba de Javi
+
+> Necesidad (Javi): igual que en Zaguán, que la pantalla avise cuando hay versión nueva y se actualice con un botón.
+
+### Hallazgo
+- `vite.config.js` ya tiene `registerType: 'prompt'` (igual que Zaguán) y la misma versión de `vite-plugin-pwa` (^1.3.0), pero **ningún componente usa `useRegisterSW`**. Hoy el SW nuevo se descarga y se queda esperando hasta que se cierran todas las pestañas; nadie se entera.
+- Zaguán: `src/components/UpdateBanner.jsx` montado una vez en `App.jsx`. Usa `useRegisterSW` y revisa cada 30 min (`registration.update()`), porque las tablets se quedan abiertas días. Botones "Actualizar" (recarga con la versión nueva) y "Después". Nunca recarga sola, así que no interrumpe una comanda.
+
+### Cambios
+- [x] Copiar `UpdateBanner.jsx` de Zaguán a `src/components/` sin cambios de lógica.
+- [x] Montar `<UpdateBanner />` en `App.jsx` (fuera de las rutas, visible en POS y admin).
+- [x] Verificación: `vite build` (confirma que el plugin deja de inyectar `registerSW.js` y usa el import virtual) + eslint.
+
+### Nota de despliegue
+- Las tablets que hoy tienen la versión SIN banner necesitan una última recarga manual (o cerrar y abrir la app) para recibir esta versión. De ahí en adelante, el aviso sale solo.
+
+### Review
+- `UpdateBanner.jsx` copiado idéntico de Zaguán; montado en `App.jsx` después de `</Routes>`.
+- `vite build` OK: `registerSW.js` ya no se genera ni se inyecta en `index.html`; el registro del SW ahora va dentro del bundle (`virtual:pwa-register/react`). eslint: solo un warning preexistente en `App.jsx` (`verifySession` en deps).
+- Prueba de Javi: después del deploy, recargar a mano una vez cada tablet; en el siguiente deploy debe salir el aviso (máx. 30 min o al recargar).
+
+---
+
 ## Plan — Sesión 2026-10-18 (2): Botón "Movimiento de caja" en /admin/cash-movements — ✅ APROBADO Y CODEADO 2026-10-18 — pendiente pruebas de Javi
 
 > Necesidad (Javi): registrar movimientos desde la pantalla admin sin perder los filtros ni regresar a POS. Solo con turno abierto; sin turno, botón desactivado. Cero migraciones, cero cambios en services.
