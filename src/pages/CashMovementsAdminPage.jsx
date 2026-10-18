@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import AdminNav from '../components/AdminNav'
 import { getCashMovements } from '../services/shifts'
 import { money } from '../utils/money'
+import { getCashMovementConfig } from '../config/cashMovements'
 
 // ── Helpers ───────────────────────────────────────────────────
 // Local (Mexico) date string — toISOString() returns the UTC date, which is
@@ -102,16 +103,86 @@ const CATEGORY_LABELS = {
 }
 
 const TYPE_FILTERS = [
-    { key: 'all',        label: 'Todos'    },
-    { key: 'withdrawal', label: 'Retiros'  },
-    { key: 'deposit',    label: 'Depósitos'},
+    { key: 'all', label: 'Todos'    },
+    { key: 'in',  label: 'Entradas' },
+    { key: 'out', label: 'Salidas'  },
 ]
+
+const ACCOUNT_FILTERS = [
+    { key: 'all',        label: 'Todas'       },
+    { key: 'drawer',     label: 'Caja'        },
+    { key: 'house_safe', label: 'Caja fuerte' },
+    { key: 'bank',       label: 'Banco'       },
+]
+
+const LOCATION_LABELS = {
+    drawer:     'Caja',
+    house_safe: 'Caja fuerte',
+    bank:       'Banco',
+    owner:      'Socio',
+    expense:    'Gasto',
+    tips:       'Propinas',
+    loan:       'Préstamo',
+    adjustment: 'Ajuste',
+}
+
+// Origen/destino del movimiento. Fallback a la config por categoría para
+// movimientos viejos que no traigan las columnas de ubicación.
+function getLocations(m) {
+    const cfg = getCashMovementConfig(m.category)
+    return {
+        src: m.source_location      || cfg?.sourceLocation      || null,
+        dst: m.destination_location || cfg?.destinationLocation || null,
+    }
+}
+
+// 'in' | 'out' | null, relativo a la cuenta elegida. En "Todas" se usa `type`
+// (relativo al cajón), igual que antes.
+function getDirection(m, account) {
+    if (account === 'all') return m.type === 'deposit' ? 'in' : 'out'
+    const { src, dst } = getLocations(m)
+    if (dst === account) return 'in'
+    if (src === account) return 'out'
+    return null
+}
+
+// Minúsculas y sin acentos, para que "nomina" encuentre "Nómina".
+function normalize(str) {
+    return String(str ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+}
+
+function searchText(m) {
+    const { src, dst } = getLocations(m)
+    return normalize([
+        CATEGORY_LABELS[m.category] || m.category,
+        m.note,
+        m.users?.name,
+        Number(m.amount || 0),
+        money(m.amount),
+        LOCATION_LABELS[src] || src,
+        LOCATION_LABELS[dst] || dst,
+    ].join(' '))
+}
+
+function filterBtnStyle(active) {
+    return {
+        padding: '6px 12px', borderRadius: '5px', border: '1px solid',
+        borderColor: active ? '#4a90d9' : '#334155',
+        background:  active ? '#1d3557' : 'transparent',
+        color:       active ? '#e2e8f0' : '#64748b',
+        cursor: 'pointer', fontSize: '13px',
+    }
+}
+
+const GRID_COLUMNS = '130px 110px 1fr 150px 120px 80px'
 
 // ── Page ──────────────────────────────────────────────────────
 function CashMovementsAdminPage() {
     const [startDate, setStartDate] = useState(nDaysAgo(7))
     const [endDate,   setEndDate]   = useState(today())
     const [typeFilter, setTypeFilter] = useState('all')
+    const [account,   setAccount]   = useState('all')
+    const [search,    setSearch]    = useState('')
     const [loading,   setLoading]   = useState(false)
     const [results,   setResults]   = useState(null)
     const [error,     setError]     = useState('')
@@ -127,19 +198,24 @@ function CashMovementsAdminPage() {
 
     useEffect(() => { load() }, [load])
 
-    const filtered = results
-        ? typeFilter === 'all'
-            ? results
-            : results.filter(m => m.type === typeFilter)
-        : []
+    const query = normalize(search.trim())
+
+    const filtered = (results || [])
+        .map(m => ({ ...m, direction: getDirection(m, account) }))
+        .filter(m => m.direction !== null)
+        .filter(m => typeFilter === 'all' || m.direction === typeFilter)
+        .filter(m => !query || searchText(m).includes(query))
 
     const totalWithdrawals = filtered
-        .filter(m => m.type === 'withdrawal')
+        .filter(m => m.direction === 'out')
         .reduce((s, m) => s + Number(m.amount || 0), 0)
 
     const totalDeposits = filtered
-        .filter(m => m.type === 'deposit')
+        .filter(m => m.direction === 'in')
         .reduce((s, m) => s + Number(m.amount || 0), 0)
+
+    const net = totalDeposits - totalWithdrawals
+    const accountLabel = ACCOUNT_FILTERS.find(a => a.key === account)?.label
 
     return (
         <div style={{ minHeight: '100vh', background: '#0f0f0f', color: '#e2e8f0', padding: '24px', paddingLeft: '216px', boxSizing: 'border-box', fontFamily: 'system-ui, sans-serif' }}>
@@ -193,20 +269,41 @@ function CashMovementsAdminPage() {
                         {/* Type filter */}
                         <div style={{ display: 'flex', gap: '4px' }}>
                             {TYPE_FILTERS.map(f => (
-                                <button
-                                    key={f.key}
-                                    onClick={() => setTypeFilter(f.key)}
-                                    style={{
-                                        padding: '6px 12px', borderRadius: '5px', border: '1px solid',
-                                        borderColor: typeFilter === f.key ? '#4a90d9' : '#334155',
-                                        background:  typeFilter === f.key ? '#1d3557' : 'transparent',
-                                        color:       typeFilter === f.key ? '#e2e8f0' : '#64748b',
-                                        cursor: 'pointer', fontSize: '13px',
-                                    }}
-                                >
+                                <button key={f.key} onClick={() => setTypeFilter(f.key)} style={filterBtnStyle(typeFilter === f.key)}>
                                     {f.label}
                                 </button>
                             ))}
+                        </div>
+                    </div>
+
+                    {/* ── Account + search ── */}
+                    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center', marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #1e1e1e' }}>
+                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                            <span style={{ fontSize: '11px', color: '#475569', marginRight: '4px' }}>Cuenta:</span>
+                            {ACCOUNT_FILTERS.map(a => (
+                                <button key={a.key} onClick={() => setAccount(a.key)} style={filterBtnStyle(account === a.key)}>
+                                    {a.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div style={{ position: 'relative', flex: '1 1 220px', maxWidth: '360px' }}>
+                            <input
+                                type="text"
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                                placeholder="Buscar concepto, nota, usuario o monto…"
+                                style={{ width: '100%', boxSizing: 'border-box', background: '#111', border: '1px solid #334155', borderRadius: '6px', color: '#e2e8f0', fontSize: '13px', padding: '6px 30px 6px 10px' }}
+                            />
+                            {search && (
+                                <button
+                                    onClick={() => setSearch('')}
+                                    title="Limpiar búsqueda"
+                                    style={{ position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '14px', padding: '2px 4px' }}
+                                >
+                                    ✕
+                                </button>
+                            )}
                         </div>
                     </div>
 
@@ -244,6 +341,9 @@ function CashMovementsAdminPage() {
                         {totalWithdrawals > 0 && (
                             <span>· Salidas: <span style={{ color: '#f87171', fontWeight: 600 }}>{money(totalWithdrawals)}</span></span>
                         )}
+                        {account !== 'all' && filtered.length > 0 && (
+                            <span>· Neto {accountLabel}: <span style={{ color: net >= 0 ? '#4ade80' : '#f87171', fontWeight: 600 }}>{net < 0 ? '-' : ''}{money(Math.abs(net))}</span></span>
+                        )}
                     </div>
                 )}
 
@@ -259,22 +359,23 @@ function CashMovementsAdminPage() {
                     <div style={{ textAlign: 'center', color: '#475569', padding: '60px', fontSize: '14px' }}>Cargando…</div>
                 ) : results === null ? null : filtered.length === 0 ? (
                     <div style={{ background: '#161616', border: '1px solid #2a2a2a', borderRadius: '10px', padding: '40px', textAlign: 'center', color: '#475569', fontSize: '14px' }}>
-                        Sin movimientos en el período seleccionado
+                        Sin movimientos con estos filtros
                     </div>
                 ) : (
                     <div style={{ background: '#161616', border: '1px solid #2a2a2a', borderRadius: '10px', overflow: 'hidden' }}>
                         {/* Header */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '140px 120px 1fr 130px 110px', padding: '10px 16px', borderBottom: '1px solid #2a2a2a' }}>
-                            {['Fecha', 'Usuario', 'Concepto', 'Monto', 'Tipo'].map(h => (
+                        <div style={{ display: 'grid', gridTemplateColumns: GRID_COLUMNS, padding: '10px 16px', borderBottom: '1px solid #2a2a2a' }}>
+                            {['Fecha', 'Usuario', 'Concepto', 'Cuenta', 'Monto', 'Tipo'].map(h => (
                                 <div key={h} style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#64748b' }}>{h}</div>
                             ))}
                         </div>
 
                         {/* Rows */}
                         {filtered.map(m => {
-                            const isDeposit = m.type === 'deposit'
+                            const isDeposit = m.direction === 'in'
+                            const { src, dst } = getLocations(m)
                             return (
-                                <div key={m.id} style={{ display: 'grid', gridTemplateColumns: '140px 120px 1fr 130px 110px', padding: '11px 16px', borderBottom: '1px solid #1a1a1a', alignItems: 'start' }}>
+                                <div key={m.id} style={{ display: 'grid', gridTemplateColumns: GRID_COLUMNS, padding: '11px 16px', borderBottom: '1px solid #1a1a1a', alignItems: 'start' }}>
                                     <div style={{ fontSize: '12px', color: '#64748b' }}>
                                         {formatDateTime(m.created_at)}
                                     </div>
@@ -290,6 +391,9 @@ function CashMovementsAdminPage() {
                                                 {m.note}
                                             </div>
                                         )}
+                                    </div>
+                                    <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+                                        {LOCATION_LABELS[src] || src || '—'} → {LOCATION_LABELS[dst] || dst || '—'}
                                     </div>
                                     <div style={{ fontSize: '13px', fontWeight: 700, color: isDeposit ? '#4ade80' : '#f87171' }}>
                                         {isDeposit ? '+' : '-'}{money(m.amount)}

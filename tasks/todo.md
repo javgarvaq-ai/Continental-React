@@ -1,3 +1,32 @@
+## Plan — Sesión 2026-10-18: Filtros por cuenta + búsqueda en Movimientos de Caja (admin) — ✅ APROBADO Y CODEADO 2026-10-18 — pendiente pruebas de Javi
+
+> Necesidad (Javi): en `/admin/cash-movements` poder ver solo los movimientos de Banco o de Caja, y buscar a mano. Solo lectura, cero migraciones, cero cambios en servicios. Un solo archivo: `src/pages/CashMovementsAdminPage.jsx`.
+
+### Hallazgo
+- `getCashMovements` ya trae `source_location` / `destination_location` (drawer · house_safe · bank · owner · expense · tips · loan · adjustment). Todo se filtra en cliente.
+- El "Entrada/Salida" actual usa `type`, que es relativo al **cajón**. Ej.: "Depósito banco" = Salida (rojo) aunque para el banco es entrada. Si se filtra por Banco con esa lógica, los totales salen invertidos.
+
+### Cambios
+- [x] **Filtro "Cuenta"** (botones): Todas · Caja (cajón) · Caja fuerte · Banco. Un movimiento entra si `source_location` o `destination_location` = la cuenta.
+- [x] **Signo relativo a la cuenta**: con una cuenta elegida, +/verde si el dinero entra a esa cuenta (dest), −/rojo si sale (origen). Totales Entradas / Salidas / **Neto** de esa cuenta. En "Todas" se mantiene el comportamiento actual (relativo al cajón).
+- [x] **Filtro Entradas/Salidas** existente pasa a respetar la cuenta elegida (mismo criterio del punto anterior).
+- [x] **Búsqueda manual** (input de texto): busca en concepto (etiqueta de categoría), nota, usuario y monto (ej. "1500"). Sin mayúsculas ni acentos ("nomina" encuentra "Nómina"). Botón ✕ para limpiar.
+- [x] **Columna "Cuenta"** en la tabla: origen → destino en texto corto (ej. "Caja → Banco", "Banco → Gasto").
+- [x] Fallback: si un movimiento viejo no trae `source/destination_location`, se toma de `config/cashMovements.js` por categoría.
+- [ ] (Pendiente Javi) Verificación: con un rango conocido, Neto de "Banco" en esta pantalla vs. el cambio de saldo de banco por movimientos en el Ledger del mismo rango (sin contar pagos con tarjeta/transferencia, que no son movimientos). `eslint` del archivo.
+
+### Fuera de alcance
+- Sin cambios a `services/`, Ledger, reportes ni DB.
+
+### Review
+- Decisiones (Javi: "va"): con Caja fuerte, sin filtro por tipo, con columna Cuenta. El botón "Retiros/Depósitos" se renombró a "Entradas/Salidas" porque ahora depende de la cuenta elegida.
+- Tabla de signos probada con node sobre todas las categorías de `config/cashMovements.js`: p. ej. `deposito_banco` = salida en Caja / entrada en Banco; `retiro_banco_a_caja` = entrada en Caja / salida en Banco; `aportacion_socio` no aparece en Banco. Correcto.
+- `vite build` OK (en carpeta aparte; el shell remoto no puede borrar `dist/`). `eslint`: único error es el `useEffect(() => { load() })` preexistente (mismo patrón repo-wide).
+- Pendiente Javi: probar en pantalla y comparar Neto "Banco" contra el Ledger (solo movimientos) en una semana conocida.
+
+---
+
+
 ## Plan — Sesión 2026-10-11 (2): Lista de folios del turno en el modal de corte/cierre — ✅ APROBADO Y CODEADO 2026-10-11 — pendiente pruebas de Javi
 
 > Necesidad (Javi): al abrir el corte/cierre, ver una lista desplegable de los folios que deben tener recibo en el turno y con qué se pagaron, p. ej. `C-001050 efectivo · C-001051 tarjeta (voucher) · C-001052 abierta`. Sirve para cuadrar contra los tickets y vouchers físicos. Solo lectura: no cambia el cálculo del corte ni el cierre. Cero migraciones.
