@@ -130,3 +130,10 @@ const CASH_MOVEMENT_CONFIG = {
 export function getCashMovementConfig(category) {
     return CASH_MOVEMENT_CONFIG[category] || null
 }
+
+// Los movimientos que tocan el cajón se suman al corte por shift_id: con fecha
+// pasada descuadrarían el turno actual. Solo esos quedan forzados a "hoy".
+export function touchesDrawer(category) {
+    const cfg = CASH_MOVEMENT_CONFIG[category]
+    return !!cfg && (cfg.sourceLocation === 'drawer' || cfg.destinationLocation === 'drawer')
+}

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { getCashMovementConfig } from '../config/cashMovements'
+import { getCashMovementConfig, touchesDrawer } from '../config/cashMovements'
 import { requireOnline } from '../utils/requireOnline'
 import {
     getShiftSummary,
@@ -137,7 +137,7 @@ export function useShift({ currentUser, currentShiftId, isOnline, setStatus, onS
     }
 
     // Devuelve true si se registró (PosPage lo ignora; la pantalla admin lo usa para recargar).
-    async function handleCashMovementSubmit({ category, amount, note }) {
+    async function handleCashMovementSubmit({ category, amount, note, occurredDate = null }) {
         if (!requireOnline(isOnline, setStatus)) return false
         if (!currentUser?.id || !currentShiftId) return false
 
@@ -148,6 +148,15 @@ export function useShift({ currentUser, currentShiftId, isOnline, setStatus, onS
 
         const config = getCashMovementConfig(category)
         if (!config) return false
+
+        // Fecha pasada (solo admin, solo movimientos que no tocan el cajón):
+        // 12:00 hora MX de ese día, misma convención que el re-fechado manual.
+        const todayStr   = new Date().toLocaleDateString('en-CA') // YYYY-MM-DD local
+        const backdated  = !!occurredDate && occurredDate < todayStr && !touchesDrawer(category)
+        const createdAt  = backdated ? `${occurredDate}T12:00:00-06:00` : null
+        const finalNote  = backdated
+            ? `${note} · capturado ${new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}`
+            : note
 
         setIsSubmittingCash(true)
 
@@ -167,11 +176,12 @@ export function useShift({ currentUser, currentShiftId, isOnline, setStatus, onS
             userId:              currentUser.id,
             type:                config.type,
             amount,
-            note,
+            note:                finalNote,
             category,
             movementNature:      config.movementNature,
             sourceLocation:      config.sourceLocation,
             destinationLocation: config.destinationLocation,
+            createdAt,
         })
 
         setIsSubmittingCash(false)

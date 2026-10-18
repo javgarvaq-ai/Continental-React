@@ -226,8 +226,12 @@ function CashMovementsAdminPage() {
             setCashPanelOpen(false) // para que se vea el mensaje de por qué no se guardó
             return
         }
-        if (endDate < operationalToday()) {
-            setStatus('Movimiento registrado. No aparece en la lista porque el rango de fechas no incluye hoy.')
+        const calendarToday = toLocalDateString(new Date())
+        const movementDay = payload.occurredDate && payload.occurredDate < calendarToday
+            ? payload.occurredDate
+            : operationalToday()
+        if (movementDay < startDate || movementDay > endDate) {
+            setStatus('Movimiento registrado. No aparece en la lista porque su fecha está fuera del rango seleccionado.')
         }
         load()
     }
@@ -293,6 +297,7 @@ function CashMovementsAdminPage() {
                     onSubmit={handleSubmitMovement}
                     isSubmitting={isSubmittingCash}
                     role={currentUser?.role}
+                    allowBackdate
                 />
 
                 {/* ── Filters ── */}

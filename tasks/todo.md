@@ -1,3 +1,28 @@
+## Plan — Sesión 2026-10-18 (4): Fecha del movimiento en el modal (solo admin) — ✅ APROBADO Y CODEADO 2026-10-18 — pendiente pruebas de Javi
+
+> Necesidad (Javi): capturar gastos con la fecha real cuando no se suben al momento. Hoy se re-fechan a mano en la DB (ej. `tasks/refechar_movimientos_sept_2026-10-04.sql`).
+
+### Hallazgo
+- Todos los reportes (semanal, mensual, Ledger, esta pantalla) agrupan por `cash_movements.created_at`. El re-fechado manual solo cambió `created_at` → mismo mecanismo, cero migraciones.
+- El corte del turno (`getShiftSummary`) suma por `shift_id`, no por fecha. Un movimiento de **cajón** con fecha pasada quedaría ligado al turno actual y le movería el efectivo esperado de HOY aunque el dinero salió otro día → descuadra el corte. Por eso el SQL de octubre solo re-fechó movimientos de **banco**.
+
+### Regla
+- Fecha editable solo si la categoría **no toca el cajón** (Banco, Caja fuerte, Socio→Banco). Las de cajón quedan siempre "hoy" con una nota: "Afecta el corte del turno: solo se registra con la fecha de hoy".
+
+### Cambios
+- [x] `CashMovementPanel.jsx`: prop `allowBackdate` (solo la pasa la pantalla admin; POS no cambia). Campo fecha (default hoy, max hoy) visible solo si la categoría elegida no toca el cajón.
+- [x] `useShift.handleCashMovementSubmit` + `services/shifts.addCashMovement`: `occurredDate` opcional → `created_at = <fecha>T12:00:00-06:00` (misma convención que el SQL manual). Si es hoy, no se manda (default `now()`). Guard defensivo: si la categoría toca el cajón, se ignora la fecha.
+- [x] Rastro de auditoría sin migración: si la fecha es pasada, se agrega a la nota " · capturado DD-mmm".
+- [ ] (Pendiente Javi) Verificación: build + eslint; Javi registra un gasto de banco con fecha de la semana pasada y lo ve en esa semana (esta pantalla y Reporte semanal); confirmar que en categorías de cajón no aparece el campo.
+
+### Review
+- Helper `touchesDrawer(category)` en `config/cashMovements.js` (lo usan el panel y `useShift`). Probado con node: fecha libre en pagos/nómina/renta/gasto/préstamo de banco, aportación socio→banco y los 3 de caja fuerte; "solo hoy" en todo lo que toca cajón (incluye Depósito a banco y Retiro banco→caja, porque mueven el cajón).
+- `2026-10-14T12:00:00-06:00` se guarda como 18:00Z, que es 12:00 en MX. Correcto.
+- El aviso de "fuera de rango" en la pantalla admin ahora usa la fecha del movimiento (pasada o día operativo actual).
+- `vite build` OK; eslint sin errores nuevos.
+
+---
+
 ## Plan — Sesión 2026-10-18 (3): Aviso "Hay una versión nueva" + botón Actualizar (copia de El Zaguán POS) — ✅ APROBADO Y CODEADO 2026-10-18 — pendiente deploy y prueba de Javi
 
 > Necesidad (Javi): igual que en Zaguán, que la pantalla avise cuando hay versión nueva y se actualice con un botón.

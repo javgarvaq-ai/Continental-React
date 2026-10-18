@@ -1,4 +1,9 @@
 import { useState } from 'react'
+import { touchesDrawer } from '../config/cashMovements'
+
+function todayLocal() {
+    return new Date().toLocaleDateString('en-CA') // YYYY-MM-DD en hora local
+}
 
 const DEPOSIT_CATEGORIES = [
     { key: 'regreso_resguardo', label: 'Regreso de resguardo', sublabel: 'Casa → Caja' },
@@ -30,14 +35,18 @@ const WITHDRAWAL_CATEGORIES = [
 // Rol manager: por ahora sin ingresos, y en salidas solo estas 3 (decisión Javi, 2026-07-03).
 const MANAGER_WITHDRAWAL_KEYS = ['propinas_entregadas', 'pago_proveedor_caja', 'gasto_operativo_caja']
 
-function CashMovementPanel({ open, onClose, onSubmit, isSubmitting, role }) {
+// allowBackdate: solo lo pasa la pantalla admin. POS siempre registra con fecha de hoy.
+function CashMovementPanel({ open, onClose, onSubmit, isSubmitting, role, allowBackdate = false }) {
     const isManager = role === 'manager'
     const [section, setSection] = useState(isManager ? 'withdrawal' : 'deposit')
     const [selectedCategory, setSelectedCategory] = useState(null)
     const [amount, setAmount] = useState('')
     const [note, setNote] = useState('')
+    const [occurredDate, setOccurredDate] = useState(todayLocal())
 
     if (!open) return null
+
+    const canBackdate = allowBackdate && selectedCategory && !touchesDrawer(selectedCategory)
 
     // Managers solo pueden ver/operar la sección de salida, sin importar el estado previo.
     const effectiveSection = isManager ? 'withdrawal' : section
@@ -53,6 +62,7 @@ function CashMovementPanel({ open, onClose, onSubmit, isSubmitting, role }) {
         setSelectedCategory(null)
         setAmount('')
         setNote('')
+        setOccurredDate(todayLocal())
     }
 
     function handleClose() {
@@ -60,6 +70,7 @@ function CashMovementPanel({ open, onClose, onSubmit, isSubmitting, role }) {
         setSelectedCategory(null)
         setAmount('')
         setNote('')
+        setOccurredDate(todayLocal())
         onClose()
     }
 
@@ -72,13 +83,20 @@ function CashMovementPanel({ open, onClose, onSubmit, isSubmitting, role }) {
 
     function handleSubmit() {
         if (!selectedCategory || !amount || !note.trim()) return
-        onSubmit({ category: selectedCategory, amount: Number(amount), note: note.trim() })
+        onSubmit({
+            category: selectedCategory,
+            amount: Number(amount),
+            note: note.trim(),
+            occurredDate: canBackdate ? occurredDate : null,
+        })
         setSelectedCategory(null)
         setAmount('')
         setNote('')
+        setOccurredDate(todayLocal())
     }
 
     const canSubmit = selectedCategory && Number(amount) > 0 && note.trim() && !isSubmitting
+        && (!canBackdate || (occurredDate && occurredDate <= todayLocal()))
 
     return (
         <div style={{
@@ -201,6 +219,37 @@ function CashMovementPanel({ open, onClose, onSubmit, isSubmitting, role }) {
                         }}
                     />
                 </div>
+
+                {/* Fecha (solo admin) */}
+                {allowBackdate && selectedCategory && (
+                    <div style={{ marginBottom: '14px' }}>
+                        <label style={{ display: 'block', fontSize: '12px', opacity: 0.6, marginBottom: '6px' }}>
+                            Fecha del movimiento
+                        </label>
+                        {canBackdate ? (
+                            <input
+                                type="date"
+                                value={occurredDate}
+                                max={todayLocal()}
+                                onChange={(e) => setOccurredDate(e.target.value)}
+                                style={{
+                                    width: '100%',
+                                    padding: '10px 12px',
+                                    borderRadius: '8px',
+                                    border: '1px solid #444',
+                                    background: '#111',
+                                    color: 'white',
+                                    boxSizing: 'border-box',
+                                    colorScheme: 'dark',
+                                }}
+                            />
+                        ) : (
+                            <div style={{ fontSize: '12px', color: '#94a3b8', background: '#111', border: '1px solid #333', borderRadius: '8px', padding: '10px 12px' }}>
+                                Hoy. Los movimientos de caja afectan el corte del turno, por eso solo se registran con la fecha de hoy.
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {/* Note */}
                 <div style={{ marginBottom: '20px' }}>

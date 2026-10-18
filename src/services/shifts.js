@@ -256,10 +256,13 @@ export async function addCashMovement({
     movementNature,
     sourceLocation,
     destinationLocation,
+    createdAt = null,
 }) {
     const { data, error } = await supabase
         .from('cash_movements')
         .insert([{
+            // Solo cuando se registra con fecha pasada; si no, default now().
+            ...(createdAt ? { created_at: createdAt } : {}),
             shift_id:             shiftId,
             user_id:              userId,
             type,
