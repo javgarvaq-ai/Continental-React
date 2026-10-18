@@ -7,6 +7,7 @@ import {
     getShiftFolios,
     closeShift,
     addCashMovement,
+    getShiftById,
 } from '../services/shifts'
 
 // Rol manager: mismo set permitido que en CashMovementPanel.jsx (guard defensivo
@@ -135,19 +136,31 @@ export function useShift({ currentUser, currentShiftId, isOnline, setStatus, onS
         return { error: null }
     }
 
+    // Devuelve true si se registró (PosPage lo ignora; la pantalla admin lo usa para recargar).
     async function handleCashMovementSubmit({ category, amount, note }) {
-        if (!requireOnline(isOnline, setStatus)) return
-        if (!currentUser?.id || !currentShiftId) return
+        if (!requireOnline(isOnline, setStatus)) return false
+        if (!currentUser?.id || !currentShiftId) return false
 
         if (currentUser.role === 'manager' && !MANAGER_ALLOWED_CATEGORIES.includes(category)) {
             setStatus('No tienes permiso para registrar este tipo de movimiento.')
-            return
+            return false
         }
 
         const config = getCashMovementConfig(category)
-        if (!config) return
+        if (!config) return false
 
         setIsSubmittingCash(true)
+
+        // El shiftId vive en memoria/localStorage: si el turno se cerró en otro
+        // dispositivo, el movimiento quedaría ligado a un turno cerrado.
+        const { data: shift, error: shiftError } = await getShiftById(currentShiftId)
+        if (shiftError || shift?.status !== 'open') {
+            setIsSubmittingCash(false)
+            setStatus(shiftError
+                ? `Error verificando turno: ${shiftError.message}`
+                : 'El turno ya fue cerrado. Vuelve a iniciar sesión para registrar movimientos.')
+            return false
+        }
 
         const { error } = await addCashMovement({
             shiftId:             currentShiftId,
@@ -165,11 +178,12 @@ export function useShift({ currentUser, currentShiftId, isOnline, setStatus, onS
 
         if (error) {
             setStatus(`Error registrando movimiento: ${error.message}`)
-            return
+            return false
         }
 
         setCashPanelOpen(false)
         setStatus('Movimiento de caja registrado correctamente.')
+        return true
     }
 
     return {

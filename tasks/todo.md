@@ -1,3 +1,28 @@
+## Plan — Sesión 2026-10-18 (2): Botón "Movimiento de caja" en /admin/cash-movements — ✅ APROBADO Y CODEADO 2026-10-18 — pendiente pruebas de Javi
+
+> Necesidad (Javi): registrar movimientos desde la pantalla admin sin perder los filtros ni regresar a POS. Solo con turno abierto; sin turno, botón desactivado. Cero migraciones, cero cambios en services.
+
+### Hallazgo — bloqueos reales para registrar un movimiento
+1. **Turno** — `cash_movements.shift_id` sale de `authStore.shiftId`. Al hacer login, si hay turno abierto el admin se liga a él automáticamente; solo queda `null` si entró con "Entrar solo al panel de admin" (no había turno).
+2. **Conexión** — `requireOnline` es obligatorio en todo handler que muta (regla del proyecto).
+3. **Rol** — la pantalla es `AuthRoute` (solo admin) → ve todas las categorías; la restricción de manager no aplica aquí.
+4. **Turno viejo en memoria** — si el turno se cerró en otro dispositivo, el `shiftId` guardado sigue ahí hasta recargar (`verifySession` solo corre al cargar la app) y el movimiento quedaría ligado a un turno cerrado. Mismo hueco existe hoy en POS.
+
+### Cambios (`CashMovementsAdminPage.jsx` + `hooks/useShift.js`)
+- [x] Reusar `useShift` (mismo `handleCashMovementSubmit` que POS → mismos guards, misma config) y `CashMovementPanel` con `role` del usuario.
+- [x] Botón "+ Movimiento de caja" junto al título. Desactivado si `!shiftId` u offline, con texto "Sin turno abierto" / "Sin conexión".
+- [x] En `useShift.handleCashMovementSubmit` (cubre POS y admin): `getShiftById` antes del insert → si no está `open`, no guarda y avisa "El turno ya fue cerrado…". El handler ahora devuelve `true/false` (POS lo ignora).
+- [x] Al registrar con éxito: cerrar modal y recargar la lista con los filtros actuales intactos. Mensaje de estado arriba de la tabla.
+- [x] Si el rango de fechas no incluye hoy, avisar que el movimiento nuevo no se ve con ese filtro.
+- [ ] (Pendiente Javi) Verificación: `vite build` + eslint; Javi prueba con turno abierto (registrar uno y ver que aparece con su `shift_id`) y en sesión "solo admin" (botón desactivado).
+
+### Review
+- Decisiones de Javi: se descartó Realtime ("cerrar sesiones en todos lados"). Realtime no recibe los avisos que se pierden con el dispositivo dormido/offline y requería migración. También se descartó la revisión al volver a la app. Queda solo la verificación antes del insert, en un solo lugar (`useShift`).
+- Si falla (turno cerrado / error), el modal se cierra para que se vea el mensaje arriba de la tabla. Al registrar con éxito se recarga la lista con los filtros intactos. Si el rango termina antes del día operativo actual (corte 06:00), avisa que el movimiento no se ve.
+- `vite build` OK. `eslint`: solo el `useEffect(() => { load() })` preexistente.
+
+---
+
 ## Plan — Sesión 2026-10-18: Filtros por cuenta + búsqueda en Movimientos de Caja (admin) — ✅ APROBADO Y CODEADO 2026-10-18 — pendiente pruebas de Javi
 
 > Necesidad (Javi): en `/admin/cash-movements` poder ver solo los movimientos de Banco o de Caja, y buscar a mano. Solo lectura, cero migraciones, cero cambios en servicios. Un solo archivo: `src/pages/CashMovementsAdminPage.jsx`.

@@ -1,5 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import AdminNav from '../components/AdminNav'
+import CashMovementPanel from '../components/CashMovementPanel'
+import { useAuthStore } from '../store/authStore'
+import { useOnlineStatus } from '../hooks/useOnlineStatus'
+import { useShift } from '../hooks/useShift'
+import { useStatus } from '../hooks/useStatus'
 import { getCashMovements } from '../services/shifts'
 import { money } from '../utils/money'
 import { getCashMovementConfig } from '../config/cashMovements'
@@ -17,6 +22,12 @@ function toLocalDateString(date) {
 
 function today() {
     return toLocalDateString(new Date())
+}
+
+// Día operativo actual (corte 06:00, igual que getCashMovements): a la 1am
+// el movimiento cuenta para el día anterior.
+function operationalToday() {
+    return toLocalDateString(new Date(Date.now() - 6 * 60 * 60 * 1000))
 }
 
 function nDaysAgo(n) {
@@ -183,6 +194,17 @@ function CashMovementsAdminPage() {
     const [typeFilter, setTypeFilter] = useState('all')
     const [account,   setAccount]   = useState('all')
     const [search,    setSearch]    = useState('')
+
+    // ── Registrar movimiento (mismo flujo que POS) ──
+    const currentUser = useAuthStore(state => state.user)
+    const shiftId     = useAuthStore(state => state.shiftId)
+    const isOnline    = useOnlineStatus()
+    const { status, statusColor, setStatus } = useStatus('')
+    const {
+        cashPanelOpen, setCashPanelOpen, isSubmittingCash, handleCashMovementSubmit,
+    } = useShift({ currentUser, currentShiftId: shiftId, isOnline, setStatus, onShiftClosed: () => {} })
+
+    const cashDisabledReason = !shiftId ? 'Sin turno abierto' : !isOnline ? 'Sin conexión' : ''
     const [loading,   setLoading]   = useState(false)
     const [results,   setResults]   = useState(null)
     const [error,     setError]     = useState('')
@@ -197,6 +219,18 @@ function CashMovementsAdminPage() {
     }, [startDate, endDate])
 
     useEffect(() => { load() }, [load])
+
+    async function handleSubmitMovement(payload) {
+        const ok = await handleCashMovementSubmit(payload)
+        if (!ok) {
+            setCashPanelOpen(false) // para que se vea el mensaje de por qué no se guardó
+            return
+        }
+        if (endDate < operationalToday()) {
+            setStatus('Movimiento registrado. No aparece en la lista porque el rango de fechas no incluye hoy.')
+        }
+        load()
+    }
 
     const query = normalize(search.trim())
 
@@ -222,7 +256,44 @@ function CashMovementsAdminPage() {
             <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
                 <AdminNav currentPath="/admin/cash-movements" />
 
-                <h1 style={{ margin: '0 0 20px 0', fontSize: '22px', fontWeight: 700, color: '#f1f5f9' }}>Movimientos de Caja</h1>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '20px' }}>
+                    <h1 style={{ margin: 0, fontSize: '22px', fontWeight: 700, color: '#f1f5f9' }}>Movimientos de Caja</h1>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        {cashDisabledReason && (
+                            <span style={{ fontSize: '12px', color: '#64748b' }}>{cashDisabledReason}</span>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => { setStatus(''); setCashPanelOpen(true) }}
+                            disabled={!!cashDisabledReason}
+                            style={{
+                                padding: '8px 14px', borderRadius: '6px', border: '1px solid',
+                                borderColor: cashDisabledReason ? '#334155' : '#4a90d9',
+                                background:  cashDisabledReason ? 'transparent' : '#1d3557',
+                                color:       cashDisabledReason ? '#475569' : '#e2e8f0',
+                                cursor: cashDisabledReason ? 'not-allowed' : 'pointer',
+                                fontSize: '13px', fontWeight: 600,
+                            }}
+                        >
+                            + Movimiento de caja
+                        </button>
+                    </div>
+                </div>
+
+                {status && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#161616', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '10px 14px', marginBottom: '12px', fontSize: '13px', color: statusColor }}>
+                        <span>{status}</span>
+                        <button type="button" onClick={() => setStatus('')} style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '14px' }}>✕</button>
+                    </div>
+                )}
+
+                <CashMovementPanel
+                    open={cashPanelOpen}
+                    onClose={() => setCashPanelOpen(false)}
+                    onSubmit={handleSubmitMovement}
+                    isSubmitting={isSubmittingCash}
+                    role={currentUser?.role}
+                />
 
                 {/* ── Filters ── */}
                 <div style={{ background: '#161616', border: '1px solid #2a2a2a', borderRadius: '10px', padding: '16px 20px', marginBottom: '16px' }}>
