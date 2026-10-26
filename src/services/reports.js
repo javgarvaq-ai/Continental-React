@@ -605,31 +605,74 @@ export async function getTopConsumedItems(days = 7) {
     }
 }
 
+// Columnas compartidas por la lista de eventos y la historia de una comanda.
+const COMANDA_EVENT_SELECT = `
+    id,
+    created_at,
+    event_type,
+    event_data,
+    user_id,
+    users ( name ),
+    products ( name ),
+    comandas ( id, folio, customer_name, status, final_total, units ( name ) )
+`
+
 /**
- * Returns comanda events for audit, joined with user name, folio, and unit name.
+ * Returns comanda events for audit, joined with user, product, folio and unit.
  * Ordered by created_at descending. Hard limit of 500 rows.
+ * eventTypes: array of event_type (empty/undefined = todos). userId: opcional.
  */
-export async function getComandaEvents({ startDate, endDate, eventType } = {}) {
+export async function getComandaEvents({ startDate, endDate, eventTypes, userId } = {}) {
     let query = supabase
         .from('comanda_events')
-        .select(`
-            id,
-            created_at,
-            event_type,
-            users ( name ),
-            comandas ( folio, units ( name ) )
-        `)
+        .select(COMANDA_EVENT_SELECT)
         .order('created_at', { ascending: false })
         .limit(500)
 
     // Operational-day cutoff (06:00 local) so a shift crossing midnight isn't
     // split across two calendar days — same convention as buildDailyRevenue.
+    // Requiere created_at timestamptz (migración 20261025000001).
     if (startDate)  query = query.gte('created_at', `${startDate}T06:00:00-06:00`)
     if (endDate)    query = query.lt('created_at', `${addDaysToDateString(endDate, 1)}T06:00:00-06:00`)
-    if (eventType && eventType !== 'all') query = query.eq('event_type', eventType)
+    if (eventTypes?.length) query = query.in('event_type', eventTypes)
+    if (userId)     query = query.eq('user_id', userId)
 
     const { data, error } = await query
     return { data, error }
+}
+
+/**
+ * Full timeline of a single comanda (sin rango de fechas), ascending.
+ * Accepts comandaId or folio. Returns { comanda, events, error }.
+ */
+export async function getComandaTimeline({ comandaId, folio }) {
+    let id = comandaId
+    if (!id && folio) {
+        const { data: found, error: findErr } = await supabase
+            .from('comandas')
+            .select('id')
+            .eq('folio', folio)
+            .maybeSingle()
+        if (findErr) return { comanda: null, events: [], error: findErr }
+        if (!found)  return { comanda: null, events: [], error: new Error(`No existe la comanda con folio ${folio}`) }
+        id = found.id
+    }
+
+    const [comandaRes, eventsRes] = await Promise.all([
+        supabase
+            .from('comandas')
+            .select('id, folio, customer_name, status, final_total, tip_total, opened_at, closed_at, personas, units ( name )')
+            .eq('id', id)
+            .single(),
+        supabase
+            .from('comanda_events')
+            .select(COMANDA_EVENT_SELECT)
+            .eq('comanda_id', id)
+            .order('created_at', { ascending: true }),
+    ])
+
+    const error = comandaRes.error || eventsRes.error
+    return { comanda: comandaRes.data || null, events: eventsRes.data || [], error }
 }
 
 // ── Multi-week comparison ─────────────────────────────────────

@@ -1,3 +1,58 @@
+## Plan — Sesión 2026-10-25: Mejorar pantalla Eventos de Comandas (admin) — ✅ APROBADO Y CODEADO 2026-10-25 (opción B) — pendiente db push + pruebas de Javi
+
+> Necesidad (Javi): la pantalla es muy simple, ocupa más info y filtrar mejor. Prioridades elegidas: **detectar movimientos raros**, **ver la historia de una comanda**, **cuadrar cobros**. Fuera de alcance por ahora: registrar productos normales agregados (hoy no dejan evento).
+
+### Hallazgos de la revisión
+- **Tipos desalineados:** la pantalla filtra `paid`/`presented`/`opened`, pero el sistema escribe `cobro_confirmed`/`cuenta_clicked`/`created` → los filtros "Pagadas" y "Cuentas" siempre salen vacíos. `item_decreased`, `shot_with_mixers_added` y `ticket_reprinted` no tienen etiqueta ni filtro.
+- **Zona horaria:** `comanda_events.created_at` es `timestamp` SIN zona (las demás tablas usan `timestamptz`). Si se guarda en UTC → la hora se muestra 6 h adelantada y el corte de fechas queda mal. **Confirmado 2026-10-25:** `created_at` = `cobrado_at` en UTC exacto. Conteo real de tipos: shot 2799, cuenta 1158, created 1066, payment_started 988, cobro 981, item_decreased 608, reopened_cuenta 170, cancelled 77, reprint 36, reopened_processing 7, renamed 2.
+- `event_data` no se consulta; ahí está todo el detalle (desglose del cobro, cantidades, mezcladores, renombres, ticket reimpreso). `product_id` tiene FK a `products` → se puede traer el nombre del producto.
+
+### Cambios
+**0. Arreglar lo que está roto**
+- [x] Catálogo único de tipos con etiqueta, color y grupo, alineado a lo que se escribe de verdad: `created`, `renamed`, `shot_with_mixers_added`, `item_decreased`, `cuenta_clicked`, `payment_started`, `cobro_confirmed`, `reopened_from_cuenta`, `reopened_from_processing`, `cancelled`, `ticket_reprinted`. Si llega un tipo desconocido, se muestra crudo (no truena).
+- [x] Zona horaria (según el resultado del SQL). **Opción B (recomendada):** migración de 1 línea `ALTER COLUMN created_at TYPE timestamptz USING created_at AT TIME ZONE 'UTC'`. Arregla la causa raíz; el front ya funciona sin cambios porque usa offsets -06:00. **Opción A:** sin migración, el front trata la columna como UTC (agregar `Z` al mostrar y convertir los límites del filtro a UTC). Funciona, pero deja la trampa para el siguiente que lea la tabla.
+
+**1. Más información por fila** (`services/reports.getComandaEvents` + página)
+- [x] El select agrega `event_data`, `products(name)` y `comandas(id, folio, customer_name, status, final_total, units(name))`.
+- [x] Nueva columna "Detalle", con un formateador por tipo:
+  - Cobro: total · Ef/Tar/Transf (solo los que tienen monto) · propina · cambio
+  - Cuenta: total presentado · Bajar producto: "Corona 3 → 1" · Shot: nombre + mezcladores
+  - Renombrar: "Juan → Juan Pérez" · Reimpresión: tipo de ticket · Reabierta: estado previo · Creación: cliente / RP (cortesía)
+- [x] Columna Mesa muestra también el nombre del cliente de la comanda.
+
+**2. Filtros**
+- [x] Tipos de evento con **selección múltiple** (`.in('event_type', [...])`), agrupados: *Raros* (bajar producto, reabierta ×2, cancelada, reimpresión), *Cobros* (cuenta, pago iniciado, cobro), *Flujo* (creada, renombrada, shot).
+- [x] Atajos: **"⚠ Movimientos raros"** (selecciona el grupo Raros de un clic) y "Cobros".
+- [x] Filtro por **usuario** (dropdown con los usuarios que aparecen en el rango; `.eq('user_id')` en el servidor).
+- [x] Se mantienen el rango de fechas y los atajos Hoy/7d/30d.
+
+**3. Historia de una comanda**
+- [x] Al hacer clic en el folio se entra en "modo comanda": se consultan TODOS sus eventos por `comanda_id` (sin rango de fechas, en orden cronológico ascendente) y se muestra un encabezado con folio, mesa, cliente, estado y total final. Un botón "← Volver" regresa a la lista con los filtros intactos.
+- [x] Buscador por folio (ej. `1234` o `C-001234`) que entra directo en ese modo (se resuelve folio → id con un `select` a `comandas`).
+
+**4. Cuadrar cobros**
+- [x] Cuando los resultados incluyen `cobro_confirmed`, se muestra una barra de totales del rango: núm. de cobros · total · efectivo · tarjeta · transferencia · propina. Si se llegó al límite de 500, aviso de que los totales están incompletos.
+
+### Lo que NO se hace (para no engordar)
+- No se registran los productos normales agregados (decisión de Javi: después).
+- Sin paginación: se queda el límite de 500 con su aviso; el modo comanda y los filtros lo hacen innecesario en la práctica.
+- Sin marcar "después de cuenta" en la lista: en el modo comanda se ve en contexto. Se puede agregar luego si hace falta.
+
+### Verificación
+- [x] `vite build` + eslint sin errores nuevos.
+- [x] Probar con node el formateador de detalle usando un `event_data` de ejemplo por cada tipo.
+- [ ] (Pendiente Javi) En prod: el filtro de cobros trae resultados y su total coincide con el reporte del día; las horas coinciden con la hora real; clic en un folio muestra la historia completa.
+
+
+### Review
+- Migración `20261025000001_comanda_events_created_at_timestamptz.sql`: `ALTER COLUMN created_at TYPE timestamptz USING created_at AT TIME ZONE 'UTC'`. No hay vistas ni funciones que lean la columna (solo INSERTs con default now()).
+- **Orden de despliegue:** primero `npx supabase db push`, después el deploy del front. El front nuevo asume timestamptz; sin la migración, las horas y el corte del día siguen 6 h mal.
+- Lógica pura en `src/utils/comandaEvents.js` (catálogo, grupos, `formatEventDetail`, `summarizeCobros`, `parseFolio`). Probada con node: los 11 tipos, datos incompletos/antiguos, tipo desconocido (se muestra crudo) y folios `1234`/`C-001234`/`c1234`/`abc`/`0`.
+- `services/reports`: `getComandaEvents` acepta `eventTypes[]` y `userId`; nuevo `getComandaTimeline({ comandaId | folio })`.
+- Página: filas de "raros" con fondo rojizo tenue; el clic en el folio abre la historia; "Volver" conserva los filtros (el estado de la lista no se toca).
+- `vite build` OK (a otra carpeta de salida, porque aquí no se puede borrar `dist/`). eslint: 0 problemas nuevos; el `set-state-in-effect` de `useEffect(() => { load() })` ya existía en la versión original.
+---
+
 ## Plan — Sesión 2026-10-18 (4): Fecha del movimiento en el modal (solo admin) — ✅ APROBADO Y CODEADO 2026-10-18 — pendiente pruebas de Javi
 
 > Necesidad (Javi): capturar gastos con la fecha real cuando no se suben al momento. Hoy se re-fechan a mano en la DB (ej. `tasks/refechar_movimientos_sept_2026-10-04.sql`).
