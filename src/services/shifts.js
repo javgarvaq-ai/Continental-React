@@ -22,7 +22,7 @@ export async function getShiftById(shiftId) {
  * then calculates all totals needed for the shift close panel.
  *
  * Returns { data: { shift, totalEfectivo, totalTarjeta, totalTransferencia,
- *                   totalPropinas, totalCambio, totalWithdrawals,
+ *                   totalPropinas, totalVentaSinPropina, totalCambio, totalWithdrawals,
  *                   totalDeposits, expectedCash }, error }
  */
 export async function getShiftSummary(shiftId) {
@@ -63,13 +63,17 @@ export async function getShiftSummary(shiftId) {
     let totalWithdrawals    = 0
     let totalDeposits       = 0
     let totalPropinasRetiradas = 0
+    let totalVentaSinPropina = 0
 
     ;(payments || []).forEach((p) => {
         totalEfectivo      += Number(p.efectivo    || 0)
         totalTarjeta       += Number(p.tarjeta     || 0)
         totalTransferencia += Number(p.transferencia || 0)
-        totalPropinas      += Number((p.tip_amount ?? p.comandas?.tip_total) || 0)
+        const propina       = Number((p.tip_amount ?? p.comandas?.tip_total) || 0)
+        totalPropinas      += propina
         totalCambio        += Number(p.change_given || 0)
+        // Mismo criterio que Cierre Mensual: venta sin propina = total_paid − propina.
+        totalVentaSinPropina += Number(p.total_paid || 0) - propina
     })
 
     ;(cashMovements || []).forEach((m) => {
@@ -96,6 +100,7 @@ export async function getShiftSummary(shiftId) {
             totalTransferencia,
             totalPropinas,
             totalPropinasRetiradas,
+            totalVentaSinPropina,
             totalCambio,
             totalWithdrawals,
             totalDeposits,

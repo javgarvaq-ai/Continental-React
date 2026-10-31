@@ -272,6 +272,9 @@ function ShiftPanel({ open, onClose, currentUser, onFetchData, onConfirmClose, o
                                 </>
                             )}
                             <div style={{ borderTop: '1px solid #2a2a2a', margin: '8px 0' }} />
+                            <SummaryRow label="Venta del turno (sin propina)" value={money(summary.totalVentaSinPropina)} bold />
+                            <SummaryRow label="2% de la venta" value={money(Math.round(Number(summary.totalVentaSinPropina || 0) * 2) / 100)} />
+                            <div style={{ borderTop: '1px solid #2a2a2a', margin: '8px 0' }} />
                             <SummaryRow label="Depósitos" value={`+${money(summary.totalDeposits)}`} accent="#66bb6a" />
                             <SummaryRow label="Retiros" value={`-${money(summary.totalWithdrawals)}`} accent="#ef9a9a" />
                             <div style={{ borderTop: '1px solid #2a2a2a', margin: '8px 0' }} />

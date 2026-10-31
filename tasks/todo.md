@@ -1,3 +1,62 @@
+## Plan — Sesión 2026-10-30: Venta sin propina + 2% en el modal de corte/cierre — ✅ APROBADO Y CODEADO 2026-10-30 — pendiente prueba en vivo de Javi
+
+> Necesidad (Javi): en el modal de corte agregar una línea con la venta total cobrada SIN propina y debajo otra con el 2% de ese valor.
+
+### Hallazgos de la revisión
+- Modal = `src/components/ShiftPanel.jsx`; datos de `getShiftSummary` (`src/services/shifts.js:27`). Es **por turno** (`payments.shift_id`), no por día calendario.
+- `payments.efectivo` se guarda NETO (ya sin cambio) → `efectivo + tarjeta + transferencia = total_paid = venta + propina` (`utils/payments.js:38`).
+- Las líneas Efectivo/Tarjeta/Transferencia del modal **incluyen la propina**. Hoy no hay ninguna línea de venta sin propina.
+- Criterio del resto del sistema (Cierre Mensual, `reports.js:765`): venta sin propina = `total_paid − tip_amount`. Se usa el mismo para que cuadre.
+- `totalPropinas` del corte usa `tip_amount ?? comandas.tip_total`; se usa esa misma propina para restar.
+
+### Cambios (2 archivos, sin migración)
+- [x] `services/shifts.js` → `getShiftSummary`: acumular `totalVentaSinPropina += total_paid − propina` por pago y devolverlo. No toca `expectedCash` ni `closeShift`.
+- [x] `components/ShiftPanel.jsx`: después del bloque de Propinas y antes de Depósitos/Retiros, separador + 2 renglones:
+  - `Venta del turno (sin propina)` — en negritas
+  - `2% de la venta` — `round2(venta × 0.02)`
+- [x] No se guarda en la tabla `shifts` (solo pantalla).
+
+### Verificación
+- [x] Parseo con `@babel/parser` de ambos archivos.
+- [ ] Javi abre el corte en vivo: `Efectivo + Tarjeta + Transferencia − Propinas` = línea nueva, y 2% cuadra.
+
+### Decisiones (Javi, 2026-10-30)
+1. Por turno.
+2. Etiqueta: "2% de la venta".
+3. Mismo acceso que el resto del modal (hoy todos los usuarios son gerente/admin).
+
+### Review (2026-10-30)
+- `shifts.js`: +`totalVentaSinPropina` (Σ `total_paid − propina`, misma propina que `totalPropinas`). `expectedCash` y `closeShift` intactos.
+- `ShiftPanel.jsx`: 2 renglones + separador entre Propinas y Depósitos. 2% = `Math.round(venta × 2) / 100`.
+- `useShift.js` pasa el summary sin transformar (verificado). Ambos archivos parsean con `@babel/parser`.
+
+## Plan — Sesión 2026-10-27: Cervezas vendidas por mes (jun–oct 2026), por producto y presentación — ✅ HECHO 2026-10-27
+
+> Necesidad (Javi): cuántas cervezas vende por mes desde junio, por unidad y tipo/presentación. Solo lectura (SELECT), sin cambios de código ni migraciones.
+
+### Hallazgos de la revisión
+- Cubetas/promos: el producto padre (`is_shot = true`) va en su propio renglón y **cada cerveza incluida es un renglón aparte** con `is_free_mixer = true`, `unit_price = 0`, `product_id` = la cerveza real (`services/products.js:244`). Si solo se cuentan las sueltas, las cubetas desaparecen.
+- Membresía: renglones con `is_free_benefit = true`.
+- Categoría de cerveza: `'A. Cerveza'` (`config/categoryColors.js`).
+- Columnas verificadas contra `20260508191907_remote_schema.sql`: `comanda_items(comanda_id, product_id, quantity, status, is_free_mixer, is_free_benefit)`, `products(name, category_id, is_shot)`, `categories(name)`, `comandas(status, cobrado_at)`.
+- Mismo criterio que `getProductUnitsForPeriod` (`services/reports.js:358`): comandas `paid`, items `active`, fecha por `cobrado_at`, corte operativo 06:00.
+
+### Decisiones (Javi, 2026-10-27)
+- Contar TODO, desglosado: sueltas · en cubeta/promo · membresía · total físico.
+- "Por unidad" = **por presentación** (botella/lata/caguama…). Como no se ve en el esquema, la presentación se saca del nombre del producto al analizar los resultados; si algún nombre es ambiguo, se le pregunta a Javi.
+
+### Pasos
+- [x] Javi corre el SQL en el editor de Supabase y pasa el resultado (CSV o copia).
+- [x] Verificar: sueltas + cubeta + membresía = total en las 95 filas (OK). Membresía = 0 en todos los meses.
+- [x] Agrupar por marca/presentación y entregar la tabla mes × cerveza con totales.
+
+### Review (2026-10-27)
+Total físico por mes (oct parcial, hasta el 27): jun 1,127 · jul 682 · ago 498 · sep 520 · oct 499 = **3,326**.
+- Sueltas estables ~375–435/mes; lo que se mueve es cubeta/promo: jun 707 (63%) → jul 267 → ago 63 → sep/oct 126.
+- Por presentación (jun→oct): Media 936/510/316/354/309 · Preparada 1/2 110/100/87/75/68 · Caguama 70/70/94/68/48 · Caguamita 0/0/0/19/67 · Preparada 1 Lt 11/2/1/4/7.
+- Caguamita Carta Blanca (desde sep) parece canibalizar a Carta Blanca Caguama (sep 50+19 → oct 19+67).
+- Pendiente de Javi: qué cerveza lleva cada preparada (Gringa/Chelada/Michelada) si quiere el conteo por marca completo.
+
 ## Plan — Sesión 2026-10-25: Mejorar pantalla Eventos de Comandas (admin) — ✅ APROBADO Y CODEADO 2026-10-25 (opción B) — pendiente db push + pruebas de Javi
 
 > Necesidad (Javi): la pantalla es muy simple, ocupa más info y filtrar mejor. Prioridades elegidas: **detectar movimientos raros**, **ver la historia de una comanda**, **cuadrar cobros**. Fuera de alcance por ahora: registrar productos normales agregados (hoy no dejan evento).
